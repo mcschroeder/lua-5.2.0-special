@@ -544,7 +544,7 @@ int luaK_exp2RK (FuncState *fs, expdesc *e) {
     case VTRUE:
     case VFALSE:
     case VNIL: {
-      if (fs->nk <= SIZE_B) {  /* constant fits in B operand? */
+      if (fs->nk <= MAXARG_B) {  /* constant fits in B operand? */
         e->u.info = (e->k == VNIL) ? nilK(fs) : boolK(fs, (e->k == VTRUE));
         e->k = VK;
         return e->u.info;
@@ -557,7 +557,7 @@ int luaK_exp2RK (FuncState *fs, expdesc *e) {
       /* go through */
     }
     case VK: {
-      if (e->u.info <= SIZE_C)  /* constant fits in argC? */
+      if (e->u.info <= MAXARG_C)  /* constant fits in argC? */
         return e->u.info;
       else break;
     }
