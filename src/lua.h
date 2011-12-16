@@ -19,7 +19,7 @@
 #define LUA_VERSION_MAJOR	"5"
 #define LUA_VERSION_MINOR	"2"
 #define LUA_VERSION_NUM		502
-#define LUA_VERSION_RELEASE	"0"
+#define LUA_VERSION_RELEASE	"0" " (special)"
 
 #define LUA_VERSION	"Lua " LUA_VERSION_MAJOR "." LUA_VERSION_MINOR
 #define LUA_RELEASE	LUA_VERSION "." LUA_VERSION_RELEASE
@@ -176,7 +176,7 @@ LUA_API const void     *(lua_topointer) (lua_State *L, int idx);
 ** Comparison and arithmetic functions
 */
 
-#define LUA_OPADD	0	/* ORDER TM */
+#define LUA_OPADD	0	/* ORDER TM + ORDER OPR */
 #define LUA_OPSUB	1
 #define LUA_OPMUL	2
 #define LUA_OPDIV	3

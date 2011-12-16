@@ -244,10 +244,12 @@ void luaD_hook (lua_State *L, int event, int line) {
 static void callhook (lua_State *L, CallInfo *ci) {
   int hook = LUA_HOOKCALL;
   ci->u.l.savedpc++;  /* hooks assume 'pc' is already incremented */
-  if (isLua(ci->previous) &&
-      GET_OPCODE(*(ci->previous->u.l.savedpc - 1)) == OP_TAILCALL) {
-    ci->callstatus |= CIST_TAIL;
-    hook = LUA_HOOKTAILCALL;
+  if (isLua(ci->previous)) {
+    OpCode op = GET_OPCODE(*(ci->previous->u.l.savedpc - 1));
+    if (op == OP_TAILCALL_x || op == OP_TAILCALL_l || op == OP_TAILCALL_c || op == OP_TAILCALL_r) {
+      ci->callstatus |= CIST_TAIL;
+      hook = LUA_HOOKTAILCALL;
+    }
   }
   luaD_hook(L, hook, -1);
   ci->u.l.savedpc--;  /* correct 'pc' */

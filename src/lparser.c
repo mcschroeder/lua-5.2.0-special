@@ -507,7 +507,7 @@ static void codeclosure (LexState *ls, Proto *clp, expdesc *v) {
   }
   f->p[fs->np++] = clp;
   luaC_objbarrier(ls->L, f, clp);
-  init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE, 0, fs->np-1));
+  init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE_r, 0, fs->np-1));
   luaK_exp2nextreg(fs, v);  /* fix it at stack top (for GC) */
 }
 
@@ -671,7 +671,14 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   checknext(ls, '=');
   rkkey = luaK_exp2RK(fs, &key);
   expr(ls, &val);
-  luaK_codeABC(fs, OP_SETTABLE, cc->t->u.info, rkkey, luaK_exp2RK(fs, &val));
+  int rkval = luaK_exp2RK(fs, &val);
+  OpCode op;
+  if (key.k != VK && val.k != VK) op = OP_SETTABLE_rrr;
+  else if (key.k != VK && val.k == VK) op = OP_SETTABLE_rrK;
+  else if (key.k == VK && val.k != VK) op = OP_SETTABLE_rKr;
+  else if (key.k == VK && val.k == VK) op = OP_SETTABLE_rKK;
+  else lua_assert(o);
+  luaK_codeABC(fs, op, cc->t->u.info, rkkey, rkval);
   fs->freereg = reg;  /* free registers */
 }
 
@@ -738,7 +745,7 @@ static void constructor (LexState *ls, expdesc *t) {
      sep -> ',' | ';' */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  int pc = luaK_codeABC(fs, OP_NEWTABLE, 0, 0, 0);
+  int pc = luaK_codeABC(fs, OP_NEWTABLE_r, 0, 0, 0);
   struct ConsControl cc;
   cc.na = cc.nh = cc.tostore = 0;
   cc.t = t;
@@ -863,7 +870,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
       luaK_exp2nextreg(fs, &args);  /* close last argument */
     nparams = fs->freereg - (base+1);
   }
-  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, base, nparams+1, 2));
+  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL_rr, base, nparams+1, 2));
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
                             (unless changed) one result */
@@ -968,7 +975,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
       FuncState *fs = ls->fs;
       check_condition(ls, fs->f->is_vararg,
                       "cannot use " LUA_QL("...") " outside a vararg function");
-      init_exp(v, VVARARG, luaK_codeABC(fs, OP_VARARG, 0, 1, 0));
+      init_exp(v, VVARARG, luaK_codeABC(fs, OP_VARARG_r, 0, 1, 0));
       break;
     }
     case '{': {  /* constructor */
@@ -1131,7 +1138,7 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
   }
   if (conflict) {
     /* copy upvalue/local value to a temporary (in position 'extra') */
-    OpCode op = (v->k == VLOCAL) ? OP_MOVE : OP_GETUPVAL;
+    OpCode op = (v->k == VLOCAL) ? OP_MOVE_r : OP_GETUPVAL_r;
     luaK_codeABC(fs, op, extra, v->u.info, 0);
     luaK_reserveregs(fs, 1);
   }
@@ -1502,7 +1509,7 @@ static void retstat (LexState *ls) {
     if (hasmultret(e.k)) {
       luaK_setmultret(fs, &e);
       if (e.k == VCALL && nret == 1) {  /* tail call? */
-        SET_OPCODE(getcode(fs,&e), OP_TAILCALL);
+        SET_OPCODE(getcode(fs,&e), OP_TAILCALL_r);
         lua_assert(GETARG_A(getcode(fs,&e)) == fs->nactvar);
       }
       first = fs->nactvar;

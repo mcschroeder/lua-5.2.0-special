@@ -296,8 +296,8 @@ static void PrintCode(const Proto* f)
   {
    case iABC:
     printf("%d",a);
-    if (getBMode(o)!=OpArgN) printf(" %d",ISK(b) ? (MYK(INDEXK(b))) : b);
-    if (getCMode(o)!=OpArgN) printf(" %d",ISK(c) ? (MYK(INDEXK(c))) : c);
+    if (getBMode(o)!=OpArgN) printf(" %d",/*ISK(b) ? (MYK(INDEXK(b))) : */b);
+    if (getCMode(o)!=OpArgN) printf(" %d",/*ISK(c) ? (MYK(INDEXK(c))) : */c);
     break;
    case iABx:
     printf("%d",a);
@@ -311,63 +311,64 @@ static void PrintCode(const Proto* f)
     printf("%d",MYK(ax));
     break;
   }
-  switch (o)
-  {
-   case OP_LOADK:
-    printf("\t; "); PrintConstant(f,bx);
-    break;
-   case OP_GETUPVAL:
-   case OP_SETUPVAL:
-    printf("\t; %s",UPVALNAME(b));
-    break;
-   case OP_GETTABUP:
-    printf("\t; %s",UPVALNAME(b));
-    if (ISK(c)) { printf(" "); PrintConstant(f,INDEXK(c)); }
-    break;
-   case OP_SETTABUP:
-    printf("\t; %s",UPVALNAME(a));
-    if (ISK(b)) { printf(" "); PrintConstant(f,INDEXK(b)); }
-    if (ISK(c)) { printf(" "); PrintConstant(f,INDEXK(c)); }
-    break;
-   case OP_GETTABLE:
-   case OP_SELF:
-    if (ISK(c)) { printf("\t; "); PrintConstant(f,INDEXK(c)); }
-    break;
-   case OP_SETTABLE:
-   case OP_ADD:
-   case OP_SUB:
-   case OP_MUL:
-   case OP_DIV:
-   case OP_POW:
-   case OP_EQ:
-   case OP_LT:
-   case OP_LE:
-    if (ISK(b) || ISK(c))
-    {
-     printf("\t; ");
-     if (ISK(b)) PrintConstant(f,INDEXK(b)); else printf("-");
-     printf(" ");
-     if (ISK(c)) PrintConstant(f,INDEXK(c)); else printf("-");
-    }
-    break;
-   case OP_JMP:
-   case OP_FORLOOP:
-   case OP_FORPREP:
-   case OP_TFORLOOP:
-    printf("\t; to %d",sbx+pc+2);
-    break;
-   case OP_CLOSURE:
-    printf("\t; %p",VOID(f->p[bx]));
-    break;
-   case OP_SETLIST:
-    if (c==0) printf("\t; %d",(int)code[++pc]); else printf("\t; %d",c);
-    break;
-   case OP_EXTRAARG:
-    printf("\t; "); PrintConstant(f,ax);
-    break;
-   default:
-    break;
-  }
+  // TODO
+  // switch (o)
+  // {
+  //  case OP_LOADK:
+  //   printf("\t; "); PrintConstant(f,bx);
+  //   break;
+  //  case OP_GETUPVAL:
+  //  case OP_SETUPVAL:
+  //   printf("\t; %s",UPVALNAME(b));
+  //   break;
+  //  case OP_GETTABUP:
+  //   printf("\t; %s",UPVALNAME(b));
+  //   if (ISK(c)) { printf(" "); PrintConstant(f,INDEXK(c)); }
+  //   break;
+  //  case OP_SETTABUP:
+  //   printf("\t; %s",UPVALNAME(a));
+  //   if (ISK(b)) { printf(" "); PrintConstant(f,INDEXK(b)); }
+  //   if (ISK(c)) { printf(" "); PrintConstant(f,INDEXK(c)); }
+  //   break;
+  //  case OP_GETTABLE:
+  //  case OP_SELF:
+  //   if (ISK(c)) { printf("\t; "); PrintConstant(f,INDEXK(c)); }
+  //   break;
+  //  case OP_SETTABLE:
+  //  case OP_ADD:
+  //  case OP_SUB:
+  //  case OP_MUL:
+  //  case OP_DIV:
+  //  case OP_POW:
+  //  case OP_EQ:
+  //  case OP_LT:
+  //  case OP_LE:
+  //   if (ISK(b) || ISK(c))
+  //   {
+  //    printf("\t; ");
+  //    if (ISK(b)) PrintConstant(f,INDEXK(b)); else printf("-");
+  //    printf(" ");
+  //    if (ISK(c)) PrintConstant(f,INDEXK(c)); else printf("-");
+  //   }
+  //   break;
+  //  case OP_JMP:
+  //  case OP_FORLOOP:
+  //  case OP_FORPREP:
+  //  case OP_TFORLOOP:
+  //   printf("\t; to %d",sbx+pc+2);
+  //   break;
+  //  case OP_CLOSURE:
+  //   printf("\t; %p",VOID(f->p[bx]));
+  //   break;
+  //  case OP_SETLIST:
+  //   if (c==0) printf("\t; %d",(int)code[++pc]); else printf("\t; %d",c);
+  //   break;
+  //  case OP_EXTRAARG:
+  //   printf("\t; "); PrintConstant(f,ax);
+  //   break;
+  //  default:
+  //   break;
+  // }
   printf("\n");
  }
 }
