@@ -939,8 +939,8 @@ static void codecomp (FuncState *fs, BinOpr opr, expdesc *e1, expdesc *e2) {
   }
   else if (const1 && const2) {
     switch (opr) {
-      case OPR_GT: case OPR_LT: op = OP_LE_KK; break;
-      case OPR_GE: case OPR_LE: op = OP_LT_KK; break;
+      case OPR_GT: case OPR_LT: op = OP_LT_KK; break;
+      case OPR_GE: case OPR_LE: op = OP_LE_KK; break;
       default: lua_assert(0);
     }
   }
