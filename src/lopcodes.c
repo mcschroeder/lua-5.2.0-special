@@ -11,7 +11,6 @@
 #include "lopcodes.h"
 
 
-/* ORDER OP */
 
 LUAI_DDEF const char *const luaP_opnames[NUM_OPCODES+1] = {
 #define OPNAME(name,m,a,b,c,sa,t) #name,

@@ -180,9 +180,9 @@ _(GETTABUP_rur, ABC,dst,upv,reg,1,0) /* Ra   <- Ub[Rc]   */ \
 _(GETTABUP_xuI, ABC,dst,upv,kst,1,0) /* Ra:? <- Ub[Kc:i] */ \
 _(GETTABUP_xuF, ABC,dst,upv,kst,1,0) /* Ra:? <- Ub[Kc:f] */ \
 _(GETTABUP_xuS, ABC,dst,upv,kst,1,0) /* Ra:? <- Ub[Kc:s] */ \
-_(GETTABUP_ruI, ABC,dst,upv,kst,1,0) /* Ra   <- Ub[Kc:i] */ \
-_(GETTABUP_ruF, ABC,dst,upv,kst,1,0) /* Ra   <- Ub[Kc:f] */ \
-_(GETTABUP_ruS, ABC,dst,upv,kst,1,0) /* Ra   <- Ub[Kc:s] */ \
+/*_(GETTABUP_ruI, ABC,dst,upv,kst,1,0)*/ /* Ra   <- Ub[Kc:i] */ \
+/*_(GETTABUP_ruF, ABC,dst,upv,kst,1,0)*/ /* Ra   <- Ub[Kc:f] */ \
+/*_(GETTABUP_ruS, ABC,dst,upv,kst,1,0)*/ /* Ra   <- Ub[Kc:s] */ \
 /* TODO: remove the following */ \
 _(GETTABUP_ruK, ABC,dst,upv,kst,1,0) /* Ra   <- Ub[Kc]   */ \
 \
@@ -197,9 +197,9 @@ _(GETTABLE_rrr, ABC,dst,reg,reg,1,0) /* Ra   <- Rb[Rc]   */ \
 _(GETTABLE_xrI, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb[Kc:i] */ \
 _(GETTABLE_xrF, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb[Kc:f] */ \
 _(GETTABLE_xrS, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb[Kc:s] */ \
-_(GETTABLE_rrI, ABC,dst,reg,kst,1,0) /* Ra   <- Rb[Kc:i] */ \
-_(GETTABLE_rrF, ABC,dst,reg,kst,1,0) /* Ra   <- Rb[Kc:f] */ \
-_(GETTABLE_rrS, ABC,dst,reg,kst,1,0) /* Ra   <- Rb[Kc:s] */ \
+/*_(GETTABLE_rrI, ABC,dst,reg,kst,1,0)*/ /* Ra   <- Rb[Kc:i] */ \
+/*_(GETTABLE_rrF, ABC,dst,reg,kst,1,0)*/ /* Ra   <- Rb[Kc:f] */ \
+/*_(GETTABLE_rrS, ABC,dst,reg,kst,1,0)*/ /* Ra   <- Rb[Kc:s] */ \
 /* TODO: remove the following */ \
 _(GETTABLE_rrK, ABC,dst,reg,kst,1,0) /* Ra   <- Rb[Kc]   */ \
 \
@@ -211,12 +211,12 @@ _(SETTABUP_uxK, ABC,upv,reg,kst,0,0) /* Ua[Rb:?] <- Kc */ \
 _(SETTABUP_uiK, ABC,upv,reg,kst,0,0) /* Ua[Rb:i] <- Kc */ \
 _(SETTABUP_usK, ABC,upv,reg,kst,0,0) /* Ua[Rb:s] <- Kc */ \
 _(SETTABUP_urK, ABC,upv,reg,kst,0,0) /* Ua[Rb]   <- Kc */ \
-_(SETTABUP_uIr, ABC,upv,kst,reg,0,0) /* Ua[Kb:i] <- Rc */ \
-_(SETTABUP_uFr, ABC,upv,kst,reg,0,0) /* Ua[Kb:f] <- Rc */ \
-_(SETTABUP_uSr, ABC,upv,kst,reg,0,0) /* Ua[Kb:s] <- Rc */ \
-_(SETTABUP_uIK, ABC,upv,kst,kst,0,0) /* Ua[Kb:i] <- Kc */ \
-_(SETTABUP_uFK, ABC,upv,kst,kst,0,0) /* Ua[Kb:f] <- Kc */ \
-_(SETTABUP_uSK, ABC,upv,kst,kst,0,0) /* Ua[Kb:s] <- Kc */ \
+/*_(SETTABUP_uIr, ABC,upv,kst,reg,0,0)*/ /* Ua[Kb:i] <- Rc */ \
+/*_(SETTABUP_uFr, ABC,upv,kst,reg,0,0)*/ /* Ua[Kb:f] <- Rc */ \
+/*_(SETTABUP_uSr, ABC,upv,kst,reg,0,0)*/ /* Ua[Kb:s] <- Rc */ \
+/*_(SETTABUP_uIK, ABC,upv,kst,kst,0,0)*/ /* Ua[Kb:i] <- Kc */ \
+/*_(SETTABUP_uFK, ABC,upv,kst,kst,0,0)*/ /* Ua[Kb:f] <- Kc */ \
+/*_(SETTABUP_uSK, ABC,upv,kst,kst,0,0)*/ /* Ua[Kb:s] <- Kc */ \
 /* TODO: remove the following two */ \
 _(SETTABUP_uKr, ABC,upv,kst,reg,0,0) /* Ua[Kb]   <- Rc */ \
 _(SETTABUP_uKK, ABC,upv,kst,kst,0,0) /* Ua[Kb]   <- Kc */ \
@@ -231,12 +231,12 @@ _(SETTABLE_rxK, ABC,reg,reg,kst,0,0) /* Ra[Rb:?] <- Kc */ \
 _(SETTABLE_riK, ABC,reg,reg,kst,0,0) /* Ra[Rb:i] <- Kc */ \
 _(SETTABLE_rsK, ABC,reg,reg,kst,0,0) /* Ra[Rb:s] <- Kc */ \
 _(SETTABLE_rrK, ABC,reg,reg,kst,0,0) /* Ra[Rb]   <- Kc */ \
-_(SETTABLE_rIr, ABC,reg,kst,reg,0,0) /* Ra[Kb:i] <- Rc */ \
-_(SETTABLE_rFr, ABC,reg,kst,reg,0,0) /* Ra[Kb:f] <- Rc */ \
-_(SETTABLE_rSr, ABC,reg,kst,reg,0,0) /* Ra[Kb:s] <- Rc */ \
-_(SETTABLE_rIK, ABC,reg,kst,kst,0,0) /* Ra[Kb:i] <- Kc */ \
-_(SETTABLE_rFK, ABC,reg,kst,kst,0,0) /* Ra[Kb:f] <- Kc */ \
-_(SETTABLE_rSK, ABC,reg,kst,kst,0,0) /* Ra[Kb:s] <- Kc */ \
+/*_(SETTABLE_rIr, ABC,reg,kst,reg,0,0)*/ /* Ra[Kb:i] <- Rc */ \
+/*_(SETTABLE_rFr, ABC,reg,kst,reg,0,0)*/ /* Ra[Kb:f] <- Rc */ \
+/*_(SETTABLE_rSr, ABC,reg,kst,reg,0,0)*/ /* Ra[Kb:s] <- Rc */ \
+/*_(SETTABLE_rIK, ABC,reg,kst,kst,0,0)*/ /* Ra[Kb:i] <- Kc */ \
+/*_(SETTABLE_rFK, ABC,reg,kst,kst,0,0)*/ /* Ra[Kb:f] <- Kc */ \
+/*_(SETTABLE_rSK, ABC,reg,kst,kst,0,0)*/ /* Ra[Kb:s] <- Kc */ \
 /* TODO: remove the following two */ \
 _(SETTABLE_rKr, ABC,reg,kst,reg,0,0) /* Ra[Kb]   <- Rc */ \
 _(SETTABLE_rKK, ABC,reg,kst,kst,0,0) /* Ra[Kb]   <- Kc */ \
