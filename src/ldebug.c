@@ -481,6 +481,7 @@ static const char *getfuncname (lua_State *L, CallInfo *ci, const char **name) {
     case OP_EQ_KK: tm = TM_EQ; break;
     case OP_ADD_rrr:
     case OP_ADD_rrK:
+    case OP_ADD_rKr:
     case OP_ADD_rKK: tm = TM_ADD; break;
     case OP_SUB_rrr:
     case OP_SUB_rrK:
@@ -488,6 +489,7 @@ static const char *getfuncname (lua_State *L, CallInfo *ci, const char **name) {
     case OP_SUB_rKK: tm = TM_SUB; break;
     case OP_MUL_rrr:
     case OP_MUL_rrK:
+    case OP_MUL_rKr:
     case OP_MUL_rKK: tm = TM_MUL; break;
     case OP_DIV_rrr:
     case OP_DIV_rrK:

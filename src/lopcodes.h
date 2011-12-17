@@ -256,11 +256,17 @@ _(ADD_rxx, ABC,dst,reg,reg,1,0) /* Ra   <- Rb:? + Rc:? */ \
 _(ADD_rnn, ABC,dst,reg,reg,1,0) /* Ra   <- Rb:n + Rc:n */ \
 _(ADD_rrr, ABC,dst,reg,reg,1,0) /* Ra   <- Rb   + Rc   */ \
 _(ADD_xxK, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb:? + Kc   */ \
-_(ADD_xnN, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb:n + Rc:n */ \
+_(ADD_xnN, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb:n + Kc:n */ \
 _(ADD_xrK, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb   + Kc   */ \
 _(ADD_rxK, ABC,dst,reg,kst,1,0) /* Ra   <- Rb:? + Kc   */ \
-_(ADD_rnN, ABC,dst,reg,kst,1,0) /* Ra   <- Rb:n + Kc:n */ \
+_(ADD_rnN, ABC,dst,reg,kst,1,0) /* Ra   <- Rb:n + Rc:n */ \
 _(ADD_rrK, ABC,dst,reg,kst,1,0) /* Ra   <- Rb   + Kc   */ \
+_(ADD_xKx, ABC,dst,kst,reg,1,0) /* Ra:? <- Kc   + Rb:? */ \
+_(ADD_xNn, ABC,dst,kst,reg,1,0) /* Ra:? <- Kb:n + Rc:n */ \
+_(ADD_xKr, ABC,dst,kst,reg,1,0) /* Ra:? <- Kb   + Rc   */ \
+_(ADD_rKx, ABC,dst,kst,reg,1,0) /* Ra   <- Kc   + Rb:? */ \
+_(ADD_rNn, ABC,dst,kst,reg,1,0) /* Ra   <- Kb:n + Rc:n */ \
+_(ADD_rKr, ABC,dst,kst,reg,1,0) /* Ra   <- Kb   + Rc   */ \
 _(ADD_xKK, ABC,dst,kst,kst,1,0) /* Ra:? <- Kb   + Kc   */ \
 _(ADD_rKK, ABC,dst,kst,kst,1,0) /* Ra   <- Kb   + Kc   */ \
 \
@@ -292,11 +298,17 @@ _(MUL_rxx, ABC,dst,reg,reg,1,0) /* Ra   <- Rb:? * Rc:? */ \
 _(MUL_rnn, ABC,dst,reg,reg,1,0) /* Ra   <- Rb:n * Rc:n */ \
 _(MUL_rrr, ABC,dst,reg,reg,1,0) /* Ra   <- Rb   * Rc   */ \
 _(MUL_xxK, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb:? * Kc   */ \
-_(MUL_xnN, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb:n * Rc:n */ \
+_(MUL_xnN, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb:n * Kc:n */ \
 _(MUL_xrK, ABC,dst,reg,kst,1,0) /* Ra:? <- Rb   * Kc   */ \
 _(MUL_rxK, ABC,dst,reg,kst,1,0) /* Ra   <- Rb:? * Kc   */ \
-_(MUL_rnN, ABC,dst,reg,kst,1,0) /* Ra   <- Rb:n * Kc:n */ \
+_(MUL_rnN, ABC,dst,reg,kst,1,0) /* Ra   <- Rb:n * Rc:n */ \
 _(MUL_rrK, ABC,dst,reg,kst,1,0) /* Ra   <- Rb   * Kc   */ \
+_(MUL_xKx, ABC,dst,kst,reg,1,0) /* Ra:? <- Kc   * Rb:? */ \
+_(MUL_xNn, ABC,dst,kst,reg,1,0) /* Ra:? <- Kb:n * Rc:n */ \
+_(MUL_xKr, ABC,dst,kst,reg,1,0) /* Ra:? <- Kb   * Rc   */ \
+_(MUL_rKx, ABC,dst,kst,reg,1,0) /* Ra   <- Kc   * Rb:? */ \
+_(MUL_rNn, ABC,dst,kst,reg,1,0) /* Ra   <- Kb:n * Rc:n */ \
+_(MUL_rKr, ABC,dst,kst,reg,1,0) /* Ra   <- Kb   * Rc   */ \
 _(MUL_xKK, ABC,dst,kst,kst,1,0) /* Ra:? <- Kb   * Kc   */ \
 _(MUL_rKK, ABC,dst,kst,kst,1,0) /* Ra   <- Kb   * Kc   */ \
 \

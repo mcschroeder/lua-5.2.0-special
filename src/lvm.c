@@ -416,9 +416,9 @@ void luaV_finishOp (lua_State *L) {
   Instruction inst = *(ci->u.l.savedpc - 1);  /* interrupted instruction */
   OpCode op = GET_OPCODE(inst);
   switch (op) {  /* finish its execution */
-    case OP_ADD_rrr: case OP_ADD_rrK: case OP_ADD_rKK:
+    case OP_ADD_rrr: case OP_ADD_rrK: case OP_ADD_rKr: case OP_ADD_rKK:
     case OP_SUB_rrr: case OP_SUB_rrK: case OP_SUB_rKr: case OP_SUB_rKK:
-    case OP_MUL_rrr: case OP_MUL_rrK: case OP_MUL_rKK:
+    case OP_MUL_rrr: case OP_MUL_rrK: case OP_MUL_rKr: case OP_MUL_rKK:
     case OP_DIV_rrr: case OP_DIV_rrK: case OP_DIV_rKr: case OP_DIV_rKK:
     case OP_MOD_rrr: case OP_MOD_rrK: case OP_MOD_rKr: case OP_MOD_rKK:
     case OP_POW_rrr: case OP_POW_rrK: case OP_POW_rKr: case OP_POW_rKK:
@@ -656,6 +656,9 @@ void luaV_execute (lua_State *L) {
       vmcase(OP_ADD_rrK,
         arith_op(luai_numadd, TM_ADD, RB(i), KC(i));
       )
+      vmcase(OP_ADD_rKr,
+        arith_op(luai_numadd, TM_ADD, KB(i), RC(i));
+      )
       vmcase(OP_ADD_rKK,
         arith_op(luai_numadd, TM_ADD, KB(i), KC(i));
       )
@@ -678,6 +681,9 @@ void luaV_execute (lua_State *L) {
       )
       vmcase(OP_MUL_rrK,
         arith_op(luai_nummul, TM_MUL, RB(i), KC(i));
+      )
+      vmcase(OP_MUL_rKr,
+        arith_op(luai_nummul, TM_MUL, KB(i), RC(i));
       )
       vmcase(OP_MUL_rKK,
         arith_op(luai_nummul, TM_MUL, KB(i), KC(i));

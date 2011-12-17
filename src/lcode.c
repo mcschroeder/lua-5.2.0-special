@@ -791,11 +791,9 @@ static void codearith (FuncState *fs, BinOpr opr,
     }
     else if (isconst(e1) && !isconst(e2)) {
       switch (opr) {
-        case OPR_ADD: { int tmp = o1; o1 = o2; o2 = tmp;
-                        op = OP_ADD_rrK; break; }
+        case OPR_ADD: op = OP_ADD_rKr; break;
         case OPR_SUB: op = OP_SUB_rKr; break; 
-        case OPR_MUL: { int tmp = o1; o1 = o2; o2 = tmp;
-                        op = OP_MUL_rrK; break; }
+        case OPR_MUL: op = OP_MUL_rKr; break;
         case OPR_DIV: op = OP_DIV_rKr; break;
         case OPR_MOD: op = OP_MOD_rKr; break;
         case OPR_POW: op = OP_POW_rKr; break;
