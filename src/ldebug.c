@@ -302,28 +302,29 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
 
 
 /*
-** find a "name" for the RK value 'c'
+** find a "name" for the constant value 'c'
 */
-static void kname (Proto *p, int pc, int c, const char **name) {
-  // TODO
-  // if (ISK(c)) {  /* is 'c' a constant? */
-  //   TValue *kvalue = &p->k[INDEXK(c)];
-  //   if (ttisstring(kvalue)) {  /* literal constant? */
-  //     *name = svalue(kvalue);  /* it is its own name */
-  //     return;
-  //   }
-  //   /* else no reasonable name found */
-  // }
-  // else {  /* 'c' is a register */
-  //   const char *what = getobjname(p, pc, c, name); /* search for 'c' */
-  //   if (what && *what == 'c') {  /* found a constant name? */
-  //     return;  /* 'name' already filled */
-  //   }
-  //   /* else no reasonable name found */
-  // }
+static void kname (Proto *p, int pc, int c, const char **name) {  
+  TValue *kvalue = &p->k[c];
+  if (ttisstring(kvalue)) {  /* literal constant? */
+    *name = svalue(kvalue);  /* it is its own name */
+    return;
+  }
+  /* else no reasonable name found */
   *name = "?";  /* no reasonable name found */
 }
 
+/*
+** find a name for the register value 'c'
+*/
+static void rname (Proto *p, int pc, int c, const char **name) {
+  const char *what = getobjname(p, pc, c, name); /* search for 'c' */
+  if (what && *what == 'c') {  /* found a constant name? */
+    return;  /* 'name' already filled */
+  }
+  /* else no reasonable name found */
+  *name = "?";
+}
 
 /*
 ** try to find last instruction before 'lastpc' that modified register 'reg'
@@ -378,54 +379,69 @@ static int findsetreg (Proto *p, int lastpc, int reg) {
 
 static const char *getobjname (Proto *p, int lastpc, int reg,
                                const char **name) {
-  // int pc;
+  int pc;
   *name = luaF_getlocalname(p, reg + 1, lastpc);
   if (*name)  /* is a local? */
     return "local";
-  // /* else try symbolic execution */
-  // pc = findsetreg(p, lastpc, reg);
-  // if (pc != -1) {  /* could find instruction? */
-  //   Instruction i = p->code[pc];
-  //   OpCode op = GET_OPCODE(i);
-  //   switch (op) {
-  //     case OP_MOVE: {
-  //       int b = GETARG_B(i);  /* move from 'b' to 'a' */
-  //       if (b < GETARG_A(i))
-  //         return getobjname(p, pc, b, name);  /* get name for 'b' */
-  //       break;
-  //     }
-  //     case OP_GETTABUP:
-  //     case OP_GETTABLE: {
-  //       int k = GETARG_C(i);  /* key index */
-  //       int t = GETARG_B(i);  /* table index */
-  //       const char *vn = (op == OP_GETTABLE)  /* name of indexed variable */
-  //                        ? luaF_getlocalname(p, t + 1, pc)
-  //                        : upvalname(p, t);
-  //       kname(p, pc, k, name);
-  //       return (vn && strcmp(vn, LUA_ENV) == 0) ? "global" : "field";
-  //     }
-  //     case OP_GETUPVAL: {
-  //       *name = upvalname(p, GETARG_B(i));
-  //       return "upvalue";
-  //     }
-  //     case OP_LOADK:
-  //     case OP_LOADKX: {
-  //       int b = (op == OP_LOADK) ? GETARG_Bx(i)
-  //                                : GETARG_Ax(p->code[pc + 1]);
-  //       if (ttisstring(&p->k[b])) {
-  //         *name = svalue(&p->k[b]);
-  //         return "constant";
-  //       }
-  //       break;
-  //     }
-  //     case OP_SELF: {
-  //       int k = GETARG_C(i);  /* key index */
-  //       kname(p, pc, k, name);
-  //       return "method";
-  //     }
-  //     default: break;  /* go through to return NULL */
-  //   }
-  // }
+  /* else try symbolic execution */
+  pc = findsetreg(p, lastpc, reg);
+  if (pc != -1) {  /* could find instruction? */
+    Instruction i = p->code[pc];
+    OpCode op = GET_OPCODE(i);
+    switch (op) {
+      case OP_MOVE_r: {
+        int b = GETARG_B(i);  /* move from 'b' to 'a' */
+        if (b < GETARG_A(i))
+          return getobjname(p, pc, b, name);  /* get name for 'b' */
+        break;
+      }
+      case OP_GETTABUP_rur:
+      case OP_GETTABLE_rrr: {
+        int k = GETARG_C(i);  /* key index */
+        int t = GETARG_B(i);  /* table index */
+        const char *vn = (op == OP_GETTABLE_rrr)  /* name of indexed variable */
+                         ? luaF_getlocalname(p, t + 1, pc)
+                         : upvalname(p, t);
+        rname(p, pc, k, name);
+        return (vn && strcmp(vn, LUA_ENV) == 0) ? "global" : "field";
+      }
+      case OP_GETTABUP_ruK:
+      case OP_GETTABLE_rrK: {
+        int k = GETARG_C(i);  /* key index */
+        int t = GETARG_B(i);  /* table index */
+        const char *vn = (op == OP_GETTABLE_rrK)  /* name of indexed variable */
+                         ? luaF_getlocalname(p, t + 1, pc)
+                         : upvalname(p, t);
+        kname(p, pc, k, name);
+        return (vn && strcmp(vn, LUA_ENV) == 0) ? "global" : "field";
+      }
+      case OP_GETUPVAL_r: {
+        *name = upvalname(p, GETARG_B(i));
+        return "upvalue";
+      }
+      case OP_LOADK_r:
+      case OP_LOADKX_r: {
+        int b = (op == OP_LOADK_r) ? GETARG_Bx(i)
+                                 : GETARG_Ax(p->code[pc + 1]);
+        if (ttisstring(&p->k[b])) {
+          *name = svalue(&p->k[b]);
+          return "constant";
+        }
+        break;
+      }
+      case OP_SELF_rr: {
+        int k = GETARG_C(i);  /* key index */
+        rname(p, pc, k, name);
+        return "method";
+      }
+      case OP_SELF_rK: {
+        int k = GETARG_C(i);  /* key index */
+        kname(p, pc, k, name);
+        return "method";
+      }
+      default: break;  /* go through to return NULL */
+    }
+  }
   return NULL;  /* could not find reasonable name */
 }
 
@@ -446,23 +462,54 @@ static const char *getfuncname (lua_State *L, CallInfo *ci, const char **name) {
        return "for iterator";
     }
     /* all other instructions can call only through metamethods */
-    // case OP_SELF:
-    // case OP_GETTABUP:
-    // case OP_GETTABLE: tm = TM_INDEX; break;
-    // case OP_SETTABUP:
-    // case OP_SETTABLE: tm = TM_NEWINDEX; break;
-    // case OP_EQ: tm = TM_EQ; break;
-    // case OP_ADD: tm = TM_ADD; break;
-    // case OP_SUB: tm = TM_SUB; break;
-    // case OP_MUL: tm = TM_MUL; break;
-    // case OP_DIV: tm = TM_DIV; break;
-    // case OP_MOD: tm = TM_MOD; break;
-    // case OP_POW: tm = TM_POW; break;
-    // case OP_UNM: tm = TM_UNM; break;
-    // case OP_LEN: tm = TM_LEN; break;
-    // case OP_LT: tm = TM_LT; break;
-    // case OP_LE: tm = TM_LE; break;
-    // case OP_CONCAT: tm = TM_CONCAT; break;
+    case OP_SELF_rr:
+    case OP_SELF_rK:
+    case OP_GETTABUP_rur:
+    case OP_GETTABUP_ruK:
+    case OP_GETTABLE_rrr:
+    case OP_GETTABLE_rrK: tm = TM_INDEX; break;
+    case OP_SETTABUP_urr:
+    case OP_SETTABUP_urK:
+    case OP_SETTABUP_uKr:
+    case OP_SETTABUP_uKK:
+    case OP_SETTABLE_rrr:
+    case OP_SETTABLE_rrK:
+    case OP_SETTABLE_rKr:
+    case OP_SETTABLE_rKK: tm = TM_NEWINDEX; break;
+    case OP_EQ_rr:
+    case OP_EQ_rK:
+    case OP_EQ_KK: tm = TM_EQ; break;
+    case OP_ADD_rrr:
+    case OP_ADD_rrK:
+    case OP_ADD_rKK: tm = TM_ADD; break;
+    case OP_SUB_rrr:
+    case OP_SUB_rrK:
+    case OP_SUB_rKr:
+    case OP_SUB_rKK: tm = TM_SUB; break;
+    case OP_MUL_rrr:
+    case OP_MUL_rrK:
+    case OP_MUL_rKK: tm = TM_MUL; break;
+    case OP_DIV_rrr:
+    case OP_DIV_rrK:
+    case OP_DIV_rKr:
+    case OP_DIV_rKK: tm = TM_DIV; break;
+    case OP_MOD_rrr:
+    case OP_MOD_rrK:
+    case OP_MOD_rKr:
+    case OP_MOD_rKK: tm = TM_MOD; break;
+    case OP_POW_rrr:
+    case OP_POW_rrK:
+    case OP_POW_rKr:
+    case OP_POW_rKK: tm = TM_POW; break;
+    case OP_UNM_rr: tm = TM_UNM; break;
+    case OP_LEN_rr: tm = TM_LEN; break;
+    case OP_LT_rr:
+    case OP_LT_rK:
+    case OP_LT_KK: tm = TM_LT; break;
+    case OP_LE_rr:
+    case OP_LE_rK:
+    case OP_LE_KK: tm = TM_LE; break;
+    case OP_CONCAT_r: tm = TM_CONCAT; break;
     default:
       return NULL;  /* else no useful name can be found */
   }
