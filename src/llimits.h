@@ -119,9 +119,9 @@ typedef LUAI_UACNUMBER l_uacNumber;
 
 /*
 ** maximum number of upvalues in a closure (both C and Lua). (Value
-** must fit in an unsigned char.)
+** must fit in 7 bits.)
 */
-#define MAXUPVAL	UCHAR_MAX
+#define MAXUPVAL	127
 
 
 /*
@@ -133,7 +133,7 @@ typedef lu_int32 Instruction;
 
 
 /* maximum stack for a Lua function */
-#define MAXSTACK	250
+#define MAXSTACK	120
 
 
 

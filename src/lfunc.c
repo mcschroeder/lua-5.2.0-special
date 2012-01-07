@@ -131,6 +131,8 @@ Proto *luaF_newproto (lua_State *L) {
   f->linedefined = 0;
   f->lastlinedefined = 0;
   f->source = NULL;
+  f->reginfo = NULL;
+  f->sizereginfo = 0;
   return f;
 }
 
@@ -142,6 +144,19 @@ void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->lineinfo, f->sizelineinfo);
   luaM_freearray(L, f->locvars, f->sizelocvars);
   luaM_freearray(L, f->upvalues, f->sizeupvalues);
+  
+  int i;
+  RegInfo *reg, *regnext;
+  for (i = 0; i < f->sizereginfo; i++) {
+    reg = f->reginfo[i].next;
+    while (reg != NULL) {
+      regnext = reg->next;
+      luaM_free(L, reg);
+      reg = regnext;
+    }
+  }
+  luaM_freearray(L, f->reginfo, f->sizereginfo);
+
   luaM_free(L, f);
 }
 

@@ -25,6 +25,7 @@
 #include "ltable.h"
 #include "ltm.h"
 #include "lvm.h"
+#include "lvmspec.h"
 
 
 
@@ -98,70 +99,81 @@ static void callTM (lua_State *L, const TValue *f, const TValue *p1,
   }
 }
 
-
-void luaV_gettable (lua_State *L, const TValue *t, TValue *key, StkId val) {
-  int loop;
-  for (loop = 0; loop < MAXTAGLOOP; loop++) {
-    const TValue *tm;
-    if (ttistable(t)) {  /* `t' is a table? */
-      Table *h = hvalue(t);
-      const TValue *res = luaH_get(h, key); /* do a primitive get */
-      if (!ttisnil(res) ||  /* result is not nil? */
-          (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { /* or no TM? */
-        setobj2s(L, val, res);
-        return;
-      }
-      /* else will try the tag method */
-    }
-    else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_INDEX)))
-      luaG_typeerror(L, t, "index");
-    if (ttisfunction(tm)) {
-      callTM(L, tm, t, key, val, 1);
-      return;
-    }
-    t = tm;  /* else repeat with 'tm' */
-  }
-  luaG_runerror(L, "loop in gettable");
+#define _luaV_gettable_def(name, getfunc, keyfunc) \
+void name (lua_State *L, const TValue *t, TValue *key, StkId val) { \
+  int loop; \
+  for (loop = 0; loop < MAXTAGLOOP; loop++) { \
+    const TValue *tm; \
+    if (ttistable(t)) {  /* `t' is a table? */ \
+      Table *h = hvalue(t); \
+      const TValue *res = getfunc(h, keyfunc(key)); \
+      if (!ttisnil(res) ||  /* result is not nil? */ \
+          (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { /* no TM? */ \
+        setobj2s(L, val, res); \
+        return; \
+      } \
+      /* else will try the tag method */ \
+    } \
+    else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_INDEX))) \
+      luaG_typeerror(L, t, "index"); \
+    if (ttisfunction(tm)) { \
+      callTM(L, tm, t, key, val, 1); \
+      return; \
+    } \
+    t = tm;  /* else repeat with 'tm' */ \
+  } \
+  luaG_runerror(L, "loop in gettable"); \
 }
 
+_luaV_gettable_def(luaV_gettable, luaH_get,);
+_luaV_gettable_def(luaV_gettable_int, luaH_getint, nvalue);
+_luaV_gettable_def(luaV_gettable_str, luaH_getstr, rawtsvalue);
+_luaV_gettable_def(luaV_gettable_obj, luaH_getobj,);
 
-void luaV_settable (lua_State *L, const TValue *t, TValue *key, StkId val) {
-  int loop;
-  for (loop = 0; loop < MAXTAGLOOP; loop++) {
-    const TValue *tm;
-    if (ttistable(t)) {  /* `t' is a table? */
-      Table *h = hvalue(t);
-      TValue *oldval = cast(TValue *, luaH_get(h, key));
+
+#define _luaV_settable_def(name, getfunc, keyfunc) \
+void name (lua_State *L, const TValue *t, TValue *key, StkId val) { \
+  int loop; \
+  for (loop = 0; loop < MAXTAGLOOP; loop++) { \
+    const TValue *tm; \
+    if (ttistable(t)) {  /* `t' is a table? */ \
+      Table *h = hvalue(t); \
+      TValue *oldval = cast(TValue *, getfunc(h, keyfunc(key))); \
       /* if previous value is not nil, there must be a previous entry
-         in the table; moreover, a metamethod has no relevance */
-      if (!ttisnil(oldval) ||
-         /* previous value is nil; must check the metamethod */
-         ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL &&
-         /* no metamethod; is there a previous entry in the table? */
-         (oldval != luaO_nilobject ||
+         in the table; moreover, a metamethod has no relevance */ \
+      if (!ttisnil(oldval) || \
+         /* previous value is nil; must check the metamethod */ \
+         ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL && \
+         /* no metamethod; is there a previous entry in the table? */ \
+         (oldval != luaO_nilobject || \
          /* no previous entry; must create one. (The next test is
-            always true; we only need the assignment.) */
-         (oldval = luaH_newkey(L, h, key), 1)))) {
-        /* no metamethod and (now) there is an entry with given key */
-        setobj2t(L, oldval, val);  /* assign new value to that entry */
-        invalidateTMcache(h);
-        luaC_barrierback(L, obj2gco(h), val);
-        return;
-      }
-      /* else will try the metamethod */
-    }
-    else  /* not a table; check metamethod */
-      if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_NEWINDEX)))
-        luaG_typeerror(L, t, "index");
-    /* there is a metamethod */
-    if (ttisfunction(tm)) {
-      callTM(L, tm, t, key, val, 0);
-      return;
-    }
-    t = tm;  /* else repeat with 'tm' */
-  }
-  luaG_runerror(L, "loop in settable");
+            always true; we only need the assignment.) */ \
+         (oldval = luaH_newkey(L, h, key), 1)))) { \
+        /* no metamethod and (now) there is an entry with given key */ \
+        setobj2t(L, oldval, val);  /* assign new value to that entry */ \
+        invalidateTMcache(h); \
+        luaC_barrierback(L, obj2gco(h), val); \
+        return; \
+      } \
+      /* else will try the metamethod */ \
+    } \
+    else  /* not a table; check metamethod */ \
+      if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_NEWINDEX))) \
+        luaG_typeerror(L, t, "index"); \
+    /* there is a metamethod */ \
+    if (ttisfunction(tm)) { \
+      callTM(L, tm, t, key, val, 0); \
+      return; \
+    } \
+    t = tm;  /* else repeat with 'tm' */ \
+  } \
+  luaG_runerror(L, "loop in settable"); \
 }
+
+_luaV_settable_def(luaV_settable, luaH_get,);
+_luaV_settable_def(luaV_settable_int, luaH_getint, nvalue);
+_luaV_settable_def(luaV_settable_str, luaH_getstr, rawtsvalue);
+_luaV_settable_def(luaV_settable_obj, luaH_getobj,);
 
 
 static int call_binTM (lua_State *L, const TValue *p1, const TValue *p2,
@@ -416,27 +428,27 @@ void luaV_finishOp (lua_State *L) {
   Instruction inst = *(ci->u.l.savedpc - 1);  /* interrupted instruction */
   OpCode op = GET_OPCODE(inst);
   switch (op) {  /* finish its execution */
-    case OP_ADD_rrr: case OP_ADD_rrK: case OP_ADD_rKr: case OP_ADD_rKK:
-    case OP_SUB_rrr: case OP_SUB_rrK: case OP_SUB_rKr: case OP_SUB_rKK:
-    case OP_MUL_rrr: case OP_MUL_rrK: case OP_MUL_rKr: case OP_MUL_rKK:
-    case OP_DIV_rrr: case OP_DIV_rrK: case OP_DIV_rKr: case OP_DIV_rKK:
-    case OP_MOD_rrr: case OP_MOD_rrK: case OP_MOD_rKr: case OP_MOD_rKK:
-    case OP_POW_rrr: case OP_POW_rrK: case OP_POW_rKr: case OP_POW_rKK:
-    case OP_UNM_rr: case OP_LEN_rr:
-    case OP_GETTABUP_rur: case OP_GETTABUP_ruK:
-    case OP_GETTABLE_rrr: case OP_GETTABLE_rrK: 
-    case OP_SELF_rr: case OP_SELF_rK: {
-      setobjs2s(L, base + GETARG_A(inst), --L->top);
+    case OP_ADD: case OP_SUB: case OP_MUL: 
+    case OP_DIV: case OP_MOD: case OP_POW: 
+    case OP_UNM: case OP_LEN:     
+    case OP_GETTABLE:
+    case OP_SELF: {
+      StkId ra = base + GETARG_A(inst);
+      if (GET_OPSPEC_OUT(inst) == OPSPEC_OUT_chk) {
+        int rat = rttype(ra);
+        setobjs2s(L, ra, --L->top);
+        if (rat != rttype(ra)) luaVS_specialize(L, GETARG_A(inst));
+      } else {
+        setobjs2s(L, ra, --L->top);
+      }
       break;
     }
-    case OP_LE_rr: case OP_LE_rK:
-    case OP_LT_rr: case OP_LT_rK:
-    case OP_EQ_rr: case OP_EQ_rK: {
+    case OP_LE: case OP_LT: case OP_EQ: {
       int res = !l_isfalse(L->top - 1);
       L->top--;
       /* metamethod should not be called when operand is K */
       //lua_assert(!ISK(GETARG_B(inst)));
-      if ((op == OP_LE_rr || op == OP_LE_rK) &&  /* "<=" using "<" instead? */
+      if (op == OP_LE &&  /* "<=" using "<" instead? */
           ttisnil(luaT_gettmbyobj(L, base + GETARG_B(inst), TM_LE)))
         res = !res;  /* invert result */
       lua_assert(GET_OPCODE(*ci->u.l.savedpc) == OP_JMP);
@@ -444,7 +456,7 @@ void luaV_finishOp (lua_State *L) {
         ci->u.l.savedpc++;  /* skip jump instruction */
       break;
     }
-    case OP_CONCAT_r: {
+    case OP_CONCAT: {
       StkId top = L->top - 1;  /* top when 'call_binTM' was called */
       int b = GETARG_B(inst);      /* first element to concatenate */
       int total = cast_int(top - 1 - (base + b));  /* yet to concatenate */
@@ -454,7 +466,14 @@ void luaV_finishOp (lua_State *L) {
         luaV_concat(L, total);  /* concat them (may yield again) */
       }
       /* move final result to final position */
-      setobj2s(L, ci->u.l.base + GETARG_A(inst), L->top - 1);
+      StkId ra = ci->u.l.base + GETARG_A(inst);
+      if (GET_OPSPEC_OUT(inst) == OPSPEC_OUT_chk) {
+        int rat = rttype(ra);
+        setobj2s(L, ra, L->top - 1);
+        if (rat != rttype(ra)) luaVS_specialize(L, GETARG_A(inst));
+      } else {
+        setobj2s(L, ra, L->top - 1);
+      }
       L->top = ci->top;  /* restore top */
       break;
     }
@@ -463,16 +482,12 @@ void luaV_finishOp (lua_State *L) {
       L->top = ci->top;  /* correct top */
       break;
     }
-    case OP_CALL_rr: {
+    case OP_CALL: {
       if (GETARG_C(inst) - 1 >= 0)  /* nresults >= 0? */
         L->top = ci->top;  /* adjust results */
       break;
     }
-    case OP_TAILCALL_r: 
-    case OP_SETTABUP_urr: case OP_SETTABUP_urK: case OP_SETTABUP_uKr: 
-    case OP_SETTABUP_uKK:
-    case OP_SETTABLE_rrr: case OP_SETTABLE_rrK: case OP_SETTABLE_rKr:
-    case OP_SETTABLE_rKK:
+    case OP_TAILCALL: case OP_SETTABUP: case OP_SETTABLE:
       break;
     default: lua_assert(0);
   }
@@ -525,8 +540,12 @@ void luaV_finishOp (lua_State *L) {
 
 
 #define vmdispatch(o)	switch(o)
-#define vmcase(l,b)	case l: {b}  break;
-#define vmcasenb(l,b)	case l: {b}		/* nb = no break */
+#define vmcase(o,s,b)	case OP_MAKE(o,s): {b}  break;
+#define vmcasenb(o,s,b)	case OP_MAKE(o,s): {b}		/* nb = no break */
+
+
+#define SpecCheckRa(x) { int rat = rttype(ra); {x;} \
+        if (rat != rttype(ra)) luaVS_specialize(L, GETARG_A(i)); }
 
 void luaV_execute (lua_State *L) {
   CallInfo *ci = L->ci;
@@ -534,6 +553,7 @@ void luaV_execute (lua_State *L) {
   TValue *k;
   StkId base;
  newframe:  /* reentry point when frame changes (call/return) */
+ printf("---\n");
   lua_assert(ci == L->ci);
   cl = clLvalue(ci->func);
   k = cl->p->k;
@@ -550,85 +570,204 @@ void luaV_execute (lua_State *L) {
     ra = RA(i);
     lua_assert(base == ci->u.l.base);
     lua_assert(base <= L->top && L->top < L->stack + L->stacksize);
-    vmdispatch (GET_OPCODE(i)) {
-      vmcase(OP_MOVE_r,
+  dispatch_again:
+    printf("[%i] %s ", pcRel(ci->u.l.savedpc, ci_func(ci)->p), luaP_opnames[GET_OPCODE(i)]);
+    PrintSpec(i);
+    printf("\n");
+    vmdispatch (GET_OP(i)) {      
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_MOVE, 1, /* Ra:? <- Rb */
+        setobjs2s(L, ra, RB(i));
+        luaVS_specialize(L, GETARG_A(i));
+      )
+      vmcase(OP_MOVE, 2, /* Ra:x <- Rb:x (any two equal types) */
+        setobjs2s_fast(L, ra, RB(i));
+      )
+      vmcase(OP_MOVE, 0, /* Ra <- Rb */
         setobjs2s(L, ra, RB(i));
       )
-      vmcase(OP_LOADK_r,
-        TValue *rb = k + GETARG_Bx(i);
-        setobj2s(L, ra, rb);
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_LOADK, 1, /* Ra:? <- Kb */
+        setobj2s(L, ra, KB(i));
+        luaVS_specialize(L, GETARG_A(i));
       )
-      vmcase(OP_LOADKX_r,
+      vmcase(OP_LOADK, 2, /* Ra:x <- Kb:x (any two equal types) */
+        setobj2s_fast(L, ra, KB(i));
+      )
+      vmcase(OP_LOADK, 0, /* Ra <- Kb */
+        setobj2s(L, ra, KB(i));
+      )
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_LOADKX, 1, /* Ra:? <- extra arg */
+        TValue *rb;
+        lua_assert(GET_OPCODE(*ci->u.l.savedpc) == OP_EXTRAARG);
+        rb = k + GETARG_Ax(*ci->u.l.savedpc++);
+        SpecCheckRa(setobj2s(L, ra, rb));
+      )
+      vmcase(OP_LOADKX, 0, /* Ra <- extra arg */
         TValue *rb;
         lua_assert(GET_OPCODE(*ci->u.l.savedpc) == OP_EXTRAARG);
         rb = k + GETARG_Ax(*ci->u.l.savedpc++);
         setobj2s(L, ra, rb);
       )
-      vmcase(OP_LOADBOOL_r,
-        setbvalue(ra, GETARG_B(i));
-        if (GETARG_C(i)) ci->u.l.savedpc++;  /* skip next instruction (if C) */
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_LOADBOOL, 2, /* Ra:bool <- Ib:bool */
+        changebvalue(ra, GETARG_B(i));
+        if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
       )
-      vmcase(OP_LOADNIL_r,
+      vmcase(OP_LOADBOOL, 0, /* Ra <- Ib:bool */
+        setbvalue(ra, GETARG_B(i));
+        if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
+      )
+      vmcase(OP_LOADBOOL, 1, /* Ra:? <- Ib:bool */
+        setbvalue(ra, GETARG_B(i));
+        luaVS_specialize(L, GETARG_A(i));
+        if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
+      )
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_LOADNIL, 0, /* R(a...a+b) <- nil */
         int b = GETARG_B(i);
         do {
           setnilvalue(ra++);
         } while (b--);
       )
-      vmcase(OP_GETUPVAL_r,
+      vmcase(OP_LOADNIL, 1, /* R(a...a+b):? <- nil */        
         int b = GETARG_B(i);
-        setobj2s(L, ra, cl->upvals[b]->v);
+        do {
+          setnilvalue(ra);
+          luaVS_specialize(L, GETARG_A(i));
+          ra++;
+        } while (b--);
       )
-      vmcase(OP_GETTABUP_rur,
-        int b = GETARG_B(i);
-        Protect(luaV_gettable(L, cl->upvals[b]->v, RC(i), ra));
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_GETUPVAL, 1, /* Ra:? <- Ub */
+        SpecCheckRa(setobj2s(L, ra, cl->upvals[GETARG_B(i)]->v));
       )
-      vmcase(OP_GETTABUP_ruK,
-        int b = GETARG_B(i);
-        Protect(luaV_gettable(L, cl->upvals[b]->v, KC(i), ra));
+      vmcase(OP_GETUPVAL, 0, /* Ra <- Ub */
+        setobj2s(L, ra, cl->upvals[GETARG_B(i)]->v);
       )
-      vmcase(OP_GETTABLE_rrr,
-        Protect(luaV_gettable(L, RB(i), RC(i), ra));
+/* ------------------------------------------------------------------------ */
+#undef sp
+#define sp(out,key,ck) \
+      (OPSPEC_##ck<<4 | OPSPEC_TAB_KEY_##key<<1 | OPSPEC_OUT_##out)
+
+#define _vmcase_gettab_chk(op) \
+      vmcasenb(op, sp(raw,chk,reg), /* raw <- b[?] */) \
+      vmcasenb(op, sp(chk,chk,reg), /* ? <- b[?] */ \
+        luaVS_specialize(L, GETARG_C(i)); \
+        goto dispatch_again; \
       )
-      vmcase(OP_GETTABLE_rrK,
-        Protect(luaV_gettable(L, RB(i), KC(i), ra));
+#define _vmcase_gettab_str(op,b,c,ck) \
+      vmcase(op, sp(raw,str,ck), /* raw <- b[str] */ \
+        Protect(luaV_gettable_str(L, b, c, ra)); \
+      ) \
+      vmcase(op, sp(chk,str,ck), /* ? <- b[str] */ \
+        SpecCheckRa(Protect(luaV_gettable_str(L, b, c, ra))); \
       )
-      vmcase(OP_SETTABUP_urr,
-        int a = GETARG_A(i);
-        Protect(luaV_settable(L, cl->upvals[a]->v, RB(i), RC(i)));
+#define _vmcase_gettab_int(op,b,c,ck) \
+      vmcase(op, sp(raw,int,ck), /* raw <- b[int] */ \
+        Protect(luaV_gettable_int(L, b, c, ra)); \
+      ) \
+      vmcase(op, sp(chk,int,ck), /* ? <- b[int] */ \
+        SpecCheckRa(Protect(luaV_gettable_int(L, b, c, ra))); \
       )
-      vmcase(OP_SETTABUP_urK,
-        int a = GETARG_A(i);
-        Protect(luaV_settable(L, cl->upvals[a]->v, RB(i), KC(i)));
+#define _vmcase_gettab_obj(op,b) \
+      vmcase(op, sp(raw,obj,reg), /* raw <- b[obj] */ \
+        Protect(luaV_gettable_obj(L, b, RC(i), ra)); \
+      ) \
+      vmcase(op, sp(chk,obj,reg), /* ? <- b[obj] */ \
+        SpecCheckRa(Protect(luaV_gettable_obj(L, b, RC(i), ra))); \
       )
-      vmcase(OP_SETTABUP_uKr,
-        int a = GETARG_A(i);
-        Protect(luaV_settable(L, cl->upvals[a]->v, KB(i), RC(i)));
+#define _vmcase_gettab_raw(op,b) \
+      vmcase(op, sp(raw,raw,reg), /* raw <- b[c] */ \
+        Protect(luaV_gettable(L, b, RC(i), ra)); \
+      ) \
+      vmcase(op, sp(chk,raw,reg), /* ? <- b[c] */ \
+        SpecCheckRa(Protect(luaV_gettable(L, b, RC(i), ra))); \
       )
-      vmcase(OP_SETTABUP_uKK,
-        int a = GETARG_A(i);
-        Protect(luaV_settable(L, cl->upvals[a]->v, KB(i), KC(i)));
-        )      
-      vmcase(OP_SETUPVAL,
+#define vmcase_gettab(op,b) \
+      _vmcase_gettab_chk(op) \
+      _vmcase_gettab_str(op,b,RC(i),reg) \
+      _vmcase_gettab_str(op,b,KC(i),kst) \
+      _vmcase_gettab_int(op,b,RC(i),reg) \
+      _vmcase_gettab_int(op,b,KC(i),kst) \
+      _vmcase_gettab_obj(op,b) \
+      _vmcase_gettab_raw(op,b)      
+
+      vmcase_gettab(OP_GETTABLE, RB(i))
+      vmcase_gettab(OP_GETTABUP, cl->upvals[GETARG_B(i)]->v)
+/* ------------------------------------------------------------------------ */
+#undef sp
+#define sp(key,bk,ck) \
+      (OPSPEC_##ck<<4 | OPSPEC_##bk<<3 | OPSPEC_TAB_KEY_##key)
+
+#define _vmcase_settab_chk(op) \
+      vmcase(op, sp(chk,reg,reg), /* a[?] <- c*/) \
+      vmcase(op, sp(chk,reg,kst), /* a[?] <- c*/ \
+        luaVS_specialize(L, GETARG_B(i)); \
+        goto dispatch_again; \
+      )
+#define _vmcase_settab_str(op,a,b,bk,c,ck) \
+      vmcase(op, sp(str,bk,ck), /* a[str] <- c */ \
+        Protect(luaV_settable_str(L, a, b, c)); \
+      )
+#define _vmcase_settab_int(op,a,b,bk,c,ck) \
+      vmcase(op, sp(int,bk,ck), /* a[int] <- c */ \
+        Protect(luaV_settable_int(L, a, b, c)); \
+      )
+#define _vmcase_settab_obj(op,a,b,bk,c,ck) \
+      vmcase(op, sp(obj,bk,ck), /* a[obj] <- c */ \
+        Protect(luaV_settable_obj(L, a, b, c)); \
+      )
+#define _vmcase_settab_raw(op,a,c,ck) \
+      vmcase(op, sp(raw,reg,ck), /* a[b] <- c */ \
+        Protect(luaV_settable(L, a, RB(i), c)); \
+      )
+#define vmcase_settab(op,a) \
+      _vmcase_settab_chk(op) \
+      _vmcase_settab_str(op, a, RB(i), reg, RC(i), reg); \
+      _vmcase_settab_str(op, a, RB(i), reg, KC(i), kst); \
+      _vmcase_settab_str(op, a, KB(i), kst, RC(i), reg); \
+      _vmcase_settab_str(op, a, KB(i), kst, KC(i), kst); \
+      _vmcase_settab_int(op, a, RB(i), reg, RC(i), reg); \
+      _vmcase_settab_int(op, a, RB(i), reg, KC(i), kst); \
+      _vmcase_settab_int(op, a, KB(i), kst, RC(i), reg); \
+      _vmcase_settab_int(op, a, KB(i), kst, KC(i), kst); \
+      _vmcase_settab_obj(op, a, RB(i), reg, RC(i), reg); \
+      _vmcase_settab_obj(op, a, RB(i), reg, KC(i), kst); \
+      _vmcase_settab_obj(op, a, KB(i), kst, RC(i), reg); \
+      _vmcase_settab_obj(op, a, KB(i), kst, KC(i), kst); \
+      _vmcase_settab_raw(op, a, RC(i), reg); \
+      _vmcase_settab_raw(op, a, KC(i), kst);
+
+      vmcase_settab(OP_SETTABLE, ra);
+      vmcase_settab(OP_SETTABUP, cl->upvals[GETARG_A(i)]->v);
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_SETUPVAL, 0, /* Ub <- Ra */
         UpVal *uv = cl->upvals[GETARG_B(i)];
         setobj(L, uv->v, ra);
         luaC_barrier(L, uv, ra);
       )
-      vmcase(OP_SETTABLE_rrr,
-        Protect(luaV_settable(L, ra, RB(i), RC(i)));
-      )
-      vmcase(OP_SETTABLE_rrK,
-        Protect(luaV_settable(L, ra, RB(i), KC(i)));
-      )
-      vmcase(OP_SETTABLE_rKr,
-        Protect(luaV_settable(L, ra, KB(i), RC(i)));
-      )
-      vmcase(OP_SETTABLE_rKK,
-        Protect(luaV_settable(L, ra, KB(i), KC(i)));
-      )
-      vmcase(OP_NEWTABLE_r,
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_NEWTABLE, 1, /* Ra:? <- {} */
         int b = GETARG_B(i);
         int c = GETARG_C(i);
         Table *t = luaH_new(L);
+        SpecCheckRa(
+          sethvalue(L, ra, t);
+        )
+        if (b != 0 || c != 0)
+          luaH_resize(L, t, luaO_fb2int(b), luaO_fb2int(c));
+        checkGC(L,
+          L->top = ra + 1;  /* limit of live values */
+          luaC_step(L);
+          L->top = ci->top;  /* restore top */
+        )
+      )
+      vmcase(OP_NEWTABLE, 0, /* Ra <- {} */
+        int b = GETARG_B(i);
+        int c = GETARG_C(i);
+        Table *t = luaH_new(L);        
         sethvalue(L, ra, t);
         if (b != 0 || c != 0)
           luaH_resize(L, t, luaO_fb2int(b), luaO_fb2int(c));
@@ -638,115 +777,188 @@ void luaV_execute (lua_State *L) {
           L->top = ci->top;  /* restore top */
         )
       )
+/* ------------------------------------------------------------------------ */
+#define vmcase_self(c,ck) \
+      vmcase(OP_SELF, (ck<<4)|0, /* R(a+1) <- Rb; Ra <- Rb[c:str] */ \
+        StkId rb = RB(i); \
+        setobjs2s(L, ra+1, rb); /* TODO: this should be fine, yeah? */ \
+        Protect(luaV_gettable_str(L, rb, c, ra)); \
+      ) \
+      vmcase(OP_SELF, (ck<<4)|1, /* R(a+1) <- Rb; Ra:? <- Rb[c:str] */ \
+        StkId rb = RB(i); \
+        setobjs2s(L, ra+1, rb); \
+        SpecCheckRa( \
+          Protect(luaV_gettable_str(L, rb, c, ra)); \
+        ) \
+      )
+      vmcase_self(RC(i), 0);
+      vmcase_self(KC(i), 1);
+      // NOTE: the grammar of the language restricts c to strings
+/* ------------------------------------------------------------------------ */
+#undef sp
+#define sp(out,in,bk,ck) (OPSPEC_##ck<<4 | OPSPEC_##bk<<3 | \
+      OPSPEC_ARITH_IN_##in<<1 | OPSPEC_OUT_##out)
 
-      vmcase(OP_SELF_rr,
-        StkId rb = RB(i);
-        setobjs2s(L, ra+1, rb);
-        Protect(luaV_gettable(L, rb, RC(i), ra));
+#define _vmcase_arith_chk(op) \
+      vmcasenb(op, sp(raw,chk,reg,reg), /* raw <- ? . ? */) \
+      vmcasenb(op, sp(chk,chk,reg,reg), /* ? <- ? . ? */ \
+        luaVS_specialize(L, GETARG_B(i)); \
+        luaVS_specialize(L, GETARG_C(i)); \
+        goto dispatch_again; \
+      ) \
+      vmcasenb(op, sp(raw,chk,reg,kst), /* raw <- ? . K */) \
+      vmcasenb(op, sp(chk,chk,reg,kst), /* ? <- ? . K */ \
+        luaVS_specialize(L, GETARG_B(i)); \
+        goto dispatch_again; \
+      ) \
+      vmcasenb(op, sp(raw,chk,kst,reg), /* raw <- K . ? */) \
+      vmcasenb(op, sp(chk,chk,kst,reg), /* ? <- K . ? */ \
+        luaVS_specialize(L, GETARG_C(i)); \
+        goto dispatch_again; \
       )
-      vmcase(OP_SELF_rK,
-        StkId rb = RB(i);
-        setobjs2s(L, ra+1, rb);
-        Protect(luaV_gettable(L, rb, KC(i), ra));
+#define _vmcase_arith_num(op,func,b,bk,c,ck) \
+      vmcase(op, sp(raw,num,bk,ck), /* raw <- num . num */ \
+        setnvalue(ra, func(L, nvalue(b), nvalue(c))); \
+      ) \
+      vmcase(op, sp(chk,num,bk,ck), /* ? <- num . num */ \
+        SpecCheckRa(setnvalue(ra, func(L, nvalue(b), nvalue(c)))); \
       )
-      
-      vmcase(OP_ADD_rrr,
-        arith_op(luai_numadd, TM_ADD, RB(i), RC(i));
+#define _vmcase_arith_obj(op,tm,b,bk,c,ck) \
+      vmcase(op, sp(raw,obj,bk,ck), /* raw <- obj . obj */ \
+        Protect( \
+          TValue *rb = b; \
+          TValue *rc = c; \
+          if (!call_binTM(L, rb, rc, ra, tm)) \
+            luaG_aritherror(L, rb, rc); \
+        ) \
+      ) \
+      vmcase(op, sp(chk,obj,bk,ck), /* ? <- obj . obj */ \
+        SpecCheckRa( \
+          Protect( \
+            TValue *rb = b; \
+            TValue *rc = c; \
+            if (!call_binTM(L, rb, rc, ra, tm)) \
+              luaG_aritherror(L, rb, rc); \
+          ) \
+        ) \
       )
-      vmcase(OP_ADD_rrK,
-        arith_op(luai_numadd, TM_ADD, RB(i), KC(i));
+#define _vmcase_arith_raw(op,func,tm,b,bk,c,ck) \
+      vmcase(op, sp(raw,raw,bk,ck), /* raw <- raw . raw */ \
+        TValue *rb = b; \
+        TValue *rc = c; \
+        if (ttisnumber(rb) && ttisnumber(rc)) { \
+          lua_Number nb = nvalue(rb); \
+          lua_Number nc = nvalue(rc); \
+          setnvalue(ra, func(L, nb, nc)); \
+        } \
+        else { Protect(luaV_arith(L, ra, rb, rc, tm)); } \
+      ) \
+      vmcase(op, sp(chk,raw,bk,ck), /* ? <- raw . raw */ \
+        SpecCheckRa( \
+          TValue *rb = b; \
+          TValue *rc = c; \
+          if (ttisnumber(rb) && ttisnumber(rc)) { \
+            lua_Number nb = nvalue(rb); \
+            lua_Number nc = nvalue(rc); \
+            setnvalue(ra, func(L, nb, nc)); \
+          } \
+          else { Protect(luaV_arith(L, ra, rb, rc, tm)); } \
+        ) \
       )
-      vmcase(OP_ADD_rKr,
-        arith_op(luai_numadd, TM_ADD, KB(i), RC(i));
-      )
-      vmcase(OP_ADD_rKK,
-        arith_op(luai_numadd, TM_ADD, KB(i), KC(i));
-      )
+#define vmcase_arith(op,func,tm) \
+      _vmcase_arith_chk(op) \
+      _vmcase_arith_num(op, func, RB(i), reg, RC(i), reg) \
+      _vmcase_arith_num(op, func, RB(i), kst, KC(i), kst) \
+      _vmcase_arith_num(op, func, KB(i), kst, RC(i), reg) \
+      _vmcase_arith_obj(op, tm, RB(i), reg, RC(i), reg) \
+      _vmcase_arith_obj(op, tm, RB(i), reg, KC(i), kst) \
+      _vmcase_arith_obj(op, tm, KB(i), kst, RC(i), reg) \
+      _vmcase_arith_raw(op, func, tm, RB(i), reg, RC(i), reg) \
+      _vmcase_arith_raw(op, func, tm, RB(i), reg, KC(i), kst) \
+      _vmcase_arith_raw(op, func, tm, KB(i), kst, RC(i), reg) \
+      _vmcase_arith_raw(op, func, tm, KB(i), kst, KC(i), kst)      
 
-      vmcase(OP_SUB_rrr,
-        arith_op(luai_numsub, TM_SUB, RB(i), RC(i));
-      )
-      vmcase(OP_SUB_rrK,
-        arith_op(luai_numsub, TM_SUB, RB(i), KC(i));
-      )
-      vmcase(OP_SUB_rKr,
-        arith_op(luai_numsub, TM_SUB, KB(i), RC(i));
-      )
-      vmcase(OP_SUB_rKK,
-        arith_op(luai_numsub, TM_SUB, KB(i), KC(i));
-      )
+      vmcase_arith(OP_ADD, luai_numadd, TM_ADD)
+      vmcase_arith(OP_SUB, luai_numsub, TM_SUB)
+      vmcase_arith(OP_MUL, luai_nummul, TM_MUL)
+      vmcase_arith(OP_DIV, luai_numdiv, TM_DIV)
+      vmcase_arith(OP_MOD, luai_nummod, TM_MOD)
+      vmcase_arith(OP_POW, luai_numpow, TM_POW)
+/* ------------------------------------------------------------------------ */
+#undef sp
+#define sp(out,in) (OPSPEC_ARITH_IN_##in<<1 | OPSPEC_OUT_##out)
 
-      vmcase(OP_MUL_rrr,
-        arith_op(luai_nummul, TM_MUL, RB(i), RC(i));
+      vmcasenb(OP_UNM, sp(raw,chk),) /* raw <- -chk */
+      vmcasenb(OP_UNM, sp(chk,chk), /* chk <- -chk */
+        luaVS_specialize(L, GETARG_B(i));
+        goto dispatch_again;
       )
-      vmcase(OP_MUL_rrK,
-        arith_op(luai_nummul, TM_MUL, RB(i), KC(i));
+      vmcase(OP_UNM, sp(raw,num), /* raw <- -num */
+        setnvalue(ra, luai_numunm(L, nvalue(RB(i))));
       )
-      vmcase(OP_MUL_rKr,
-        arith_op(luai_nummul, TM_MUL, KB(i), RC(i));
+      vmcase(OP_UNM, sp(chk,num), /* chk <- -num */
+        SpecCheckRa(setnvalue(ra, luai_numunm(L, nvalue(RB(i)))));
       )
-      vmcase(OP_MUL_rKK,
-        arith_op(luai_nummul, TM_MUL, KB(i), KC(i));
-      )
-
-      vmcase(OP_DIV_rrr,
-        arith_op(luai_numdiv, TM_DIV, RB(i), RC(i));
-      )
-      vmcase(OP_DIV_rrK,
-        arith_op(luai_numdiv, TM_DIV, RB(i), KC(i));
-      )
-      vmcase(OP_DIV_rKr,
-        arith_op(luai_numdiv, TM_DIV, KB(i), RC(i));
-      )
-      vmcase(OP_DIV_rKK,
-        arith_op(luai_numdiv, TM_DIV, KB(i), KC(i));
-      )
-
-      vmcase(OP_MOD_rrr,
-        arith_op(luai_nummod, TM_MOD, RB(i), RC(i));
-      )
-      vmcase(OP_MOD_rrK,
-        arith_op(luai_nummod, TM_MOD, RB(i), KC(i));
-      )
-      vmcase(OP_MOD_rKr,
-        arith_op(luai_nummod, TM_MOD, KB(i), RC(i));
-      )
-      vmcase(OP_MOD_rKK,
-        arith_op(luai_nummod, TM_MOD, KB(i), KC(i));
-      )
-
-      vmcase(OP_POW_rrr,
-        arith_op(luai_numpow, TM_POW, RB(i), RC(i));
-      )
-      vmcase(OP_POW_rrK,
-        arith_op(luai_numpow, TM_POW, RB(i), KC(i));
-      )
-      vmcase(OP_POW_rKr,
-        arith_op(luai_numpow, TM_POW, KB(i), RC(i));
-      )
-      vmcase(OP_POW_rKK,
-        arith_op(luai_numpow, TM_POW, KB(i), KC(i));
-      )
-
-      vmcase(OP_UNM_rr,
+      vmcase(OP_UNM, sp(raw,raw), /* raw <- -raw */
         TValue *rb = RB(i);
-        if (ttisnumber(rb)) {
-          lua_Number nb = nvalue(rb);
-          setnvalue(ra, luai_numunm(L, nb));
-        }
-        else {
-          Protect(luaV_arith(L, ra, rb, rb, TM_UNM));
-        }
+        Protect(luaV_arith(L, ra, rb, rb, TM_UNM));
       )
-      vmcase(OP_NOT_rr,
+      vmcase(OP_UNM, sp(chk,raw), /* chk <- -raw */
         TValue *rb = RB(i);
-        int res = l_isfalse(rb);  /* next assignment may change this value */
-        setbvalue(ra, res);
+        SpecCheckRa(Protect(luaV_arith(L, ra, rb, rb, TM_UNM)));
       )
-      vmcase(OP_LEN_rr,
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_NOT, 0, /* raw <- not raw */
+        setbvalue(ra, l_isfalse(RB(i)));
+      )
+      vmcase(OP_NOT, 1,/* chk <- not raw */
+        SpecCheckRa(setbvalue(ra, l_isfalse(RB(i))));
+      )
+/* ------------------------------------------------------------------------ */
+#undef sp
+#define sp(out,in) (OPSPEC_ARITH_IN_##in<<1 | OPSPEC_OUT_##out)
+
+      vmcasenb(OP_LEN, sp(raw,chk), /* raw <- #chk */)
+      vmcasenb(OP_LEN, sp(chk,chk), /* chk <- #chk */
+        luaVS_specialize(L, GETARG_B(i));
+        goto dispatch_again;
+      )
+      vmcase(OP_LEN, sp(raw,str), /* raw <- #str */
+        setnvalue(ra, cast_num(tsvalue(RB(i))->len));
+      )
+      vmcase(OP_LEN, sp(chk,str), /* chk <- #str */
+        SpecCheckRa(setnvalue(ra, cast_num(tsvalue(RB(i))->len)));
+      )
+      vmcase(OP_LEN, sp(raw,tab), /* raw <- #tab */
+        TValue *rb = RB(i);
+        Table *h = hvalue(rb);
+        const TValue *tm = fasttm(L, h->metatable, TM_LEN);
+        if (tm) {
+          callTM(L, tm, rb, rb, ra, 1);
+        } else {
+          setnvalue(ra, cast_num(luaH_getn(h)));
+        }
+      )
+      vmcase(OP_LEN, sp(chk,tab), /* chk <- #tab */
+        SpecCheckRa(
+          TValue *rb = RB(i);
+          Table *h = hvalue(rb);
+          const TValue *tm = fasttm(L, h->metatable, TM_LEN);
+          if (tm) {
+            callTM(L, tm, rb, rb, ra, 1);
+          } else {
+            setnvalue(ra, cast_num(luaH_getn(h)));
+          }
+        )
+      )
+      vmcase(OP_LEN, sp(raw,raw), /* raw <- raw */
         Protect(luaV_objlen(L, ra, RB(i)));
       )
-      vmcase(OP_CONCAT_r,
+      vmcase(OP_LEN, sp(chk,raw), /* chk <- raw */        
+        SpecCheckRa(Protect(luaV_objlen(L, ra, RB(i))));
+      )
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_CONCAT, 0,/* raw <- raw.. ... ..raw */
         int b = GETARG_B(i);
         int c = GETARG_C(i);
         StkId rb;
@@ -761,98 +973,117 @@ void luaV_execute (lua_State *L) {
         )
         L->top = ci->top;  /* restore top */
       )
-      vmcase(OP_JMP,
+      vmcase(OP_CONCAT, 1,/* chk <- raw.. ... ..raw */
+        int b = GETARG_B(i);
+        int c = GETARG_C(i);
+        StkId rb;
+        L->top = base + c + 1;  /* mark the end of concat operands */
+        Protect(luaV_concat(L, c - b + 1));
+        ra = RA(i);  /* 'luav_concat' may invoke TMs and move the stack */
+        rb = b + base;
+        SpecCheckRa(setobjs2s(L, ra, rb));
+        checkGC(L,
+          L->top = (ra >= rb ? ra + 1 : rb);  /* limit of live values */
+          luaC_step(L);
+        )
+        L->top = ci->top;  /* restore top */
+      )
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_JMP, 0,
         dojump(ci, i, 0);
       )
+/* ------------------------------------------------------------------------ */
+#undef sp
+#define sp(bk,ck) (OPSPEC_##ck<<4 | OPSPEC_##bk<<3)
 
-      vmcase(OP_EQ_rr,
-        TValue *rb = RB(i);
-        TValue *rc = RC(i);
-        Protect(
-          if (cast_int(equalobj(L, rb, rc)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
-      )
-      vmcase(OP_EQ_rK,
-        TValue *rb = RB(i);
-        TValue *rc = KC(i);
-        Protect(
-          if (cast_int(equalobj(L, rb, rc)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
-      )
-      vmcase(OP_EQ_KK,
-        TValue *rb = KB(i);
-        TValue *rc = KC(i);
-        Protect(
-          if (cast_int(equalobj(L, rb, rc)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
+#define vmcase_eq(b,bk,c,ck) \
+      vmcase(OP_EQ, sp(bk,ck), /* if ((b == c) ~= a) pc++ */ \
+        Protect( \
+          if (cast_int(equalobj(L, b, c)) != GETARG_A(i)) \
+            ci->u.l.savedpc++; \
+          else \
+            donextjump(ci); \
+        ) \
       )
 
-      vmcase(OP_LT_rr,
-        Protect(
-          if (luaV_lessthan(L, RB(i), RC(i)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
-      )
-      vmcase(OP_LT_rK,
-        Protect(
-          if (luaV_lessthan(L, RB(i), KC(i)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
-      )
-      vmcase(OP_LT_KK,
-        Protect(
-          if (luaV_lessthan(L, KB(i), KC(i)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
-      )
+      vmcase_eq(RB(i), reg, RC(i), reg)
+      vmcase_eq(RB(i), reg, KC(i), kst)
+      vmcase_eq(KB(i), kst, RC(i), reg)
+      vmcase_eq(KB(i), kst, KC(i), kst)
+/* ------------------------------------------------------------------------ */
+#undef sp
+#define sp(t,bk,ck) \
+      (OPSPEC_##ck<<4 | OPSPEC_##bk<<3 | OPSPEC_LESS_TYPE_##t<<1)
 
-      vmcase(OP_LE_rr,
-        Protect(
-          if (luaV_lessequal(L, RB(i), RC(i)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
+#define _vmcase_less_chk(op) \
+      vmcasenb(op, sp(chk,reg,reg), /* ? < ? */ \
+        luaVS_specialize(L, GETARG_B(i)); \
+        luaVS_specialize(L, GETARG_C(i)); \
+        goto dispatch_again; \
+      ) \
+      vmcasenb(op, sp(chk,reg,kst), /* ? < K */ \
+        luaVS_specialize(L, GETARG_B(i)); \
+        goto dispatch_again; \
+      ) \
+      vmcasenb(op, sp(chk,kst,reg), /* K < ? */ \
+        luaVS_specialize(L, GETARG_C(i)); \
+        goto dispatch_again; \
       )
-      vmcase(OP_LE_rK,
-        Protect(
-          if (luaV_lessequal(L, RB(i), KC(i)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
+#define _vmcase_less_num(op,numfunc,b,bk,c,ck) \
+      vmcase(op, sp(num,bk,ck), /* num < num */ \
+        Protect( \
+          int res = numfunc(L, nvalue(b), nvalue(c)); \
+          if (res != GETARG_A(i)) \
+            ci->u.l.savedpc++; \
+          else \
+            donextjump(ci); \
+        ) \
       )
-      vmcase(OP_LE_KK,
-        Protect(
-          if (luaV_lessequal(L, KB(i), KC(i)) != GETARG_A(i))
-            ci->u.l.savedpc++;
-          else
-            donextjump(ci);
-        )
+#define _vmcase_less_str(op,cmpop,b,bk,c,ck) \
+      vmcase(op, sp(str,bk,ck), /* str < str */ \
+        Protect( \
+          int res = l_strcmp(rawtsvalue(b), rawtsvalue(c)) cmpop 0; \
+          if (res != GETARG_A(i)) \
+            ci->u.l.savedpc++; \
+          else \
+            donextjump(ci); \
+        ) \
       )
+#define _vmcase_less_raw(op,func,b,bk,c,ck) \
+      vmcase(op, sp(raw,bk,ck), /* raw < raw */ \
+        Protect( \
+          if (func(L, b, c) != GETARG_A(i)) \
+            ci->u.l.savedpc++; \
+          else \
+            donextjump(ci); \
+        ) \
+      )
+#define vmcase_less(op,func,numfunc,cmpop) \
+      _vmcase_less_chk(op) \
+      _vmcase_less_num(op, numfunc, RB(i), reg, RC(i), reg) \
+      _vmcase_less_num(op, numfunc, RB(i), reg, KC(i), kst) \
+      _vmcase_less_num(op, numfunc, KB(i), kst, RC(i), reg) \
+      _vmcase_less_num(op, numfunc, KB(i), kst, KC(i), kst) \
+      _vmcase_less_str(op, cmpop, RB(i), reg, RC(i), reg) \
+      _vmcase_less_str(op, cmpop, RB(i), reg, KC(i), kst) \
+      _vmcase_less_str(op, cmpop, KB(i), kst, RC(i), reg) \
+      _vmcase_less_str(op, cmpop, KB(i), kst, KC(i), kst) \
+      _vmcase_less_raw(op, func, RB(i), reg, RC(i), reg) \
+      _vmcase_less_raw(op, func, RB(i), reg, KC(i), kst) \
+      _vmcase_less_raw(op, func, KB(i), kst, RC(i), reg) \
+      _vmcase_less_raw(op, func, KB(i), kst, KC(i), kst)
 
-      vmcase(OP_TEST,
+      vmcase_less(OP_LT, luaV_lessthan, luai_numlt, <)
+      vmcase_less(OP_LE, luaV_lessequal, luai_numle, <=)
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_TEST, 0,
         if (GETARG_C(i) ? l_isfalse(ra) : !l_isfalse(ra))
             ci->u.l.savedpc++;
           else
           donextjump(ci);
       )
-      vmcase(OP_TESTSET_r,
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_TESTSET, 0, /* raw */
         TValue *rb = RB(i);
         if (GETARG_C(i) ? l_isfalse(rb) : !l_isfalse(rb))
           ci->u.l.savedpc++;
@@ -861,7 +1092,25 @@ void luaV_execute (lua_State *L) {
           donextjump(ci);
         }
       )
-      vmcase(OP_CALL_rr,
+      vmcase(OP_TESTSET, 1, /* chk */
+        TValue *rb = RB(i);
+        if (GETARG_C(i) ? l_isfalse(rb) : !l_isfalse(rb))
+          ci->u.l.savedpc++;
+        else {
+          SpecCheckRa(setobjs2s(L, ra, rb));
+          donextjump(ci);
+        }
+      )
+/* ------------------------------------------------------------------------ */
+      // the way calls are done now, we always call a tmp register since
+      // the return value is put in the spot where the function was.
+      // therefore, specialization doesn't make sense.
+      // if we want to specialize based on function type we will have to
+      // do the whole call thing differently.
+      // the question right now is: do we have to spec-check the result
+      // registers? no, since they're always temps, right?
+      // BUT: under the new scheme we can specialize temps!
+      vmcase(OP_CALL, 0,
         int b = GETARG_B(i);
         int nresults = GETARG_C(i) - 1;
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
@@ -875,7 +1124,9 @@ void luaV_execute (lua_State *L) {
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
       )
-      vmcase(OP_TAILCALL_r,
+/* ------------------------------------------------------------------------ */
+      // see above caveat
+      vmcase(OP_TAILCALL, 0,
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
         lua_assert(GETARG_C(i) - 1 == LUA_MULTRET);
@@ -904,7 +1155,8 @@ void luaV_execute (lua_State *L) {
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
       )
-      vmcasenb(OP_RETURN,
+/* ------------------------------------------------------------------------ */
+      vmcasenb(OP_RETURN, 0,
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b-1;
         if (cl->p->sizep > 0) luaF_close(L, base);
@@ -919,7 +1171,8 @@ void luaV_execute (lua_State *L) {
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
       )
-      vmcase(OP_FORLOOP,
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_FORLOOP, 0,
         lua_Number step = nvalue(ra+2);
         lua_Number idx = luai_numadd(L, nvalue(ra), step); /* increment index */
         lua_Number limit = nvalue(ra+1);
@@ -930,7 +1183,8 @@ void luaV_execute (lua_State *L) {
           setnvalue(ra+3, idx);  /* ...and external index */
         }
       )
-      vmcase(OP_FORPREP,
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_FORPREP, 0,
         const TValue *init = ra;
         const TValue *plimit = ra+1;
         const TValue *pstep = ra+2;
@@ -943,7 +1197,8 @@ void luaV_execute (lua_State *L) {
         setnvalue(ra, luai_numsub(L, nvalue(ra), nvalue(pstep)));
         ci->u.l.savedpc += GETARG_sBx(i);
       )
-      vmcasenb(OP_TFORCALL,
+/* ------------------------------------------------------------------------ */
+      vmcasenb(OP_TFORCALL, 0,
         StkId cb = ra + 3;  /* call base */
         setobjs2s(L, cb+2, ra+2);
         setobjs2s(L, cb+1, ra+1);
@@ -956,14 +1211,16 @@ void luaV_execute (lua_State *L) {
         lua_assert(GET_OPCODE(i) == OP_TFORLOOP);
         goto l_tforloop;
       )
-      vmcase(OP_TFORLOOP,
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_TFORLOOP, 0,
         l_tforloop:
         if (!ttisnil(ra + 1)) {  /* continue loop? */
           setobjs2s(L, ra, ra + 1);  /* save control variable */
            ci->u.l.savedpc += GETARG_sBx(i);  /* jump back */
         }
       )
-      vmcase(OP_SETLIST,
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_SETLIST, 0,
         int n = GETARG_B(i);
         int c = GETARG_C(i);
         int last;
@@ -985,29 +1242,40 @@ void luaV_execute (lua_State *L) {
         }
         L->top = ci->top;  /* correct top (in case of previous open call) */
       )
-      vmcase(OP_CLOSURE_r,
-        Proto *p = cl->p->p[GETARG_Bx(i)];
-        Closure *ncl = getcached(p, cl->upvals, base);  /* cached closure */
-        if (ncl == NULL)  /* no match? */
-          pushclosure(L, p, cl->upvals, base, ra);  /* create a new one */
-        else
-          setclLvalue(L, ra, ncl);  /* push cashed closure */
-        checkGC(L,
-          L->top = ra + 1;  /* limit of live values */
-          luaC_step(L);
-          L->top = ci->top;  /* restore top */
-        )
+/* ------------------------------------------------------------------------ */
+#define _loadclosure \
+      Proto *p = cl->p->p[GETARG_Bx(i)]; \
+      Closure *ncl = getcached(p, cl->upvals, base);  /* cached closure */ \
+      if (ncl == NULL)  /* no match? */ \
+        pushclosure(L, p, cl->upvals, base, ra);  /* create a new one */ \
+      else \
+        setclLvalue(L, ra, ncl);  /* push cashed closure */ \
+      checkGC(L, \
+        L->top = ra + 1;  /* limit of live values */ \
+        luaC_step(L); \
+        L->top = ci->top;  /* restore top */ \
       )
-      vmcase(OP_VARARG_r,
-        int b = GETARG_B(i) - 1;
-        int j;
-        int n = cast_int(base - ci->func) - cl->p->numparams - 1;
-        if (b < 0) {  /* B == 0? */
-          b = n;  /* get all var. arguments */
-          Protect(luaD_checkstack(L, n));
-          ra = RA(i);  /* previous call may change the stack */
-          L->top = ra + n;
-        }
+
+      vmcase(OP_CLOSURE, 1, /* ? <- closure */
+        SpecCheckRa(_loadclosure)
+      )
+      vmcase(OP_CLOSURE, 0, /* raw <- closure */
+        _loadclosure
+      )
+/* ------------------------------------------------------------------------ */
+#define _vararg_prep \
+      int b = GETARG_B(i) - 1; \
+      int j; \
+      int n = cast_int(base - ci->func) - cl->p->numparams - 1; \
+      if (b < 0) {  /* B == 0? */ \
+        b = n;  /* get all var. arguments */ \
+        Protect(luaD_checkstack(L, n)); \
+        ra = RA(i);  /* previous call may change the stack */ \
+        L->top = ra + n; \
+      }
+
+      vmcase(OP_VARARG, 0, /* R(a...a+b-2) <- ... */
+        _vararg_prep
         for (j = 0; j < b; j++) {
           if (j < n) {
             setobjs2s(L, ra + j, base - n + j);
@@ -1017,9 +1285,24 @@ void luaV_execute (lua_State *L) {
           }
         }
       )
-      vmcase(OP_EXTRAARG,
+      vmcase(OP_VARARG, 1, /* R(a...a+b-2):? <- ... */
+        _vararg_prep
+        int a = GETARG_A(i);
+        for (j = 0; j < b; j++) {
+          if (j < n) {
+            setobjs2s(L, ra + j, base - n + j);            
+          }
+          else {
+            setnilvalue(ra + j);
+          }
+          luaVS_specialize(L, a + j);
+        }
+      )
+/* ------------------------------------------------------------------------ */
+      vmcase(OP_EXTRAARG, 0,
         lua_assert(0);
       )
+/* ------------------------------------------------------------------------ */
       default:
         // TODO: remove
         printf("OOPS: %i %s\n", GET_OPCODE(i), luaP_opnames[GET_OPCODE(i)]);

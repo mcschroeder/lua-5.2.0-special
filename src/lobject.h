@@ -187,6 +187,8 @@ typedef struct lua_TValue TValue;
 #define setbvalue(obj,x) \
   { TValue *io=(obj); val_(io).b=(x); settt_(io, LUA_TBOOLEAN); }
 
+#define changebvalue(o,x)  check_exp(ttisboolean(o), val_(o).b=(x))
+
 #define setgcovalue(L,obj,x) \
   { TValue *io=(obj); GCObject *i_g=(x); \
     val_(io).gc=i_g; settt_(io, ctb(gch(i_g)->tt)); }
@@ -235,6 +237,13 @@ typedef struct lua_TValue TValue;
 	  io1->value_ = io2->value_; io1->tt_ = io2->tt_; \
 	  checkliveness(G(L),io1); }
 
+/* WARNING: if the objects do not have the same types,
+            all hell will break loose! */
+#define setobj_fast(L,obj1,obj2) \
+  { const TValue *io2=(obj2); TValue *io1=(obj1); \
+    io1->value_ = io2->value_; \
+    checkliveness(G(L),io1); }
+
 
 /*
 ** different types of assignments, according to destination
@@ -242,8 +251,10 @@ typedef struct lua_TValue TValue;
 
 /* from stack to (same) stack */
 #define setobjs2s	setobj
+#define setobjs2s_fast setobj_fast
 /* to stack (not from same stack) */
 #define setobj2s	setobj
+#define setobj2s_fast setobj_fast
 #define setsvalue2s	setsvalue
 #define sethvalue2s	sethvalue
 #define setptvalue2s	setptvalue
@@ -341,6 +352,9 @@ typedef struct lua_TValue TValue;
 	{ const TValue *o2_=(obj2); TValue *o1_=(obj1); \
 	  o1_->u = o2_->u; \
 	  checkliveness(G(L),o1_); }
+
+#undef setobj_fast
+#define setobj_fast setobj
 
 
 /*
@@ -448,7 +462,37 @@ typedef struct LocVar {
   TString *varname;
   int startpc;  /* first point where variable is active */
   int endpc;    /* first point where variable is dead */
+  lu_byte speccount; /* how often the register has been specialized */
 } LocVar;
+
+
+// note that the start instructions is always a store for the register
+// whereas the end instruction is always a load for temp register but can
+// be either a store or a load for locals
+// (meaning: the scope of temps is only from one store to the next)
+/*
+we shouldn't be able to jump across scope boundaries,
+but we still have to prove that this can never happen:
+
+label:
+  r1 <- ...   first local scope
+  ... <- r1
+-----------------
+  r1 <- ...   temp scope
+  ... <- ...
+------------------  
+  r1 <- ...    second local scope
+  goto label
+
+could the code generator conceivably emit such bytecode?
+I'm pretty certain it doesn't, but why?
+*/
+typedef struct RegInfo {
+  int startpc;      /* first point  */
+  int endpc;
+  lu_byte islocal;
+  struct RegInfo *next;
+} RegInfo;
 
 
 /*
@@ -476,6 +520,10 @@ typedef struct Proto {
   lu_byte numparams;  /* number of fixed parameters */
   lu_byte is_vararg;
   lu_byte maxstacksize;  /* maximum stack used by this function */
+
+  RegInfo *reginfo;
+  int sizereginfo;  
+
 } Proto;
 
 

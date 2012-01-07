@@ -38,14 +38,17 @@ typedef enum UnOpr { OPR_MINUS, OPR_NOT, OPR_LEN, OPR_NOUNOPR } UnOpr;
 
 #define getcode(fs,e)	((fs)->f->code[(e)->u.info])
 
-#define luaK_codeAsBx(fs,o,A,sBx)	luaK_codeABx(fs,o,A,(sBx)+MAXARG_sBx)
+#define luaK_codeAsBx(fs,o,sp,A,sBx) \
+		luaK_codeABx(fs,o,sp,A,(sBx)+MAXARG_sBx)
 
 #define luaK_setmultret(fs,e)	luaK_setreturns(fs, e, LUA_MULTRET)
 
 #define luaK_jumpto(fs,t)	luaK_patchlist(fs, luaK_jump(fs), t)
 
-LUAI_FUNC int luaK_codeABx (FuncState *fs, OpCode o, int A, unsigned int Bx);
-LUAI_FUNC int luaK_codeABC (FuncState *fs, OpCode o, int A, int B, int C);
+LUAI_FUNC int luaK_codeABx (FuncState *fs, OpCode o, int sp, 
+                            int A, unsigned int Bx);
+LUAI_FUNC int luaK_codeABC (FuncState *fs, OpCode o, int sp, 
+							int A, int B, int C);
 LUAI_FUNC int luaK_codek (FuncState *fs, int reg, int k);
 LUAI_FUNC void luaK_fixline (FuncState *fs, int line);
 LUAI_FUNC void luaK_nil (FuncState *fs, int from, int n);
@@ -79,5 +82,10 @@ LUAI_FUNC void luaK_posfix (FuncState *fs, BinOpr op, expdesc *v1,
                             expdesc *v2, int line);
 LUAI_FUNC void luaK_setlist (FuncState *fs, int base, int nelems, int tostore);
 
+
+LUAI_FUNC void reginfo_insert_store(FuncState *fs, int pc, int idx);
+LUAI_FUNC void reginfo_insert_load(FuncState *fs, int pc, int idx);
+#define reginfo_add_store(fs, idx) reginfo_insert_store(fs, fs->pc, idx)
+#define reginfo_add_load(fs, idx) reginfo_insert_load(fs, fs->pc, idx)
 
 #endif

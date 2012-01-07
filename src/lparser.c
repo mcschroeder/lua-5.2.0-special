@@ -28,8 +28,8 @@
 
 
 /* maximum number of local variables per function (must be smaller
-   than 250, due to the bytecode format) */
-#define MAXVARS		200
+   than 120, due to the bytecode format) */
+#define MAXVARS		100
 
 
 #define hasmultret(k)		((k) == VCALL || (k) == VVARARG)
@@ -507,7 +507,7 @@ static void codeclosure (LexState *ls, Proto *clp, expdesc *v) {
   }
   f->p[fs->np++] = clp;
   luaC_objbarrier(ls->L, f, clp);
-  init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE_r, 0, fs->np-1));
+  init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE, 1, 0, fs->np-1));
   luaK_exp2nextreg(fs, v);  /* fix it at stack top (for GC) */
 }
 
@@ -672,13 +672,36 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   rkkey = luaK_exp2RK(fs, &key);
   expr(ls, &val);
   int rkval = luaK_exp2RK(fs, &val);
-  OpCode op;
-  if (key.k != VK && val.k != VK) op = OP_SETTABLE_rrr;
-  else if (key.k != VK && val.k == VK) op = OP_SETTABLE_rrK;
-  else if (key.k == VK && val.k != VK) op = OP_SETTABLE_rKr;
-  else if (key.k == VK && val.k == VK) op = OP_SETTABLE_rKK;
-  else lua_assert(o);
-  luaK_codeABC(fs, op, cc->t->u.info, rkkey, rkval);
+
+  int sp;  
+  int ck;
+  if (val.k == VK) { 
+    ck = OPSPEC_kst;
+  } else {
+    reginfo_add_load(fs, rkval);
+    ck = OPSPEC_reg;
+  }
+  if (key.k == VK) {
+    TValue *k = fs->f->k + rkkey;
+    if (ttisnumber(k)) {
+      int ik;
+      lua_number2int(ik, nvalue(k));
+      if (luai_numeq(cast_num(ik), nvalue(k))) {
+        sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_int, OPSPEC_kst, ck);
+      } else {
+        sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_obj, OPSPEC_kst, ck);
+      }
+    } else {
+      lua_assert(ttisstring(k));
+      sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_str, OPSPEC_kst, ck);
+    }
+  } else {
+    reginfo_add_load(fs, rkkey);
+    sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_chk, OPSPEC_reg, ck);
+  }
+  reginfo_add_load(fs, cc->t->u.info);
+
+  luaK_codeABC(fs, OP_SETTABLE, sp, cc->t->u.info, rkkey, rkval);
   fs->freereg = reg;  /* free registers */
 }
 
@@ -745,7 +768,7 @@ static void constructor (LexState *ls, expdesc *t) {
      sep -> ',' | ';' */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  int pc = luaK_codeABC(fs, OP_NEWTABLE_r, 0, 0, 0);
+  int pc = luaK_codeABC(fs, OP_NEWTABLE, 1, 0, 0, 0);
   struct ConsControl cc;
   cc.na = cc.nh = cc.tostore = 0;
   cc.t = t;
@@ -869,8 +892,12 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
     if (args.k != VVOID)
       luaK_exp2nextreg(fs, &args);  /* close last argument */
     nparams = fs->freereg - (base+1);
-  }
-  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL_rr, base, nparams+1, 2));
+  }  
+  int ra;
+  for (ra = base; ra <= base+nparams; ra++)
+    reginfo_add_load(fs, ra);
+  reginfo_add_store(fs, base);
+  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, 0, base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
                             (unless changed) one result */
@@ -975,7 +1002,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
       FuncState *fs = ls->fs;
       check_condition(ls, fs->f->is_vararg,
                       "cannot use " LUA_QL("...") " outside a vararg function");
-      init_exp(v, VVARARG, luaK_codeABC(fs, OP_VARARG_r, 0, 1, 0));
+      init_exp(v, VVARARG, luaK_codeABC(fs, OP_VARARG, 1, 0, 1, 0));
       break;
     }
     case '{': {  /* constructor */
@@ -1138,8 +1165,9 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
   }
   if (conflict) {
     /* copy upvalue/local value to a temporary (in position 'extra') */
-    OpCode op = (v->k == VLOCAL) ? OP_MOVE_r : OP_GETUPVAL_r;
-    luaK_codeABC(fs, op, extra, v->u.info, 0);
+    OpCode op = (v->k == VLOCAL) ? OP_MOVE : OP_GETUPVAL;
+    reginfo_add_store(fs, extra);
+    luaK_codeABC(fs, op, 1, extra, v->u.info, 0);
     luaK_reserveregs(fs, 1);
   }
 }
@@ -1294,19 +1322,41 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   int prep, endfor;
   adjustlocalvars(ls, 3);  /* control variables */
   checknext(ls, TK_DO);
-  prep = isnum ? luaK_codeAsBx(fs, OP_FORPREP, base, NO_JUMP) : luaK_jump(fs);
+  if (isnum) {
+    reginfo_add_store(fs, base);
+    reginfo_add_load(fs, base+1);
+    reginfo_add_load(fs, base+2);
+    prep = luaK_codeAsBx(fs, OP_FORPREP, 0, base, NO_JUMP);
+  } else {
+    prep = luaK_jump(fs);
+  }
   enterblock(fs, &bl, 0);  /* scope for declared variables */
   adjustlocalvars(ls, nvars);
   luaK_reserveregs(fs, nvars);
   block(ls);
   leaveblock(fs);  /* end of scope for declared variables */
   luaK_patchtohere(fs, prep);
-  if (isnum)  /* numeric for? */
-    endfor = luaK_codeAsBx(fs, OP_FORLOOP, base, NO_JUMP);
+  if (isnum) {  /* numeric for? */
+    reginfo_add_store(fs, base);
+    reginfo_add_store(fs, base+3);
+    reginfo_add_load(fs, base); // TODO: ??
+    reginfo_add_load(fs, base+1);
+    reginfo_add_load(fs, base+2);
+    // TODO: keep in mind they'll always be numbers (never respecialized)
+    endfor = luaK_codeAsBx(fs, OP_FORLOOP, 0, base, NO_JUMP);
+  }
   else {  /* generic for */
-    luaK_codeABC(fs, OP_TFORCALL, base, 0, nvars);
+    reginfo_add_load(fs, base);
+    reginfo_add_load(fs, base+1);
+    reginfo_add_load(fs, base+2);
+    int ra;
+    for (ra = base+3; ra <= base+2+nvars; ra++)
+      reginfo_add_store(fs, ra);
+    luaK_codeABC(fs, OP_TFORCALL, 0, base, 0, nvars);    
     luaK_fixline(fs, line);
-    endfor = luaK_codeAsBx(fs, OP_TFORLOOP, base + 2, NO_JUMP);
+    reginfo_add_load(fs, base+2+1);
+    reginfo_add_store(fs, base+2);
+    endfor = luaK_codeAsBx(fs, OP_TFORLOOP, 0, base + 2, NO_JUMP);
   }
   luaK_patchlist(fs, endfor, prep + 1);
   luaK_fixline(fs, line);
@@ -1509,7 +1559,7 @@ static void retstat (LexState *ls) {
     if (hasmultret(e.k)) {
       luaK_setmultret(fs, &e);
       if (e.k == VCALL && nret == 1) {  /* tail call? */
-        SET_OPCODE(getcode(fs,&e), OP_TAILCALL_r);
+        SET_OPCODE(getcode(fs,&e), OP_TAILCALL);
         lua_assert(GETARG_A(getcode(fs,&e)) == fs->nactvar);
       }
       first = fs->nactvar;

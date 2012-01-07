@@ -493,6 +493,19 @@ const TValue *luaH_get (Table *t, const TValue *key) {
   }
 }
 
+/*
+** search function for "objects"
+*/
+const TValue *luaH_getobj (Table *t, const TValue *key) {
+  Node *n = mainposition(t, key);
+  do {  /* check whether `key' is somewhere in the chain */
+    if (luaV_rawequalobj(gkey(n), key))
+      return gval(n);  /* that's it */
+    else n = gnext(n);
+  } while (n);
+  return luaO_nilobject;
+}
+
 
 /*
 ** beware: when using this function you probably need to check a GC

@@ -10,6 +10,7 @@
 
 #include <limits.h>
 #include <stddef.h>
+#include <assert.h> // TODO: remove
 
 
 /*
@@ -524,6 +525,7 @@
 */
 
 
+#define lua_assert(c) assert(c)
 
 #endif
 
