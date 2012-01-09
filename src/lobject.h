@@ -488,11 +488,15 @@ could the code generator conceivably emit such bytecode?
 I'm pretty certain it doesn't, but why?
 */
 typedef struct RegInfo {
-  int startpc;      /* first point  */
-  int endpc;
-  lu_byte islocal;
+  lu_byte state;
+  int startpc;
+  int endpc;  
   struct RegInfo *next;
 } RegInfo;
+
+#define REGINFO_STATE_TEMP    0
+#define REGINFO_STATE_LOCAL   1
+#define REGINFO_STATE_UNUSED  3
 
 
 /*

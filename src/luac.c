@@ -291,7 +291,7 @@ static void PrintCode(const Proto* f)
   int bx=GETARG_Bx(i);
   int sbx=GETARG_sBx(i);
   int line=getfuncline(f,pc);
-  printf("\t%d\t",pc+1);
+  printf("\t%d\t",pc);
   if (line>0) printf("[%d]\t",line); else printf("[-]\t");
   printf("%-9s",luaP_opnames[o]);
   switch (o) {
@@ -383,7 +383,7 @@ static void PrintCode(const Proto* f)
    case OP_FORLOOP:
    case OP_FORPREP:
    case OP_TFORLOOP:
-    printf("\t; to %d",sbx+pc+2);
+    printf("\t; to %d",sbx+pc+1);
     break;
    case OP_CLOSURE:
     printf("\t; %p",VOID(f->p[bx]));
@@ -431,7 +431,7 @@ static void PrintDebug(const Proto* f)
  printf("constants (%d) for %p:\n",n,VOID(f));
  for (i=0; i<n; i++)
  {
-  printf("\t%d\t",i+1);
+  printf("\t%d\t",i);
   PrintConstant(f,i);
   printf("\n");
  }
@@ -440,7 +440,7 @@ static void PrintDebug(const Proto* f)
  for (i=0; i<n; i++)
  {
   printf("\t%d\t%s\t%d\t%d\n",
-  i,getstr(f->locvars[i].varname),f->locvars[i].startpc+1,f->locvars[i].endpc+1);
+  i,getstr(f->locvars[i].varname),f->locvars[i].startpc,f->locvars[i].endpc);
  }
  n=f->sizeupvalues;
  printf("upvalues (%d) for %p:\n",n,VOID(f));
@@ -452,19 +452,18 @@ static void PrintDebug(const Proto* f)
  n=f->sizereginfo;
  printf("register info for %p:\n",VOID(f));
  for (i=0; i<n; i++)
- {  
+ {
   RegInfo *reginfo = &(f->reginfo[i]);
-  if (reginfo->startpc == -1) {
+  if (reginfo->state == REGINFO_STATE_UNUSED) {
     printf("\t%d\t(unused)\n", i);
     continue;
   }
-  printf("\t%d\t%d - %d\t%s", 
-         i, reginfo->startpc, reginfo->endpc, 
-         reginfo->islocal ? "(local)" : "");
-  for (reginfo = reginfo->next; reginfo; reginfo = reginfo->next)
-    printf("\n\t\t%d - %d\t%s", 
-           reginfo->startpc, reginfo->endpc, 
-           reginfo->islocal ? "(local)" : "");
+  printf("\t%d\t%d - %d", i, reginfo->startpc, reginfo->endpc);
+  if (reginfo->state == REGINFO_STATE_LOCAL) printf("\t(local)");
+  for (reginfo = reginfo->next; reginfo; reginfo = reginfo->next) {
+    printf("\n\t\t%d - %d", reginfo->startpc, reginfo->endpc);
+    if (reginfo->state == REGINFO_STATE_LOCAL) printf("\t(local)");
+  }    
   printf("\n");
  }
 }

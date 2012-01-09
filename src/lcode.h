@@ -83,9 +83,10 @@ LUAI_FUNC void luaK_posfix (FuncState *fs, BinOpr op, expdesc *v1,
 LUAI_FUNC void luaK_setlist (FuncState *fs, int base, int nelems, int tostore);
 
 
-LUAI_FUNC void reginfo_insert_store(FuncState *fs, int pc, int idx);
-LUAI_FUNC void reginfo_insert_load(FuncState *fs, int pc, int idx);
-#define reginfo_add_store(fs, idx) reginfo_insert_store(fs, fs->pc, idx)
-#define reginfo_add_load(fs, idx) reginfo_insert_load(fs, fs->pc, idx)
+LUAI_FUNC void reginfo_insert(FuncState *fs, int pc, int idx, int store);
+#define reginfo_insert_store(fs, pc, idx) reginfo_insert(fs, pc, idx, 1)
+#define reginfo_insert_load(fs, pc, idx) reginfo_insert(fs, pc, idx, 0)
+#define reginfo_add_store(fs, idx) reginfo_insert_store(fs, fs->pc, idx);
+#define reginfo_add_load(fs, idx) reginfo_insert_load(fs, fs->pc, idx);
 
 #endif

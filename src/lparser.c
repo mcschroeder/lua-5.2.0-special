@@ -175,7 +175,7 @@ static int registerlocalvar (LexState *ls, TString *varname) {
 }
 
 
-static void new_localvar (LexState *ls, TString *name) {
+static void new_localvar (LexState *ls, TString *name) {  
   FuncState *fs = ls->fs;
   Dyndata *dyd = ls->dyd;
   int reg = registerlocalvar(ls, name);
@@ -202,7 +202,7 @@ static LocVar *getlocvar (FuncState *fs, int i) {
 }
 
 
-static void adjustlocalvars (LexState *ls, int nvars) {
+static void adjustlocalvars (LexState *ls, int nvars) {  
   FuncState *fs = ls->fs;
   fs->nactvar = cast_byte(fs->nactvar + nvars);
   for (; nvars; nvars--) {
@@ -470,6 +470,7 @@ static l_noret undefgoto (LexState *ls, Labeldesc *gt) {
 
 
 static void leaveblock (FuncState *fs) {
+  printf("%s\n", __func__);
   BlockCnt *bl = fs->bl;
   LexState *ls = fs->ls;
   if (bl->previous && bl->upval) {

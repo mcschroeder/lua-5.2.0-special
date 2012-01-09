@@ -221,70 +221,74 @@ void luaK_concat (FuncState *fs, int *l1, int l2) {
 
 /* -- register info ------------------------------------------------------ */
 
-int islocalat(FuncState *fs, int pc, int idx) {
-  return idx < fs->nlocvars && 
-         fs->f->locvars[idx].startpc <= pc && 
-         fs->f->locvars[idx].endpc >= pc;
+void printactvar(FuncState *fs) {
+  Dyndata *dyd = fs->ls->dyd;
+  int i;
+  printf("actvar:");
+  for (i = 0; i < dyd->actvar.n; i++)
+    printf(" %i", dyd->actvar.arr[i].idx);
+  printf("\n");
 }
 
-#define islocal(fs, idx) islocalat(fs, fs->pc, idx)
+int islocal(FuncState *fs, int idx) {
+  Dyndata *dyd = fs->ls->dyd;
+  int i;
+  for (i = 0; i < dyd->actvar.n; i++)
+    if (dyd->actvar.arr[i].idx == idx)
+      return 1;  
+  return 0;
+}
 
-RegInfo *reginfo_get_last(FuncState *fs, int idx) {
-  lua_assert(idx < fs->f->sizereginfo);
-  RegInfo *reginfo = &(fs->f->reginfo[idx]);
-  if (reginfo) {
+ // #define islocal(fs, idx) islocalat(fs, fs->pc, idx)
+ //#define islocal(fs, idx) 0
+
+// int islocalat(FuncState *fs, int pc, int idx) {
+//     return idx < fs->nlocvars && 
+//           fs->f->locvars[idx].startpc <= pc && 
+//           fs->f->locvars[idx].endpc >= pc;
+// }
+
+#define islocalat(fs,pc,idx) islocal(fs,idx)
+//#define islocalat(fs,pc,idx) 0
+
+void reginfo_grow(FuncState *fs, int reg) {
+  if (reg < fs->f->sizereginfo) return;  
+  int oldsize = fs->f->sizereginfo;
+  int newsize = reg+1;
+  luaM_reallocvector(fs->ls->L, fs->f->reginfo, oldsize, newsize, RegInfo);
+  fs->f->sizereginfo = newsize;
+  while (oldsize < newsize)
+    fs->f->reginfo[oldsize++].state = REGINFO_STATE_UNUSED;
+}
+
+RegInfo *reginfo_get_last(FuncState *fs, int reg) {
+  lua_assert(reg < fs->f->sizereginfo);
+  RegInfo *reginfo = &(fs->f->reginfo[reg]);
+  if (reginfo->state != REGINFO_STATE_UNUSED) {
     while (reginfo->next != NULL)
       reginfo = reginfo->next;
   }
   return reginfo;
 }
 
-void reginfo_insert_store(FuncState *fs, int pc, int idx) {
-    printf("%s: [%i] %i %s\n", __func__, pc, idx, islocalat(fs,pc,idx) ? "local" : "temp");
-
-  lua_State *L = fs->ls->L;
-  Proto *f = fs->f;
-  
-  int oldsize = f->sizereginfo;
-  luaM_growvector(L, f->reginfo, idx, f->sizereginfo,
-                  RegInfo, SHRT_MAX, "register info");
-  while (oldsize < f->sizereginfo) f->reginfo[oldsize++].startpc = -1;
-  
-  RegInfo *reginfo = reginfo_get_last(fs, idx);
-  if (reginfo->islocal && islocalat(fs, pc, idx)) {
-    if (reginfo->endpc <= pc)
-      reginfo->endpc = pc;
-  } else {
-    if (reginfo->startpc != -1) {
-      reginfo->next = luaM_new(L, RegInfo);
+void reginfo_insert(FuncState *fs, int pc, int reg, int store) {
+  printf("%s: [%i] %i %s\n", __func__, pc, reg, store ? "store" : "load");
+  reginfo_grow(fs, reg);
+  RegInfo *reginfo = reginfo_get_last(fs, reg);
+  if ((reginfo->state == islocalat(fs, pc, reg)) && 
+      (reginfo->state != REGINFO_STATE_TEMP || !store)) {
+    lua_assert(reginfo->endpc <= pc);
+    reginfo->endpc = pc; /* extend scope*/
+  }
+  else { /* start new scope*/
+    if (reginfo->state != REGINFO_STATE_UNUSED) {
+      reginfo->next = luaM_new(fs->ls->L, RegInfo);
       reginfo = reginfo->next;
     }
+    reginfo->state = islocalat(fs, pc, reg);
     reginfo->startpc = pc;
     reginfo->endpc = pc;
-    reginfo->islocal = islocalat(fs, pc, idx);
     reginfo->next = NULL;
-  }
-}
-
-void reginfo_insert_load(FuncState *fs, int pc, int idx) {
-    printf("%s: [%i] %i %s\n", __func__, pc, idx, islocalat(fs,pc,idx) ? "local" : "temp");
-
-  lua_State *L = fs->ls->L;
-  Proto *f = fs->f;
-  
-  int oldsize = f->sizereginfo;
-  luaM_growvector(L, f->reginfo, idx, f->sizereginfo,
-                  RegInfo, SHRT_MAX, "register info");
-  while (oldsize < f->sizereginfo) f->reginfo[oldsize++].startpc = -1;
-
-  RegInfo *reginfo = reginfo_get_last(fs, idx);
-  if (reginfo->startpc == -1) {
-    reginfo->startpc = pc;
-    reginfo->endpc = pc;
-    reginfo->islocal = islocalat(fs, pc, idx);
-    reginfo->next = NULL;
-  } else if (reginfo->endpc <= pc) {  
-    reginfo->endpc = pc;
   }
 }
 
@@ -510,10 +514,10 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
         }
       } else {
         reginfo_add_load(fs, e->u.ind.idx);
-        if (islocal(fs, e->u.ind.idx))
+        // if (islocal(fs, e->u.ind.idx))
           sp = CREATE_OPSPEC_GETTAB(1, OPSPEC_TAB_KEY_chk, OPSPEC_reg);
-        else /* temp register */
-          sp = CREATE_OPSPEC_GETTAB(1, OPSPEC_TAB_KEY_raw, OPSPEC_reg);
+        // else /* temp register */
+        //   sp = CREATE_OPSPEC_GETTAB(1, OPSPEC_TAB_KEY_raw, OPSPEC_reg);
       }
 
       reginfo_add_load(fs, e->u.ind.t);
@@ -562,10 +566,10 @@ static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
       Instruction *pc = &getcode(fs, e);
       SETARG_A(*pc, reg);
       reginfo_insert_store(fs, e->u.info, reg);
-      if (!islocal(fs, reg))
-        SET_OPSPEC_OUT(*pc, OPSPEC_OUT_raw);
-        // TODO: ensure this is always valid for all possible instructions 
-        // TODO: do we specialize locals now or not?
+      // if (!islocal(fs, reg))
+      //   SET_OPSPEC_OUT(*pc, OPSPEC_OUT_raw);
+      //   // TODO: ensure this is always valid for all possible instructions 
+      //   // TODO: do we specialize locals now or not?
       break;
     }
     case VNONRELOC: {

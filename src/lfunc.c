@@ -137,6 +137,24 @@ Proto *luaF_newproto (lua_State *L) {
 }
 
 
+void reginfo_free(lua_State *L, Proto *f) {
+  int i;
+  RegInfo *reginfo, *tmp;
+  for (i = 0; i < f->sizereginfo; i++) {
+    reginfo = &(f->reginfo[i]);
+    if (reginfo->state == REGINFO_STATE_UNUSED)
+      continue;
+    reginfo = reginfo->next;
+    while (reginfo != NULL) {
+      tmp = reginfo;
+      reginfo = reginfo->next;
+      luaM_free(L, tmp);
+    }
+  }
+  luaM_freearray(L, f->reginfo, f->sizereginfo);
+}
+
+
 void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->code, f->sizecode);
   luaM_freearray(L, f->p, f->sizep);
@@ -144,19 +162,7 @@ void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->lineinfo, f->sizelineinfo);
   luaM_freearray(L, f->locvars, f->sizelocvars);
   luaM_freearray(L, f->upvalues, f->sizeupvalues);
-  
-  int i;
-  RegInfo *reg, *regnext;
-  for (i = 0; i < f->sizereginfo; i++) {
-    reg = f->reginfo[i].next;
-    while (reg != NULL) {
-      regnext = reg->next;
-      luaM_free(L, reg);
-      reg = regnext;
-    }
-  }
-  luaM_freearray(L, f->reginfo, f->sizereginfo);
-
+  reginfo_free(L, f);
   luaM_free(L, f);
 }
 
