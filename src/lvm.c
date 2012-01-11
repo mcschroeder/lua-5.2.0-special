@@ -1286,7 +1286,16 @@ void luaV_execute (lua_State *L) {
       int b = GETARG_B(i) - 1; \
       int j; \
       int n = cast_int(base - ci->func) - cl->p->numparams - 1; \
+      int spec = 1; /* TODO: kinda hackish. essentially what we're doing is
+                             not specialize when we're "directly handing over
+                             the dots as input to another function" 
+                             WHY? it's still a store to a temp reg, BUT
+                             we don't have any reginfo for those reg scopes
+                             since the actual number is only determined at
+                             runtime by the number of arguments to the input
+                             function! */ \
       if (b < 0) {  /* B == 0? */ \
+        spec = 0; \
         b = n;  /* get all var. arguments */ \
         Protect(luaD_checkstack(L, n)); \
         ra = RA(i);  /* previous call may change the stack */ \
@@ -1314,7 +1323,7 @@ void luaV_execute (lua_State *L) {
           else {
             setnilvalue(ra + j);
           }
-          luaVS_specialize(L, a + j);
+          if (spec) luaVS_specialize(L, a + j);
         }
       )
 /* ------------------------------------------------------------------------ */

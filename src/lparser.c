@@ -461,7 +461,7 @@ static void movegotosout (FuncState *fs, BlockCnt *bl) {
 
 
 static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
-  printf("%s\n", __func__);
+  // printf("%s\n", __func__);
   bl->isloop = isloop;
   bl->nactvar = fs->nactvar;
   bl->firstlabel = fs->ls->dyd->label.n;

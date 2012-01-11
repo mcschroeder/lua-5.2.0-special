@@ -42,6 +42,7 @@ RegInfo *getreginfo(Proto *f, int pc, int reg) {
 }
 
 int is_polymorphic(Proto *f, int pc, int reg) {
+  printf("%s [%i] %i\n", __func__, pc, reg);
   RegInfo *reginfo = getreginfo(f, pc, reg);
   return reginfo->nspec > 2;
 }
@@ -339,7 +340,7 @@ void luaVS_specialize(lua_State *L, int reg) {
         if (reg >= a && reg <= a+b) {
           int flag = 0;
           for (j = 0; j < b; j++) {
-            if (!is_polymorphic(p, pc, a+b)) {
+            if (!is_polymorphic(p, pc, a+j)) {
               flag = 1;
             }
           }
