@@ -512,10 +512,14 @@ void luaV_finishOp (lua_State *L) {
 #define KB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgK, k+GETARG_B(i))
 #define KC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgK, k+GETARG_C(i))
 */
+/*
 #define KBx(i)  \
   (k + (GETARG_Bx(i) != 0 ? GETARG_Bx(i) - 1 : GETARG_Ax(*ci->u.l.savedpc++)))
+*/
+// TODO: the reasons for this not working are a little unclear...
+#define KBx(i) (k+GETARG_Bx(i))
 
-/* TODO: the modes checking is now a little trickier...  */
+// TODO: the modes checking is now a little trickier...
 #define RB(i) (base+GETARG_B(i))
 #define RC(i) (base+GETARG_C(i))
 #define KB(i) (k+GETARG_B(i))
@@ -555,6 +559,8 @@ void luaV_finishOp (lua_State *L) {
 #define SpecCheckRa(x) { int rat = rttype(ra); {x;} \
         if (rat != rttype(ra)) luaVS_specialize(L, GETARG_A(i)); }
 
+#define dispatch_again { ci->u.l.savedpc--; continue; }
+
 void luaV_execute (lua_State *L) {
   CallInfo *ci = L->ci;
   LClosure *cl;
@@ -578,13 +584,17 @@ void luaV_execute (lua_State *L) {
     ra = RA(i);
     lua_assert(base == ci->u.l.base);
     lua_assert(base <= L->top && L->top < L->stack + L->stacksize);
-  dispatch_again:
-    printf("[%i] %s ", pcRel(ci->u.l.savedpc, ci_func(ci)->p), luaP_opnames[GET_OPCODE(i)]);
+  //dispatch_again:
+    printf("[%i] %i (code=%i/%s spec=%i/", 
+           pcRel(ci->u.l.savedpc, ci_func(ci)->p),
+           GET_OP(i), GET_OPCODE(i), GET_OPCODE(i) < NUM_OPCODES ? 
+           luaP_opnames[GET_OPCODE(i)] : "unknown", GET_OPSPEC(i));
     PrintSpec(i);
-    printf("\n");
+    printf(")\n");
     vmdispatch (GET_OP(i)) {      
 /* ------------------------------------------------------------------------ */
       vmcase(OP_MOVE, 1, /* Ra:? <- Rb */
+      // printf("\t\t\tOP_MOVE: ra <- %f\n", nvalue(RB(i)));
         setobjs2s(L, ra, RB(i));
         luaVS_specialize(L, GETARG_A(i));
       )
@@ -596,14 +606,15 @@ void luaV_execute (lua_State *L) {
       )
 /* ------------------------------------------------------------------------ */
       vmcase(OP_LOADK, 1, /* Ra:? <- Kb */
-        setobj2s(L, ra, KB(i));
+        // printf("\t\t\tOP_LOADK: ra <- %f\n", nvalue(KBx(i)));
+        setobj2s(L, ra, KBx(i));
         luaVS_specialize(L, GETARG_A(i));
       )
       vmcase(OP_LOADK, 2, /* Ra:x <- Kb:x (any two equal types) */
-        setobj2s_fast(L, ra, KB(i));
+        setobj2s_fast(L, ra, KBx(i));
       )
       vmcase(OP_LOADK, 0, /* Ra <- Kb */
-        setobj2s(L, ra, KB(i));
+        setobj2s(L, ra, KBx(i));
       )
 /* ------------------------------------------------------------------------ */
       vmcase(OP_LOADKX, 1, /* Ra:? <- extra arg */
@@ -663,7 +674,7 @@ void luaV_execute (lua_State *L) {
       vmcasenb(op, sp(raw,chk,reg), /* raw <- b[?] */) \
       vmcasenb(op, sp(chk,chk,reg), /* ? <- b[?] */ \
         luaVS_specialize(L, GETARG_C(i)); \
-        goto dispatch_again; \
+        dispatch_again; \
       )
 #define _vmcase_gettab_str(op,b,c,ck) \
       vmcase(op, sp(raw,str,ck), /* raw <- b[str] */ \
@@ -713,7 +724,7 @@ void luaV_execute (lua_State *L) {
       vmcase(op, sp(chk,reg,reg), /* a[?] <- c*/) \
       vmcase(op, sp(chk,reg,kst), /* a[?] <- c*/ \
         luaVS_specialize(L, GETARG_B(i)); \
-        goto dispatch_again; \
+        dispatch_again \
       )
 #define _vmcase_settab_str(op,a,b,bk,c,ck) \
       vmcase(op, sp(str,bk,ck), /* a[str] <- c */ \
@@ -812,17 +823,17 @@ void luaV_execute (lua_State *L) {
       vmcasenb(op, sp(chk,chk,reg,reg), /* ? <- ? . ? */ \
         luaVS_specialize(L, GETARG_B(i)); \
         luaVS_specialize(L, GETARG_C(i)); \
-        goto dispatch_again; \
+        dispatch_again \
       ) \
       vmcasenb(op, sp(raw,chk,reg,kst), /* raw <- ? . K */) \
       vmcasenb(op, sp(chk,chk,reg,kst), /* ? <- ? . K */ \
         luaVS_specialize(L, GETARG_B(i)); \
-        goto dispatch_again; \
+        dispatch_again \
       ) \
       vmcasenb(op, sp(raw,chk,kst,reg), /* raw <- K . ? */) \
       vmcasenb(op, sp(chk,chk,kst,reg), /* ? <- K . ? */ \
         luaVS_specialize(L, GETARG_C(i)); \
-        goto dispatch_again; \
+        dispatch_again \
       )
 #define _vmcase_arith_num(op,func,b,bk,c,ck) \
       vmcase(op, sp(raw,num,bk,ck), /* raw <- num . num */ \
@@ -876,7 +887,7 @@ void luaV_execute (lua_State *L) {
 #define vmcase_arith(op,func,tm) \
       _vmcase_arith_chk(op) \
       _vmcase_arith_num(op, func, RB(i), reg, RC(i), reg) \
-      _vmcase_arith_num(op, func, RB(i), kst, KC(i), kst) \
+      _vmcase_arith_num(op, func, RB(i), reg, KC(i), kst) \
       _vmcase_arith_num(op, func, KB(i), kst, RC(i), reg) \
       _vmcase_arith_obj(op, tm, RB(i), reg, RC(i), reg) \
       _vmcase_arith_obj(op, tm, RB(i), reg, KC(i), kst) \
@@ -899,7 +910,7 @@ void luaV_execute (lua_State *L) {
       vmcasenb(OP_UNM, sp(raw,chk),) /* raw <- -chk */
       vmcasenb(OP_UNM, sp(chk,chk), /* chk <- -chk */
         luaVS_specialize(L, GETARG_B(i));
-        goto dispatch_again;
+        dispatch_again
       )
       vmcase(OP_UNM, sp(raw,num), /* raw <- -num */
         setnvalue(ra, luai_numunm(L, nvalue(RB(i))));
@@ -929,7 +940,7 @@ void luaV_execute (lua_State *L) {
       vmcasenb(OP_LEN, sp(raw,chk), /* raw <- #chk */)
       vmcasenb(OP_LEN, sp(chk,chk), /* chk <- #chk */
         luaVS_specialize(L, GETARG_B(i));
-        goto dispatch_again;
+        dispatch_again
       )
       vmcase(OP_LEN, sp(raw,str), /* raw <- #str */
         setnvalue(ra, cast_num(tsvalue(RB(i))->len));
@@ -1027,15 +1038,15 @@ void luaV_execute (lua_State *L) {
       vmcasenb(op, sp(chk,reg,reg), /* ? < ? */ \
         luaVS_specialize(L, GETARG_B(i)); \
         luaVS_specialize(L, GETARG_C(i)); \
-        goto dispatch_again; \
+        dispatch_again \
       ) \
       vmcasenb(op, sp(chk,reg,kst), /* ? < K */ \
         luaVS_specialize(L, GETARG_B(i)); \
-        goto dispatch_again; \
+        dispatch_again \
       ) \
       vmcasenb(op, sp(chk,kst,reg), /* K < ? */ \
         luaVS_specialize(L, GETARG_C(i)); \
-        goto dispatch_again; \
+        dispatch_again \
       )
 #define _vmcase_less_num(op,numfunc,b,bk,c,ck) \
       vmcase(op, sp(num,bk,ck), /* num < num */ \
@@ -1312,8 +1323,9 @@ void luaV_execute (lua_State *L) {
       )
 /* ------------------------------------------------------------------------ */
       default:
-        // TODO: remove
-        printf("OOPS: %i %s\n", GET_OPCODE(i), luaP_opnames[GET_OPCODE(i)]);
+        printf("ILLEGAL OP: %i (code=%i/%s spec=%i)\n", 
+        GET_OP(i), GET_OPCODE(i), GET_OPCODE(i) < NUM_OPCODES ? 
+        luaP_opnames[GET_OPCODE(i)] : "unknown", GET_OPSPEC(i));
         break;
     }
   }

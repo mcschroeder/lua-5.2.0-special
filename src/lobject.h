@@ -466,7 +466,7 @@ typedef struct LocVar {
 
 
 typedef struct RegInfo {  
-  int startpc;  /* -1 for function arguments */
+  int startpc;  /* -1 for function arguments */ // TODO: or not?
   int endpc;
   struct RegInfo *next;
   lu_byte state;  

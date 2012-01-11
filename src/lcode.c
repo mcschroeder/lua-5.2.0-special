@@ -276,7 +276,10 @@ void reginfo_adjustlocal(FuncState *fs, int reg) {
   RegInfo *reginfo = reginfo_get_last(fs, reg);
   
   if (reginfo->state == REGINFO_STATE_UNUSED) /* function argument */
-    reginfo_insert(fs, -1, reg, 1);
+    reginfo_insert(fs, /*-1*/0, reg, 1);
+    // TODO: how do we do this so it makes sense?
+    // is a pc of 0 (or -1 for that matter) potentially dangerous?
+    // can there be temp uses before the first use of func arg reg?
   
   lua_assert(reginfo->state == REGINFO_STATE_TEMP);
   reginfo->state = REGINFO_STATE_LOCAL_OPEN;

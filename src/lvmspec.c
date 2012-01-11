@@ -25,8 +25,8 @@
 #define KB(i) (k+GETARG_B(i))
 #define KC(i) (k+GETARG_C(i))
 
-#define c_is_const(i) (GET_OPSPEC_BK(i) == OPSPEC_kst)
-#define b_is_const(i) (GET_OPSPEC_CK(i) == OPSPEC_kst)
+#define b_is_const(i) (GET_OPSPEC_BK(i) == OPSPEC_kst)
+#define c_is_const(i) (GET_OPSPEC_CK(i) == OPSPEC_kst)
 
 RegInfo *getreginfo(Proto *f, int pc, int reg) {
   lua_assert(reg < f->sizereginfos);
@@ -89,7 +89,8 @@ void luaVS_specialize(lua_State *L, int reg) {
           } else {
             SET_OPSPEC(*i, 1); /* Ra:? <- Rb */
           }
-        } else if (reg == GETARG_B(*i)) {
+        }
+        if (reg == GETARG_B(*i)) {
           if (reg_is_polymorphic) {
             if (is_polymorphic(p, pc, GETARG_A(*i))) {
               SET_OPSPEC(*i, 0); /* Ra <- Rb */
@@ -175,7 +176,8 @@ void luaVS_specialize(lua_State *L, int reg) {
           } else {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
-        } else if (!c_is_const(*i) && reg == GETARG_C(*i)) {
+        }
+        if (!c_is_const(*i) && reg == GETARG_C(*i)) {
           TValue *rc = RC(*i);
           if (reg_is_polymorphic) {
             SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);            
@@ -238,23 +240,25 @@ void luaVS_specialize(lua_State *L, int reg) {
       case OP_DIV:
       case OP_MOD:
       case OP_POW: {
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i)) {          
           if (reg_is_polymorphic) {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);            
           } else {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
-        } else if ((!b_is_const(*i) && reg == GETARG_B(*i)) || 
-                   (!c_is_const(*i) && reg == GETARG_C(*i))) {
+        }
+        if ((!b_is_const(*i) && reg == GETARG_B(*i)) || 
+            (!c_is_const(*i) && reg == GETARG_C(*i))) {
           if (reg_is_polymorphic) {
-            printf("a\n");
             SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-          } else if (ttisnumber(RB(*i)) && ttisnumber(RC(*i))) {
-            printf("b\n");
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);
           } else {
-            printf("c\n");
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+            int bn = b_is_const(*i) ? ttisnumber(KB(*i)) : ttisnumber(RB(*i));
+            int cn = c_is_const(*i) ? ttisnumber(KC(*i)) : ttisnumber(RC(*i));
+            if (bn && cn) {
+              SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);              
+            } else {
+              SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+            }
           }
         }
         break;
@@ -267,7 +271,8 @@ void luaVS_specialize(lua_State *L, int reg) {
           } else {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
-        } else if (reg == GETARG_B(*i)) {
+        }
+        if (reg == GETARG_B(*i)) {
           if (reg_is_polymorphic) {
             SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
           } else if (ttisnumber(RB(*i))) {
@@ -286,7 +291,8 @@ void luaVS_specialize(lua_State *L, int reg) {
           } else {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
-        } else if (reg == GETARG_B(*i)) {
+        }
+        if (reg == GETARG_B(*i)) {
           TValue *rb = RB(*i);
           if (reg_is_polymorphic) {
             SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
