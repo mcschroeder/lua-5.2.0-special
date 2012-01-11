@@ -170,8 +170,8 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define OPSPEC_OUT_chk 1
 
 /* BK and CK should be in the two most significant bits of the spec mask */
-#define GET_OPSPEC_BK(i) (((i)&MASK1(1,POS_SP+3))>>POS_SP)
-#define GET_OPSPEC_CK(i) (((i)&MASK1(1,POS_SP+4))>>POS_SP)
+#define GET_OPSPEC_BK(i) (((i)&MASK1(1,POS_SP+3))>>(POS_SP+3))
+#define GET_OPSPEC_CK(i) (((i)&MASK1(1,POS_SP+4))>>(POS_SP+4))
 
 #define OPSPEC_reg 0
 #define OPSPEC_kst 1
@@ -257,7 +257,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 */
 
 #define CREATE_OPSPEC_ARITH(out,in,bk,ck) \
-        (((bk)<<4) | ((ck)<<3) | ((in)<<1) | (out))
+        (((ck)<<4) | ((bk)<<3) | ((in)<<1) | (out))
 
 #define GET_OPSPEC_ARITH_IN(i) (((i)&MASK1(2,POS_SP+1))>>(POS_SP+1))
 #define SET_OPSPEC_ARITH_IN(i,in) ((i) = (((i)&MASK0(2,POS_SP+1)) | \
@@ -278,7 +278,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 */
 
 #define CREATE_OPSPEC_LESS(type,bk,ck) \
-        (((bk)<<4) | ((ck)<<3) | (type))
+        (((ck)<<4) | ((bk)<<3) | (type))
 
 #define GET_OPSPEC_LESS_TYPE(i) (((i)&MASK1(3,POS_SP))>>POS_SP)
 #define SET_OPSPEC_LESS_TYPE(i,t) ((i) = (((i)&MASK0(3,POS_SP)) | \
