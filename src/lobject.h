@@ -477,6 +477,7 @@ typedef struct RegInfo {
 #define REGINFO_STATE_LOCAL_OPEN   1
 #define REGINFO_STATE_LOCAL_CLOSED 2
 #define REGINFO_STATE_UNUSED       3
+#define REGINFO_STATE_LOCAL_UNUSED 4
 
 /*
 ** Function Prototypes

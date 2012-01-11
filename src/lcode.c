@@ -267,6 +267,13 @@ void reginfo_insert(FuncState *fs, int pc, int reg, int store) {
       reginfo->nspec = 0;
       reginfo->next = NULL;      
       break;
+    case REGINFO_STATE_LOCAL_UNUSED:
+      reginfo->startpc = pc;
+      reginfo->endpc = pc;
+      reginfo->state = REGINFO_STATE_LOCAL_OPEN;
+      reginfo->nspec = 0;
+      reginfo->next = NULL;      
+      break;      
   }
 }
 
@@ -281,6 +288,26 @@ void reginfo_adjustlocal(FuncState *fs, int reg) {
     // is a pc of 0 (or -1 for that matter) potentially dangerous?
     // can there be temp uses before the first use of func arg reg?
   
+  // OK, so apparently this function can get called before there is
+  // a temp scope at reg (either the reg is a hitherto unusued funcarg or
+  // we have a previously closed local and start a semantically new scope
+  // in the same reg)
+  // SOLUTIONS: we need to ensure theres a temp scope before calling this
+  //  1) either we do it
+  //  2) or the caller does it
+  // in both cases we need the pc of where we at
+  // OR
+  //     additional uninitialized state either in state or startpc = -1
+  // TODO: blergh
+  if (reginfo->state == REGINFO_STATE_LOCAL_CLOSED) {
+    reginfo_insert(fs, 0, reg, 1);
+    reginfo_get_last(fs, reg)->state = REGINFO_STATE_LOCAL_UNUSED;
+    return;
+  }
+
+
+  //printf("state=%i\n", reginfo->state);
+
   lua_assert(reginfo->state == REGINFO_STATE_TEMP);
   reginfo->state = REGINFO_STATE_LOCAL_OPEN;
 }

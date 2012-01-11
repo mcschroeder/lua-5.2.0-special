@@ -175,8 +175,9 @@ static int registerlocalvar (LexState *ls, TString *varname) {
 }
 
 
-static void new_localvar (LexState *ls, TString *name) {
+static void new_localvar (LexState *ls, TString *name) {  
   FuncState *fs = ls->fs;
+  printf("%s %s [%i]\n", __func__, getstr(name), fs->pc);
   Dyndata *dyd = ls->dyd;
   // printf("BEGIN: freereg=%i nactvar=%i nlocvars=%i firstlocal=%i\n", fs->freereg, fs->nactvar, fs->nlocvars, fs->firstlocal);
   int reg = registerlocalvar(ls, name); 
@@ -460,6 +461,7 @@ static void movegotosout (FuncState *fs, BlockCnt *bl) {
 
 
 static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
+  printf("%s\n", __func__);
   bl->isloop = isloop;
   bl->nactvar = fs->nactvar;
   bl->firstlabel = fs->ls->dyd->label.n;
