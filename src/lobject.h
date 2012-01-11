@@ -462,42 +462,21 @@ typedef struct LocVar {
   TString *varname;
   int startpc;  /* first point where variable is active */
   int endpc;    /* first point where variable is dead */
-  lu_byte speccount; /* how often the register has been specialized */
 } LocVar;
 
 
-// note that the start instructions is always a store for the register
-// whereas the end instruction is always a load for temp register but can
-// be either a store or a load for locals
-// (meaning: the scope of temps is only from one store to the next)
-/*
-we shouldn't be able to jump across scope boundaries,
-but we still have to prove that this can never happen:
-
-label:
-  r1 <- ...   first local scope
-  ... <- r1
------------------
-  r1 <- ...   temp scope
-  ... <- ...
-------------------  
-  r1 <- ...    second local scope
-  goto label
-
-could the code generator conceivably emit such bytecode?
-I'm pretty certain it doesn't, but why?
-*/
-typedef struct RegInfo {
-  lu_byte state;
-  int startpc;
-  int endpc;  
+typedef struct RegInfo {  
+  int startpc;  /* -1 for function arguments */
+  int endpc;
   struct RegInfo *next;
+  lu_byte state;  
+  lu_byte nspec; /* how often this register has been specialized */
 } RegInfo;
 
-#define REGINFO_STATE_TEMP    0
-#define REGINFO_STATE_LOCAL   1
-#define REGINFO_STATE_UNUSED  3
-
+#define REGINFO_STATE_TEMP         0
+#define REGINFO_STATE_LOCAL_OPEN   1
+#define REGINFO_STATE_LOCAL_CLOSED 2
+#define REGINFO_STATE_UNUSED       3
 
 /*
 ** Function Prototypes
@@ -509,25 +488,23 @@ typedef struct Proto {
   struct Proto **p;  /* functions defined inside the function */
   int *lineinfo;  /* map from opcodes to source lines (debug information) */
   LocVar *locvars;  /* information about local variables (debug information) */
+  RegInfo *reginfos;
   Upvaldesc *upvalues;  /* upvalue information */
   union Closure *cache;  /* last created closure with this prototype */
-  TString  *source;  /* used for debug information */
+  TString  *source;  /* used for debug information */  
   int sizeupvalues;  /* size of 'upvalues' */
   int sizek;  /* size of `k' */
   int sizecode;
   int sizelineinfo;
   int sizep;  /* size of `p' */
   int sizelocvars;
+  int sizereginfos;
   int linedefined;
   int lastlinedefined;
   GCObject *gclist;
   lu_byte numparams;  /* number of fixed parameters */
   lu_byte is_vararg;
   lu_byte maxstacksize;  /* maximum stack used by this function */
-
-  RegInfo *reginfo;
-  int sizereginfo;  
-
 } Proto;
 
 

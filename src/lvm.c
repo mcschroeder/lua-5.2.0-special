@@ -506,12 +506,20 @@ void luaV_finishOp (lua_State *L) {
 
 #define RA(i)	(base+GETARG_A(i))
 /* to be used after possible stack reallocation */
+/*
 #define RB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgR, base+GETARG_B(i))
 #define RC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgR, base+GETARG_C(i))
 #define KB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgK, k+GETARG_B(i))
 #define KC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgK, k+GETARG_C(i))
+*/
 #define KBx(i)  \
   (k + (GETARG_Bx(i) != 0 ? GETARG_Bx(i) - 1 : GETARG_Ax(*ci->u.l.savedpc++)))
+
+/* TODO: the modes checking is now a little trickier...  */
+#define RB(i) (base+GETARG_B(i))
+#define RC(i) (base+GETARG_C(i))
+#define KB(i) (k+GETARG_B(i))
+#define KC(i) (k+GETARG_C(i))
 
 
 /* execute a jump instruction */

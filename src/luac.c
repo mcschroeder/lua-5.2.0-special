@@ -449,20 +449,22 @@ static void PrintDebug(const Proto* f)
   printf("\t%d\t%s\t%d\t%d\n",
   i,UPVALNAME(i),f->upvalues[i].instack,f->upvalues[i].idx);
  }
- n=f->sizereginfo;
+ n=f->sizereginfos;
  printf("register info for %p:\n",VOID(f));
  for (i=0; i<n; i++)
  {
-  RegInfo *reginfo = &(f->reginfo[i]);
+  RegInfo *reginfo = &(f->reginfos[i]);
   if (reginfo->state == REGINFO_STATE_UNUSED) {
-    printf("\t%d\t(unused)\n", i);
+    printf("\t%d\tunused\n", i);
     continue;
   }
-  printf("\t%d\t%d - %d", i, reginfo->startpc, reginfo->endpc);
-  if (reginfo->state == REGINFO_STATE_LOCAL) printf("\t(local)");
+  printf("\t%d\t(%d,%d)", i, reginfo->startpc, reginfo->endpc);
+  if (reginfo->state == REGINFO_STATE_LOCAL_CLOSED) printf("\tlocal");
+  if (reginfo->state == REGINFO_STATE_LOCAL_OPEN) printf("\tlocal OPEN");
   for (reginfo = reginfo->next; reginfo; reginfo = reginfo->next) {
-    printf("\n\t\t%d - %d", reginfo->startpc, reginfo->endpc);
-    if (reginfo->state == REGINFO_STATE_LOCAL) printf("\t(local)");
+    printf("\n\t\t(%d,%d)", reginfo->startpc, reginfo->endpc);
+    if (reginfo->state == REGINFO_STATE_LOCAL_CLOSED) printf("\tlocal");
+    if (reginfo->state == REGINFO_STATE_LOCAL_OPEN) printf("\tlocal OPEN");
   }    
   printf("\n");
  }

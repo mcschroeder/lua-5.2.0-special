@@ -175,15 +175,19 @@ static int registerlocalvar (LexState *ls, TString *varname) {
 }
 
 
-static void new_localvar (LexState *ls, TString *name) {  
+static void new_localvar (LexState *ls, TString *name) {
   FuncState *fs = ls->fs;
   Dyndata *dyd = ls->dyd;
-  int reg = registerlocalvar(ls, name);
+  // printf("BEGIN: freereg=%i nactvar=%i nlocvars=%i firstlocal=%i\n", fs->freereg, fs->nactvar, fs->nlocvars, fs->firstlocal);
+  int reg = registerlocalvar(ls, name); 
+  //printf("new local: %i\t[%i]\n", reg, fs->pc);
   checklimit(fs, dyd->actvar.n + 1 - fs->firstlocal,
                   MAXVARS, "local variables");
   luaM_growvector(ls->L, dyd->actvar.arr, dyd->actvar.n + 1,
                   dyd->actvar.size, Vardesc, MAX_INT, "local variables");
   dyd->actvar.arr[dyd->actvar.n++].idx = cast(short, reg);
+//  printf("%s actvar.arr[%i].idx = %i\n", __func__, dyd->actvar.n-1, reg);
+  // printf("  END: freereg=%i nactvar=%i nlocvars=%i firstlocal=%i\n", fs->freereg, fs->nactvar, fs->nlocvars, fs->firstlocal);
 }
 
 
@@ -204,17 +208,37 @@ static LocVar *getlocvar (FuncState *fs, int i) {
 
 static void adjustlocalvars (LexState *ls, int nvars) {  
   FuncState *fs = ls->fs;
+  //printf("%s nvars=%i | nactvar=%i\n", __func__, nvars, fs->nactvar);
+  // printf("%s", __func__);
   fs->nactvar = cast_byte(fs->nactvar + nvars);
   for (; nvars; nvars--) {
     getlocvar(fs, fs->nactvar - nvars)->startpc = fs->pc;
+    reginfo_adjustlocal(fs, fs->nactvar - nvars);
+    // printf(" %i", fs->nactvar - nvars);
   }
+  // printf("\n");
+  //printf("\t\t nactvar=%i\n", fs->nactvar);
+  // TODO
+  // the diff b/w the nactvar at the beginning and the end of the func
+  // is the number of local vars that have been added
+  // start with the destination register of the last used instruction
+  // and go back that number and mark the reginfos as local
 }
 
 
-static void removevars (FuncState *fs, int tolevel) {
+static void removevars (FuncState *fs, int tolevel) {  
+  //printf("%s tolevel=%i | nactvar=%i\n", __func__, tolevel, fs->nactvar);
+  // printf("%s", __func__);
   fs->ls->dyd->actvar.n -= (fs->nactvar - tolevel);
-  while (fs->nactvar > tolevel)
-    getlocvar(fs, --fs->nactvar)->endpc = fs->pc;
+  while (fs->nactvar > tolevel) {    
+    getlocvar(fs, --fs->nactvar)->endpc = fs->pc;    
+    reginfo_removelocal(fs, fs->nactvar);
+    // printf(" %i", fs->nactvar);
+  }
+  //printf("\t nactvar=%i\n", fs->nactvar);
+  // printf("\n");
+  // TODO
+  // like above, but end local scope
 }
 
 
@@ -897,7 +921,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
   int ra;
   for (ra = base; ra <= base+nparams; ra++)
     reginfo_add_load(fs, ra);
-  reginfo_add_store(fs, base);
+  reginfo_add_store(fs, base); // TODO: not quite sure here
   init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, 0, base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
@@ -1480,6 +1504,7 @@ static void ifstat (LexState *ls, int line) {
 static void localfunc (LexState *ls) {
   expdesc b;
   FuncState *fs = ls->fs;
+  // printf("%s\n", __func__);
   new_localvar(ls, str_checkname(ls));  /* new local variable */
   adjustlocalvars(ls, 1);  /* enter its scope */
   body(ls, &b, 0, ls->linenumber);  /* function created in next register */
@@ -1494,6 +1519,7 @@ static void localstat (LexState *ls) {
   int nexps;
   expdesc e;
   do {
+    // printf("%s [%i]\n", __func__, ls->fs->pc);    
     new_localvar(ls, str_checkname(ls));
     nvars++;
   } while (testnext(ls, ','));

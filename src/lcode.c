@@ -221,49 +221,22 @@ void luaK_concat (FuncState *fs, int *l1, int l2) {
 
 /* -- register info ------------------------------------------------------ */
 
-void printactvar(FuncState *fs) {
-  Dyndata *dyd = fs->ls->dyd;
-  int i;
-  printf("actvar:");
-  for (i = 0; i < dyd->actvar.n; i++)
-    printf(" %i", dyd->actvar.arr[i].idx);
-  printf("\n");
-}
-
-int islocal(FuncState *fs, int idx) {
-  Dyndata *dyd = fs->ls->dyd;
-  int i;
-  for (i = 0; i < dyd->actvar.n; i++)
-    if (dyd->actvar.arr[i].idx == idx)
-      return 1;  
-  return 0;
-}
-
- // #define islocal(fs, idx) islocalat(fs, fs->pc, idx)
- //#define islocal(fs, idx) 0
-
-// int islocalat(FuncState *fs, int pc, int idx) {
-//     return idx < fs->nlocvars && 
-//           fs->f->locvars[idx].startpc <= pc && 
-//           fs->f->locvars[idx].endpc >= pc;
-// }
-
-#define islocalat(fs,pc,idx) islocal(fs,idx)
-//#define islocalat(fs,pc,idx) 0
-
+// TODO: naming: it doesn't grow the reginfo scope list it grows fs->reginfos
 void reginfo_grow(FuncState *fs, int reg) {
-  if (reg < fs->f->sizereginfo) return;  
-  int oldsize = fs->f->sizereginfo;
+  if (reg < fs->f->sizereginfos) return;  
+  int oldsize = fs->f->sizereginfos;
   int newsize = reg+1;
-  luaM_reallocvector(fs->ls->L, fs->f->reginfo, oldsize, newsize, RegInfo);
-  fs->f->sizereginfo = newsize;
-  while (oldsize < newsize)
-    fs->f->reginfo[oldsize++].state = REGINFO_STATE_UNUSED;
+  luaM_reallocvector(fs->ls->L, fs->f->reginfos, oldsize, newsize, RegInfo);
+  fs->f->sizereginfos = newsize;
+  while (oldsize < newsize) {
+    printf("%s %i\n", __func__, oldsize);
+    fs->f->reginfos[oldsize++].state = REGINFO_STATE_UNUSED;    
+  }
 }
 
 RegInfo *reginfo_get_last(FuncState *fs, int reg) {
-  lua_assert(reg < fs->f->sizereginfo);
-  RegInfo *reginfo = &(fs->f->reginfo[reg]);
+  lua_assert(reg < fs->f->sizereginfos);
+  RegInfo *reginfo = &(fs->f->reginfos[reg]);
   if (reginfo->state != REGINFO_STATE_UNUSED) {
     while (reginfo->next != NULL)
       reginfo = reginfo->next;
@@ -272,24 +245,48 @@ RegInfo *reginfo_get_last(FuncState *fs, int reg) {
 }
 
 void reginfo_insert(FuncState *fs, int pc, int reg, int store) {
-  printf("%s: [%i] %i %s\n", __func__, pc, reg, store ? "store" : "load");
+  printf("%s: [%i] %i %s\t\n", __func__, pc, reg, store ? "store" : "load");
   reginfo_grow(fs, reg);
   RegInfo *reginfo = reginfo_get_last(fs, reg);
-  if ((reginfo->state == islocalat(fs, pc, reg)) && 
-      (reginfo->state != REGINFO_STATE_TEMP || !store)) {
-    lua_assert(reginfo->endpc <= pc);
-    reginfo->endpc = pc; /* extend scope*/
-  }
-  else { /* start new scope*/
-    if (reginfo->state != REGINFO_STATE_UNUSED) {
+  switch (reginfo->state) {
+    case REGINFO_STATE_TEMP:
+      if (store) goto l_add_scope;
+      /* else fall through */
+    case REGINFO_STATE_LOCAL_OPEN: /* extend scope */
+      if (reginfo->endpc < pc) reginfo->endpc = pc;
+      break;
+    case REGINFO_STATE_LOCAL_CLOSED: /* add new scope */
+    l_add_scope:
       reginfo->next = luaM_new(fs->ls->L, RegInfo);
       reginfo = reginfo->next;
-    }
-    reginfo->state = islocalat(fs, pc, reg);
-    reginfo->startpc = pc;
-    reginfo->endpc = pc;
-    reginfo->next = NULL;
+      /* fall through */
+    case REGINFO_STATE_UNUSED: /* initialize scope */      
+      reginfo->startpc = pc;
+      reginfo->endpc = pc;
+      reginfo->state = REGINFO_STATE_TEMP;
+      reginfo->nspec = 0;
+      reginfo->next = NULL;      
+      break;
   }
+}
+
+void reginfo_adjustlocal(FuncState *fs, int reg) {
+  printf("%s: %i\n", __func__, reg);
+  reginfo_grow(fs, reg);
+  RegInfo *reginfo = reginfo_get_last(fs, reg);
+  
+  if (reginfo->state == REGINFO_STATE_UNUSED) /* function argument */
+    reginfo_insert(fs, -1, reg, 1);
+  
+  lua_assert(reginfo->state == REGINFO_STATE_TEMP);
+  reginfo->state = REGINFO_STATE_LOCAL_OPEN;
+}
+
+void reginfo_removelocal(FuncState *fs, int reg) {
+  printf("%s: %i\n", __func__, reg);
+  RegInfo *reginfo = reginfo_get_last(fs, reg);
+  lua_assert(reginfo->state == REGINFO_STATE_LOCAL_OPEN);
+  reginfo->state = REGINFO_STATE_LOCAL_CLOSED;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -358,23 +355,28 @@ void luaK_checkstack (FuncState *fs, int n) {
 
 
 void luaK_reserveregs (FuncState *fs, int n) {
+  // printf("%s n=%i | freereg=%i nactvar=%i\n", __func__, n, fs->freereg, fs->nactvar);
   luaK_checkstack(fs, n);
   fs->freereg += n;
+  // printf("\t\tfreereg=%i nactvar=%i\n", fs->freereg, fs->nactvar);
 }
 
 
 /* note: reg must not be a constant register */
 static void freereg (FuncState *fs, int reg) {
+  // printf("%s reg=%i | freereg=%i nactvar=%i\n", __func__, reg, fs->freereg, fs->nactvar);
   if (reg >= fs->nactvar) {
     fs->freereg--;
     lua_assert(reg == fs->freereg);
   }
+  // printf("\t\tfreereg=%i nactvar=%i\n", fs->freereg, fs->nactvar);
 }
 
 
 static void freeexp (FuncState *fs, expdesc *e) {
-  if (e->k == VNONRELOC)
+  if (e->k == VNONRELOC) {    
     freereg(fs, e->u.info);
+  }
 }
 
 
@@ -543,6 +545,8 @@ static int code_label (FuncState *fs, int A, int b, int jump) {
 
 
 static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
+  // printf("%s %i", __func__, reg);
+  // printf("\t[%i] nactvar=%i\n", fs->pc, fs->nactvar);
   luaK_dischargevars(fs, e);
   switch (e->k) {
     case VNIL: {
@@ -622,7 +626,7 @@ static void exp2reg (FuncState *fs, expdesc *e, int reg) {
 }
 
 
-void luaK_exp2nextreg (FuncState *fs, expdesc *e) {  
+void luaK_exp2nextreg (FuncState *fs, expdesc *e) { 
   luaK_dischargevars(fs, e);
   freeexp(fs, e);
   luaK_reserveregs(fs, 1);
@@ -630,15 +634,15 @@ void luaK_exp2nextreg (FuncState *fs, expdesc *e) {
 }
 
 
-int luaK_exp2anyreg (FuncState *fs, expdesc *e) {
+int luaK_exp2anyreg (FuncState *fs, expdesc *e) {  
   luaK_dischargevars(fs, e);
   if (e->k == VNONRELOC) {
     if (!hasjumps(e)) return e->u.info;  /* exp is already in a register */
     if (e->u.info >= fs->nactvar) {  /* reg. is not a local? */
       exp2reg(fs, e, e->u.info);  /* put value on it */
       return e->u.info;
-    }
-  }
+    }    
+  }  
   luaK_exp2nextreg(fs, e);  /* default */
   return e->u.info;
 }
@@ -691,6 +695,7 @@ int luaK_exp2RK (FuncState *fs, expdesc *e) {
 void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
   switch (var->k) {
     case VLOCAL: {
+      // printf("%s VLOCAL\n", __func__);
       freeexp(fs, ex);
       exp2reg(fs, ex, var->u.info);
       return;
