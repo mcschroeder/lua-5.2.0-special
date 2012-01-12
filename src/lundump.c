@@ -163,6 +163,33 @@ static void LoadDebug(LoadState* S, Proto* f)
  for (i=0; i<n; i++) f->upvalues[i].name=LoadString(S);
 }
 
+static void LoadReginfos(LoadState* S, Proto* f)
+{
+  int i,n;
+  n=LoadInt(S);
+  f->sizereginfos=n;
+  f->reginfos = luaM_newvector(S->L,n,RegInfo);
+  for (i=0; i<n; i++) {
+    RegInfo *reginfo = &f->reginfos[i];
+    reginfo->startpc = LoadNumber(S);
+    reginfo->endpc = LoadNumber(S);
+    reginfo->state = LoadChar(S);
+    reginfo->nspec = LoadChar(S);
+    reginfo->next = NULL;
+  
+    int startpc;
+    while ((startpc = LoadNumber(S)) != -42) { /* magic sentinel */
+      reginfo->next = luaM_new(S->L, RegInfo);
+      reginfo = reginfo->next;
+      reginfo->startpc = startpc;
+      reginfo->endpc = LoadNumber(S);
+      reginfo->state = LoadChar(S);
+      reginfo->nspec = LoadChar(S);
+      reginfo->next = NULL;
+    }
+  }
+}
+
 static Proto* LoadFunction(LoadState* S)
 {
  Proto* f=luaF_newproto(S->L);
@@ -175,6 +202,7 @@ static Proto* LoadFunction(LoadState* S)
  LoadCode(S,f);
  LoadConstants(S,f);
  LoadUpvalues(S,f);
+ LoadReginfos(S,f);
  LoadDebug(S,f);
  S->L->top--;
  return f;

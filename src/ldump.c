@@ -135,6 +135,24 @@ static void DumpDebug(const Proto* f, DumpState* D)
  for (i=0; i<n; i++) DumpString(f->upvalues[i].name,D);
 }
 
+static void DumpReginfos(const Proto *f, DumpState *D)
+{
+  int i,n=f->sizereginfos;
+  DumpInt(n,D);
+  for (i=0; i<n; i++)
+  {
+    RegInfo *reginfo = &f->reginfos[i];
+    while (reginfo != NULL) {
+      DumpNumber(reginfo->startpc, D);
+      DumpNumber(reginfo->endpc, D);
+      DumpChar(reginfo->state, D);
+      DumpChar(reginfo->nspec, D);
+      reginfo = reginfo->next;
+    }
+    DumpNumber(-42,D); /* magic sentinel number */
+  }    
+}
+
 static void DumpFunction(const Proto* f, DumpState* D)
 {
  DumpInt(f->linedefined,D);
@@ -145,6 +163,7 @@ static void DumpFunction(const Proto* f, DumpState* D)
  DumpCode(f,D);
  DumpConstants(f,D);
  DumpUpvalues(f,D);
+ DumpReginfos(f,D);
  DumpDebug(f,D);
 }
 
