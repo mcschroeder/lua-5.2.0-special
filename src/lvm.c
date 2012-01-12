@@ -599,7 +599,9 @@ void luaV_execute (lua_State *L) {
         luaVS_specialize(L, GETARG_A(i));
       )
       vmcase(OP_MOVE, 2, /* Ra:x <- Rb:x (any two equal types) */
-        setobjs2s_fast(L, ra, RB(i));
+      // TODO: why won't this work?
+        // setobjs2s_fast(L, ra, RB(i));
+        setobjs2s(L, ra, RB(i));
       )
       vmcase(OP_MOVE, 0, /* Ra <- Rb */
         setobjs2s(L, ra, RB(i));
@@ -611,7 +613,9 @@ void luaV_execute (lua_State *L) {
         luaVS_specialize(L, GETARG_A(i));
       )
       vmcase(OP_LOADK, 2, /* Ra:x <- Kb:x (any two equal types) */
-        setobj2s_fast(L, ra, KBx(i));
+      // TODO: why won't this work?
+        // setobj2s_fast(L, ra, KBx(i));
+        setobj2s(L, ra, KBx(i));
       )
       vmcase(OP_LOADK, 0, /* Ra <- Kb */
         setobj2s(L, ra, KBx(i));
