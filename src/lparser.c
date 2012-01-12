@@ -1349,10 +1349,10 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   int prep, endfor;
   adjustlocalvars(ls, 3);  /* control variables */
   checknext(ls, TK_DO);
-  if (isnum) {
-    reginfo_add_store(fs, base);
+  if (isnum) {    
     reginfo_add_load(fs, base+1);
     reginfo_add_load(fs, base+2);
+    reginfo_add_store(fs, base);
     prep = luaK_codeAsBx(fs, OP_FORPREP, 0, base, NO_JUMP);
   } else {
     prep = luaK_jump(fs);
@@ -1364,11 +1364,11 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   leaveblock(fs);  /* end of scope for declared variables */
   luaK_patchtohere(fs, prep);
   if (isnum) {  /* numeric for? */
-    reginfo_add_store(fs, base);
-    reginfo_add_store(fs, base+3);
     reginfo_add_load(fs, base); // TODO: ??
     reginfo_add_load(fs, base+1);
     reginfo_add_load(fs, base+2);
+    reginfo_add_store(fs, base);
+    reginfo_add_store(fs, base+3);
     // TODO: keep in mind they'll always be numbers (never respecialized)
     endfor = luaK_codeAsBx(fs, OP_FORLOOP, 0, base, NO_JUMP);
   }

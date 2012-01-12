@@ -625,8 +625,8 @@ static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
     }
     case VNONRELOC: {
       if (reg != e->u.info) {
-        reginfo_add_store(fs, reg);
         reginfo_add_load(fs, e->u.info);
+        reginfo_add_store(fs, reg);        
         luaK_codeABC(fs, OP_MOVE, 1, reg, e->u.info, 0);
       }
       break;
@@ -807,10 +807,10 @@ void luaK_self (FuncState *fs, expdesc *e, expdesc *key) {
   luaK_reserveregs(fs, 2);  /* function and 'self' produced by op_self */
   int rkkey = luaK_exp2RK(fs, key);
   int sp = (isconst(key)<<4)|1;
-  reginfo_add_store(fs, e->u.info);
-  reginfo_add_store(fs, e->u.info+1);
   reginfo_add_load(fs, ereg);
   if (!isconst(key)) reginfo_add_load(fs, rkkey);
+  reginfo_add_store(fs, e->u.info);
+  reginfo_add_store(fs, e->u.info+1);  
   luaK_codeABC(fs, OP_SELF, sp, e->u.info, ereg, rkkey);
   freeexp(fs, key);
 }
