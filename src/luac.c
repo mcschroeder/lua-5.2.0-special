@@ -404,6 +404,10 @@ static void PrintCode(const Proto* f)
 #define SS(x) ((x==1)?"":"s")
 #define S(x)  (int)(x),SS(x)
 
+static const char * const reginfostates[5] = {
+  "temp", "local open", "local closed", "unused", "local unused"
+};
+
 static void PrintHeader(const Proto* f)
 {
  const char* s=f->source ? getstr(f->source) : "=?";
@@ -458,13 +462,10 @@ static void PrintDebug(const Proto* f)
     printf("\t%d\tunused\n", i);
     continue;
   }
-  printf("\t%d\t(%d,%d)", i, reginfo->startpc, reginfo->endpc);
-  if (reginfo->state == REGINFO_STATE_LOCAL_CLOSED) printf("\tlocal");
-  if (reginfo->state == REGINFO_STATE_LOCAL_OPEN) printf("\tlocal OPEN");
+  printf("\t%d\t(%d,%d)\t%s", i, reginfo->startpc, reginfo->endpc,
+  reginfostates[reginfo->state]);
   for (reginfo = reginfo->next; reginfo; reginfo = reginfo->next) {
-    printf("\n\t\t(%d,%d)", reginfo->startpc, reginfo->endpc);
-    if (reginfo->state == REGINFO_STATE_LOCAL_CLOSED) printf("\tlocal");
-    if (reginfo->state == REGINFO_STATE_LOCAL_OPEN) printf("\tlocal OPEN");
+    printf("\n\t\t(%d,%d)\t%s", reginfo->startpc, reginfo->endpc, reginfostates[reginfo->state]);
   }    
   printf("\n");
  }

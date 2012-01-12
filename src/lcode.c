@@ -237,7 +237,8 @@ void reginfo_grow(FuncState *fs, int reg) {
 RegInfo *reginfo_get_last(FuncState *fs, int reg) {
   lua_assert(reg < fs->f->sizereginfos);
   RegInfo *reginfo = &(fs->f->reginfos[reg]);
-  if (reginfo->state != REGINFO_STATE_UNUSED) {
+  if (reginfo->state != REGINFO_STATE_UNUSED &&
+      reginfo->state != REGINFO_STATE_LOCAL_UNUSED) {
     while (reginfo->next != NULL)
       reginfo = reginfo->next;
   }
@@ -282,8 +283,11 @@ void reginfo_adjustlocal(FuncState *fs, int reg) {
   reginfo_grow(fs, reg);
   RegInfo *reginfo = reginfo_get_last(fs, reg);
   
-  if (reginfo->state == REGINFO_STATE_UNUSED) /* function argument */
-    reginfo_insert(fs, /*-1*/0, reg, 1);
+  if (reginfo->state == REGINFO_STATE_UNUSED) /* function argument */ {
+    //reginfo_insert(fs, /*-1*/0, reg, 1);
+    reginfo->state = REGINFO_STATE_LOCAL_UNUSED;
+    return;
+  }
     // TODO: how do we do this so it makes sense?
     // is a pc of 0 (or -1 for that matter) potentially dangerous?
     // can there be temp uses before the first use of func arg reg?
@@ -308,6 +312,9 @@ void reginfo_adjustlocal(FuncState *fs, int reg) {
 
   //printf("state=%i\n", reginfo->state);
 
+  // adjustlocalvars is often called after the locals have been used and
+  // their reginfos inserted, but at that point there were still known as 
+  // temps. so now we simply rebrand them.
   lua_assert(reginfo->state == REGINFO_STATE_TEMP);
   reginfo->state = REGINFO_STATE_LOCAL_OPEN;
 }
@@ -315,6 +322,12 @@ void reginfo_adjustlocal(FuncState *fs, int reg) {
 void reginfo_removelocal(FuncState *fs, int reg) {
   printf("%s: %i\n", __func__, reg);
   RegInfo *reginfo = reginfo_get_last(fs, reg);
+  if (reginfo->state == REGINFO_STATE_LOCAL_UNUSED) {
+    reginfo->state = REGINFO_STATE_UNUSED;
+    return;
+    // TODO: remove reginfo? 
+    // NO, since reginfos needs to have at least one entry per register
+  }
   lua_assert(reginfo->state == REGINFO_STATE_LOCAL_OPEN);
   reginfo->state = REGINFO_STATE_LOCAL_CLOSED;
 }
@@ -333,6 +346,10 @@ static int luaK_code (FuncState *fs, Instruction i) {
   luaM_growvector(fs->ls->L, f->lineinfo, fs->pc, f->sizelineinfo, int,
                   MAX_INT, "opcodes");
   f->lineinfo[fs->pc] = fs->ls->lastline;
+  // printf("[%i] %i (code=%i/%s spec=%i)\n", 
+  //          fs->pc,
+  //          GET_OP(i), GET_OPCODE(i), GET_OPCODE(i) < NUM_OPCODES ? 
+  //          luaP_opnames[GET_OPCODE(i)] : "unknown", GET_OPSPEC(i));
   return fs->pc++;
 }
 

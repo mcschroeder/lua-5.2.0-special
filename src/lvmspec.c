@@ -31,7 +31,8 @@
 RegInfo *getreginfo(Proto *f, int pc, int reg) {
   lua_assert(reg < f->sizereginfos);
   RegInfo *reginfo = &(f->reginfos[reg]);
-  if (reginfo->state != REGINFO_STATE_UNUSED) {
+  if (reginfo->state != REGINFO_STATE_UNUSED &&
+      reginfo->state != REGINFO_STATE_LOCAL_UNUSED) {
     while (reginfo) {
       if (reginfo->startpc <= pc && reginfo->endpc >= pc)
         return reginfo;
@@ -50,7 +51,7 @@ int is_polymorphic(Proto *f, int pc, int reg) {
 void luaVS_specialize(lua_State *L, int reg) {
   Proto *p = clLvalue(L->ci->func)->p;
   int pc = L->ci->u.l.savedpc - p->code - 1;
-  printf("%s [%i] %i", __func__, pc, reg);
+  printf("%s [%s:%i] %i", __func__, getstr(p->source), pc, reg);
   RegInfo *reginfo = getreginfo(p, pc, reg);  
   if (!reginfo) {
     printf(" NULL\n");
