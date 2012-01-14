@@ -729,8 +729,8 @@ void luaV_execute (lua_State *L) {
       (OPSPEC_##ck<<4 | OPSPEC_##bk<<3 | OPSPEC_TAB_KEY_##key)
 
 #define _vmcase_settab_chk(op) \
-      vmcase(op, sp(chk,reg,reg), /* a[?] <- c*/) \
-      vmcase(op, sp(chk,reg,kst), /* a[?] <- c*/ \
+      vmcasenb(op, sp(chk,reg,reg), /* a[?] <- c*/) \
+      vmcasenb(op, sp(chk,reg,kst), /* a[?] <- c*/ \
         luaVS_specialize_load(L, GETARG_B(i)); \
         dispatch_again \
       )
