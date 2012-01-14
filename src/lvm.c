@@ -585,12 +585,12 @@ void luaV_execute (lua_State *L) {
     lua_assert(base == ci->u.l.base);
     lua_assert(base <= L->top && L->top < L->stack + L->stacksize);
   //dispatch_again:
-    printf("[%i] %i (code=%i/%s spec=%i/", 
-           pcRel(ci->u.l.savedpc, ci_func(ci)->p),
-           GET_OP(i), GET_OPCODE(i), GET_OPCODE(i) < NUM_OPCODES ? 
-           luaP_opnames[GET_OPCODE(i)] : "unknown", GET_OPSPEC(i));
-    PrintSpec(i);
-    printf(")\n");
+    // printf("[%i] %i (code=%i/%s spec=%i/", 
+    //        pcRel(ci->u.l.savedpc, ci_func(ci)->p),
+    //        GET_OP(i), GET_OPCODE(i), GET_OPCODE(i) < NUM_OPCODES ? 
+    //        luaP_opnames[GET_OPCODE(i)] : "unknown", GET_OPSPEC(i));
+    // PrintSpec(i);
+    // printf(")\n");
     vmdispatch (GET_OP(i)) {      
 /* ------------------------------------------------------------------------ */
       vmcase(OP_MOVE, 1, /* Ra:? <- Rb */
@@ -635,7 +635,11 @@ void luaV_execute (lua_State *L) {
       )
 /* ------------------------------------------------------------------------ */
       vmcase(OP_LOADBOOL, 2, /* Ra:bool <- Ib:bool */
-        changebvalue(ra, GETARG_B(i));
+      // TODO: of course this can't work, since it's the first store in 
+      //       a temp scope, but the register has probably been reused before
+      //       so at this point it's most likely NOT bool already!!!!
+        // changebvalue(ra, GETARG_B(i));
+        setbvalue(ra, GETARG_B(i));
         if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
       )
       vmcase(OP_LOADBOOL, 0, /* Ra <- Ib:bool */
@@ -811,7 +815,6 @@ void luaV_execute (lua_State *L) {
         StkId rb = RB(i); \
         setobjs2s(L, ra+1, rb); \
         SpecCheckRa( \
-          printf("c=%i is const=%s is string:%s\n", GETARG_C(i), ck==1 ? "YES" : "NO", ttisstring(c) ? "YES" : "NO"); \
           Protect(luaV_gettable_str(L, rb, c, ra)); \
         ) \
       )
