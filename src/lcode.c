@@ -1101,6 +1101,8 @@ static void codecomp (FuncState *fs, BinOpr opr, expdesc *e1, expdesc *e2) {
     sp = CREATE_OPSPEC_LESS(OPSPEC_LESS_TYPE_chk, 
                             const1 ? OPSPEC_kst : OPSPEC_reg, 
                             const2 ? OPSPEC_kst : OPSPEC_reg);
+    if (!const1) reginfo_add_load(fs, o1);
+    if (!const2) reginfo_add_load(fs, o2);
   }
 
   e1->u.info = condjump(fs, op, sp, 1, o1, o2);
