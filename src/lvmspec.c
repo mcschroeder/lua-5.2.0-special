@@ -65,11 +65,12 @@ int is_polymorphic(Proto *f, int pc, int reg, int store) {
 
 
 
+#define getfuncline(f,pc) (((f)->lineinfo) ? (f)->lineinfo[pc] : 0)
 
 void luaVS_specialize(lua_State *L, int reg, int store) {
   Proto *p = clLvalue(L->ci->func)->p;
   int pc = L->ci->u.l.savedpc - p->code - 1;
-  printf("%s [%s:%i] %i %s", __func__, getstr(p->source), pc, reg, 
+  printf("%s [%s:%i] %i %s", __func__, getstr(p->source), getfuncline(p,pc), reg, 
           store ? "store" : "load");
   RegInfo *reginfo = getreginfo(p, pc, reg, store);  
   if (!reginfo) {
@@ -158,6 +159,7 @@ void luaVS_specialize(lua_State *L, int reg, int store) {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
         }
+        break;
       }
 /* ------------------------------------------------------------------------ */
       case OP_LOADBOOL: {
