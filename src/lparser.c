@@ -1351,19 +1351,21 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   adjustlocalvars(ls, 3);  /* control variables */
   checknext(ls, TK_DO);
   if (isnum) {
-    reginfo_add_load(fs, base);
-    reginfo_add_load(fs, base+1);
-    reginfo_add_load(fs, base+2);
-    reginfo_add_load(fs, base+3); /* external index */
+    // TODO these aren't really stores at this point
+    //      but we need to establish a unique scope
+    // maybe we should add more states to reginfo?
     reginfo_add_store(fs, base);
+    reginfo_add_store(fs, base+1);
+    reginfo_add_store(fs, base+2);
+    reginfo_add_store(fs, base+3); /* external index */
     prep = luaK_codeAsBx(fs, OP_FORPREP, 0, base, NO_JUMP);
   } else {
-    reginfo_add_load(fs, base);
-    reginfo_add_load(fs, base+1);
-    reginfo_add_load(fs, base+2);
+    reginfo_add_store(fs, base);
+    reginfo_add_store(fs, base+1);
+    reginfo_add_store(fs, base+2);
     int cb; /* call base */
     for (cb = base+3; cb <= base+2+nvars; cb++)
-      reginfo_add_load(fs, cb);
+      reginfo_add_store(fs, cb);
     prep = luaK_jump(fs);
   }
   enterblock(fs, &bl, 0);  /* scope for declared variables */
