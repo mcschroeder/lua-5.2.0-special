@@ -551,6 +551,7 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
       if (e->u.ind.vt == VLOCAL) {  /* 't' is in a register? */
         freereg(fs, e->u.ind.t);
         op = OP_GETTABLE;
+        reginfo_add_load(fs, e->u.ind.t);
       }      
       
       int sp; /* specialization */
@@ -570,13 +571,9 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
         }
       } else {
         reginfo_add_load(fs, e->u.ind.idx);
-        // if (islocal(fs, e->u.ind.idx))
-          sp = CREATE_OPSPEC_GETTAB(1, OPSPEC_TAB_KEY_chk, OPSPEC_reg);
-        // else /* temp register */
-        //   sp = CREATE_OPSPEC_GETTAB(1, OPSPEC_TAB_KEY_raw, OPSPEC_reg);
+        sp = CREATE_OPSPEC_GETTAB(1, OPSPEC_TAB_KEY_chk, OPSPEC_reg);
       }
-
-      reginfo_add_load(fs, e->u.ind.t);
+      
       e->u.info = luaK_codeABC(fs, op, sp, 0, e->u.ind.t, e->u.ind.idx);
       e->k = VRELOCABLE;
       break;
@@ -760,10 +757,10 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
       luaK_codeABC(fs, OP_SETUPVAL, 0, e, var->u.info, 0);
       break;
     }
-    case VINDEXED: {
-      OpCode op = (var->u.ind.vt == VLOCAL) ? OP_SETTABLE : OP_SETTABUP;
+    case VINDEXED: {      
       int e = luaK_exp2RK(fs, ex);
 
+      OpCode op;
       int sp; /* specialization */
       int ck;
       if (isconst(ex)) {        
@@ -789,8 +786,13 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
       } else {
         reginfo_add_load(fs, var->u.ind.idx);
         sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_chk, OPSPEC_reg, ck);
-      }
-      reginfo_add_load(fs, var->u.ind.t);
+      }      
+      if (var->u.ind.vt == VLOCAL) {
+        op = OP_SETTABLE;
+        reginfo_add_load(fs, var->u.ind.t);
+      } else {
+        op = OP_SETTABUP;
+      }      
 
       luaK_codeABC(fs, op, sp, var->u.ind.t, var->u.ind.idx, e);
       break;
