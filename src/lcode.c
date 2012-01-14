@@ -590,7 +590,6 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
 
 static int code_label (FuncState *fs, int A, int b, int jump) {
   luaK_getlabel(fs);  /* those instructions may be jump targets */
-  reginfo_add_store(fs, A);
   return luaK_codeABC(fs, OP_LOADBOOL, 1, A, b, jump);
 }
 
@@ -621,10 +620,6 @@ static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
       Instruction *pc = &getcode(fs, e);
       SETARG_A(*pc, reg);
       reginfo_insert_store(fs, e->u.info, reg);
-      // if (!islocal(fs, reg))
-      //   SET_OPSPEC_OUT(*pc, OPSPEC_OUT_raw);
-      //   // TODO: ensure this is always valid for all possible instructions 
-      //   // TODO: do we specialize locals now or not?
       break;
     }
     case VNONRELOC: {
@@ -663,7 +658,10 @@ static void exp2reg (FuncState *fs, expdesc *e, int reg) {
     int p_t = NO_JUMP;  /* position of an eventual LOAD true */
     if (need_value(fs, e->t) || need_value(fs, e->f)) {
       int fj = (e->k == VJMP) ? NO_JUMP : luaK_jump(fs);
+      reginfo_add_store(fs, reg);
       p_f = code_label(fs, reg, 0, 1);
+      reginfo_add_load(fs, reg); /* not really a load, but it extends the
+                                    temp scope to the second LOADBOOL */
       p_t = code_label(fs, reg, 1, 0);
       luaK_patchtohere(fs, fj);
     }
