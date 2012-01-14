@@ -465,17 +465,19 @@ static void PrintDebug(const Proto* f)
     printf("\t%d\tunused\n", i);
     continue;
   }
-  printf("\t%d\t(%d,%d)\t%s first=%s last=%s", 
-          i, reginfo->startpc, reginfo->endpc,
+  printf("\t%d\t(%d,%d)\t%s\t%s%s", i, 
+          reginfo->startpc,
+          reginfo->endpc,
           reginfostates[reginfo->state],
-          reginfo->firstuse ? "store" : "load",
-          reginfo->lastuse ? "store" : "load");
+          reginfo->firstuse ? "S" : "L", 
+          reginfo->lastuse ? "S" : "L");
   for (reginfo = reginfo->next; reginfo; reginfo = reginfo->next) {
-  printf("\n\t\t(%d,%d)\t%s first=%s last=%s", 
-          reginfo->startpc, reginfo->endpc,
+  printf("\n\t\t(%d,%d)\t%s\t%s%s", 
+          reginfo->startpc,
+          reginfo->endpc,
           reginfostates[reginfo->state],
-          reginfo->firstuse ? "store" : "load",
-          reginfo->lastuse ? "store" : "load");
+          reginfo->firstuse ? "S" : "L", 
+          reginfo->lastuse ? "S" : "L");
   }    
   printf("\n");
  }
