@@ -325,7 +325,10 @@ static void PrintCode(const Proto* f)
   {
    case iABC:
     printf("%d",a);
-    if (getBMode(o)!=OpArgN) printf(" %d",ISKB(i) ? (MYK(b)) : b);
+    if (o == OP_GETTABLE || o == OP_GETTABUP)
+      printf(" %d", b);
+    else if (getBMode(o)!=OpArgN) 
+      printf(" %d",ISKB(i) ? (MYK(b)) : b);
     if (getCMode(o)!=OpArgN) printf(" %d",ISKC(i) ? (MYK(c)) : c);
     break;
    case iABx:
@@ -462,10 +465,17 @@ static void PrintDebug(const Proto* f)
     printf("\t%d\tunused\n", i);
     continue;
   }
-  printf("\t%d\t(%d,%d)\t%s", i, reginfo->startpc, reginfo->endpc,
-  reginfostates[reginfo->state]);
+  printf("\t%d\t(%d,%d)\t%s first=%s last=%s", 
+          i, reginfo->startpc, reginfo->endpc,
+          reginfostates[reginfo->state],
+          reginfo->firstuse ? "store" : "load",
+          reginfo->lastuse ? "store" : "load");
   for (reginfo = reginfo->next; reginfo; reginfo = reginfo->next) {
-    printf("\n\t\t(%d,%d)\t%s", reginfo->startpc, reginfo->endpc, reginfostates[reginfo->state]);
+  printf("\n\t\t(%d,%d)\t%s first=%s last=%s", 
+          reginfo->startpc, reginfo->endpc,
+          reginfostates[reginfo->state],
+          reginfo->firstuse ? "store" : "load",
+          reginfo->lastuse ? "store" : "load");
   }    
   printf("\n");
  }

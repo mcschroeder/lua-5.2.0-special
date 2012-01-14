@@ -437,7 +437,7 @@ void luaV_finishOp (lua_State *L) {
       if (GET_OPSPEC_OUT(inst) == OPSPEC_OUT_chk) {
         int rat = rttype(ra);
         setobjs2s(L, ra, --L->top);
-        if (rat != rttype(ra)) luaVS_specialize(L, GETARG_A(inst));
+        if (rat != rttype(ra)) luaVS_specialize_store(L, GETARG_A(inst));
       } else {
         setobjs2s(L, ra, --L->top);
       }
@@ -470,7 +470,7 @@ void luaV_finishOp (lua_State *L) {
       if (GET_OPSPEC_OUT(inst) == OPSPEC_OUT_chk) {
         int rat = rttype(ra);
         setobj2s(L, ra, L->top - 1);
-        if (rat != rttype(ra)) luaVS_specialize(L, GETARG_A(inst));
+        if (rat != rttype(ra)) luaVS_specialize_store(L, GETARG_A(inst));
       } else {
         setobj2s(L, ra, L->top - 1);
       }
@@ -557,7 +557,7 @@ void luaV_finishOp (lua_State *L) {
 
 
 #define SpecCheckRa(x) { int rat = rttype(ra); {x;} \
-        if (rat != rttype(ra)) luaVS_specialize(L, GETARG_A(i)); }
+        if (rat != rttype(ra)) luaVS_specialize_store(L, GETARG_A(i)); }
 
 #define dispatch_again { ci->u.l.savedpc--; continue; }
 
@@ -596,7 +596,7 @@ void luaV_execute (lua_State *L) {
       vmcase(OP_MOVE, 1, /* Ra:? <- Rb */
       // printf("\t\t\tOP_MOVE: ra <- %f\n", nvalue(RB(i)));
         setobjs2s(L, ra, RB(i));
-        luaVS_specialize(L, GETARG_A(i));
+        luaVS_specialize_store(L, GETARG_A(i));
       )
       vmcase(OP_MOVE, 2, /* Ra:x <- Rb:x (any two equal types) */
       // TODO: why won't this work?
@@ -610,7 +610,7 @@ void luaV_execute (lua_State *L) {
       vmcase(OP_LOADK, 1, /* Ra:? <- Kb */
         // printf("\t\t\tOP_LOADK: ra <- %f\n", nvalue(KBx(i)));
         setobj2s(L, ra, KBx(i));
-        luaVS_specialize(L, GETARG_A(i));
+        luaVS_specialize_store(L, GETARG_A(i));
       )
       vmcase(OP_LOADK, 2, /* Ra:x <- Kb:x (any two equal types) */
       // TODO: why won't this work?
@@ -644,7 +644,7 @@ void luaV_execute (lua_State *L) {
       )
       vmcase(OP_LOADBOOL, 1, /* Ra:? <- Ib:bool */
         setbvalue(ra, GETARG_B(i));
-        luaVS_specialize(L, GETARG_A(i));
+        luaVS_specialize_store(L, GETARG_A(i));
         if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
       )
 /* ------------------------------------------------------------------------ */
@@ -658,7 +658,7 @@ void luaV_execute (lua_State *L) {
         int b = GETARG_B(i);
         do {
           setnilvalue(ra);
-          luaVS_specialize(L, GETARG_A(i));
+          luaVS_specialize_store(L, GETARG_A(i));
           ra++;
         } while (b--);
       )
@@ -677,7 +677,7 @@ void luaV_execute (lua_State *L) {
 #define _vmcase_gettab_chk(op) \
       vmcasenb(op, sp(raw,chk,reg), /* raw <- b[?] */) \
       vmcasenb(op, sp(chk,chk,reg), /* ? <- b[?] */ \
-        luaVS_specialize(L, GETARG_C(i)); \
+        luaVS_specialize_load(L, GETARG_C(i)); \
         dispatch_again; \
       )
 #define _vmcase_gettab_str(op,b,c,ck) \
@@ -727,7 +727,7 @@ void luaV_execute (lua_State *L) {
 #define _vmcase_settab_chk(op) \
       vmcase(op, sp(chk,reg,reg), /* a[?] <- c*/) \
       vmcase(op, sp(chk,reg,kst), /* a[?] <- c*/ \
-        luaVS_specialize(L, GETARG_B(i)); \
+        luaVS_specialize_load(L, GETARG_B(i)); \
         dispatch_again \
       )
 #define _vmcase_settab_str(op,a,b,bk,c,ck) \
@@ -811,6 +811,7 @@ void luaV_execute (lua_State *L) {
         StkId rb = RB(i); \
         setobjs2s(L, ra+1, rb); \
         SpecCheckRa( \
+          printf("c=%i is const=%s is string:%s\n", GETARG_C(i), ck==1 ? "YES" : "NO", ttisstring(c) ? "YES" : "NO"); \
           Protect(luaV_gettable_str(L, rb, c, ra)); \
         ) \
       )
@@ -825,18 +826,18 @@ void luaV_execute (lua_State *L) {
 #define _vmcase_arith_chk(op) \
       vmcasenb(op, sp(raw,chk,reg,reg), /* raw <- ? . ? */) \
       vmcasenb(op, sp(chk,chk,reg,reg), /* ? <- ? . ? */ \
-        luaVS_specialize(L, GETARG_B(i)); \
-        luaVS_specialize(L, GETARG_C(i)); \
+        luaVS_specialize_load(L, GETARG_B(i)); \
+        luaVS_specialize_load(L, GETARG_C(i)); \
         dispatch_again \
       ) \
       vmcasenb(op, sp(raw,chk,reg,kst), /* raw <- ? . K */) \
       vmcasenb(op, sp(chk,chk,reg,kst), /* ? <- ? . K */ \
-        luaVS_specialize(L, GETARG_B(i)); \
+        luaVS_specialize_load(L, GETARG_B(i)); \
         dispatch_again \
       ) \
       vmcasenb(op, sp(raw,chk,kst,reg), /* raw <- K . ? */) \
       vmcasenb(op, sp(chk,chk,kst,reg), /* ? <- K . ? */ \
-        luaVS_specialize(L, GETARG_C(i)); \
+        luaVS_specialize_load(L, GETARG_C(i)); \
         dispatch_again \
       )
 #define _vmcase_arith_num(op,func,b,bk,c,ck) \
@@ -913,7 +914,7 @@ void luaV_execute (lua_State *L) {
 
       vmcasenb(OP_UNM, sp(raw,chk),) /* raw <- -chk */
       vmcasenb(OP_UNM, sp(chk,chk), /* chk <- -chk */
-        luaVS_specialize(L, GETARG_B(i));
+        luaVS_specialize_load(L, GETARG_B(i));
         dispatch_again
       )
       vmcase(OP_UNM, sp(raw,num), /* raw <- -num */
@@ -943,7 +944,7 @@ void luaV_execute (lua_State *L) {
 
       vmcasenb(OP_LEN, sp(raw,chk), /* raw <- #chk */)
       vmcasenb(OP_LEN, sp(chk,chk), /* chk <- #chk */
-        luaVS_specialize(L, GETARG_B(i));
+        luaVS_specialize_load(L, GETARG_B(i));
         dispatch_again
       )
       vmcase(OP_LEN, sp(raw,str), /* raw <- #str */
@@ -1040,16 +1041,16 @@ void luaV_execute (lua_State *L) {
 
 #define _vmcase_less_chk(op) \
       vmcasenb(op, sp(chk,reg,reg), /* ? < ? */ \
-        luaVS_specialize(L, GETARG_B(i)); \
-        luaVS_specialize(L, GETARG_C(i)); \
+        luaVS_specialize_load(L, GETARG_B(i)); \
+        luaVS_specialize_load(L, GETARG_C(i)); \
         dispatch_again \
       ) \
       vmcasenb(op, sp(chk,reg,kst), /* ? < K */ \
-        luaVS_specialize(L, GETARG_B(i)); \
+        luaVS_specialize_load(L, GETARG_B(i)); \
         dispatch_again \
       ) \
       vmcasenb(op, sp(chk,kst,reg), /* K < ? */ \
-        luaVS_specialize(L, GETARG_C(i)); \
+        luaVS_specialize_load(L, GETARG_C(i)); \
         dispatch_again \
       )
 #define _vmcase_less_num(op,numfunc,b,bk,c,ck) \
@@ -1327,7 +1328,7 @@ void luaV_execute (lua_State *L) {
           else {
             setnilvalue(ra + j);
           }
-          if (spec) luaVS_specialize(L, a + j);
+          if (spec) luaVS_specialize_store(L, a + j);
         }
       )
 /* ------------------------------------------------------------------------ */

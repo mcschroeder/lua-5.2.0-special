@@ -28,13 +28,25 @@
 #define b_is_const(i) (GET_OPSPEC_BK(i) == OPSPEC_kst)
 #define c_is_const(i) (GET_OPSPEC_CK(i) == OPSPEC_kst)
 
-RegInfo *getreginfo(Proto *f, int pc, int reg) {
+
+#define store_possible \
+    ((pc > reginfo->startpc && pc < reginfo->endpc) || \
+     (pc == reginfo->startpc && reginfo->firstuse == REGINFO_USE_STORE) || \
+     (pc == reginfo->endpc && reginfo->lastuse == REGINFO_USE_STORE))
+
+#define load_possible \
+    ((pc > reginfo->startpc && pc < reginfo->endpc) || \
+     (pc == reginfo->startpc && reginfo->firstuse == REGINFO_USE_LOAD) || \
+     (pc == reginfo->endpc && reginfo->lastuse == REGINFO_USE_LOAD))
+
+
+RegInfo *getreginfo(Proto *f, int pc, int reg, int store) {
   lua_assert(reg < f->sizereginfos);
   RegInfo *reginfo = &(f->reginfos[reg]);
   if (reginfo->state != REGINFO_STATE_UNUSED &&
       reginfo->state != REGINFO_STATE_LOCAL_UNUSED) {
     while (reginfo) {
-      if (reginfo->startpc <= pc && reginfo->endpc >= pc)
+      if ((store && store_possible) || (!store && load_possible))
         return reginfo;
       reginfo = reginfo->next;
     }
@@ -42,17 +54,24 @@ RegInfo *getreginfo(Proto *f, int pc, int reg) {
   return NULL;
 }
 
-int is_polymorphic(Proto *f, int pc, int reg) {
+int is_polymorphic(Proto *f, int pc, int reg, int store) {
   printf("%s [%i] %i\n", __func__, pc, reg);
-  RegInfo *reginfo = getreginfo(f, pc, reg);
+  RegInfo *reginfo = getreginfo(f, pc, reg, store);
   return reginfo->nspec > 2;
 }
 
-void luaVS_specialize(lua_State *L, int reg) {
+
+
+
+
+
+
+void luaVS_specialize(lua_State *L, int reg, int store) {
   Proto *p = clLvalue(L->ci->func)->p;
   int pc = L->ci->u.l.savedpc - p->code - 1;
-  printf("%s [%s:%i] %i", __func__, getstr(p->source), pc, reg);
-  RegInfo *reginfo = getreginfo(p, pc, reg);  
+  printf("%s [%s:%i] %i %s", __func__, getstr(p->source), pc, reg, 
+          store ? "store" : "load");
+  RegInfo *reginfo = getreginfo(p, pc, reg, store);  
   if (!reginfo) {
     printf(" NULL\n");
     return;
@@ -61,6 +80,7 @@ void luaVS_specialize(lua_State *L, int reg) {
   if (reginfo->state == REGINFO_STATE_LOCAL_CLOSED) printf(" local");  
   lua_assert(reginfo->state != REGINFO_STATE_LOCAL_OPEN);
   lua_assert(reginfo->state != REGINFO_STATE_UNUSED);
+  lua_assert(reginfo->state != REGINFO_STATE_LOCAL_UNUSED);
   printf(" nspec=%i", reginfo->nspec);
 
   int reg_is_polymorphic;
@@ -80,10 +100,13 @@ void luaVS_specialize(lua_State *L, int reg) {
   TValue *k = p->k;
   for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
     Instruction *i = &(p->code[pc]);
-    switch (GET_OPCODE(*i)) {
+    printf("\tSPEC [%i] %i (op=%i/%s sp=%i/", pc, GET_OP(*i), GET_OPCODE(*i), luaP_opnames[GET_OPCODE(*i)], GET_OPSPEC(*i));
+    PrintSpec(*i);
+    printf(")");
+    switch (GET_OPCODE(*i)) {      
 /* ------------------------------------------------------------------------ */
       case OP_MOVE: { 
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i) && store_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC(*i, 0); /* Ra <- Rb */
           } else if (ttisequal(RA(*i), RB(*i))) {
@@ -92,9 +115,9 @@ void luaVS_specialize(lua_State *L, int reg) {
             SET_OPSPEC(*i, 1); /* Ra:? <- Rb */
           }
         }
-        if (reg == GETARG_B(*i)) {
+        if (reg == GETARG_B(*i) && load_possible) {
           if (reg_is_polymorphic) {
-            if (is_polymorphic(p, pc, GETARG_A(*i))) {
+            if (is_polymorphic(p, pc, GETARG_A(*i), 1)) {
               SET_OPSPEC(*i, 0); /* Ra <- Rb */
             } else {
               SET_OPSPEC(*i, 1); /* Ra:? <- Rb */
@@ -109,7 +132,7 @@ void luaVS_specialize(lua_State *L, int reg) {
       }     
 /* ------------------------------------------------------------------------ */
       case OP_LOADK: {
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i) && store_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC(*i, 0); /* Ra <- Kb */
           } else if (ttisequal(RA(*i), KB(*i))) {
@@ -128,7 +151,7 @@ void luaVS_specialize(lua_State *L, int reg) {
       case OP_SELF:
       case OP_TESTSET:
       case OP_CLOSURE: {
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i) && store_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
           } else {
@@ -138,7 +161,7 @@ void luaVS_specialize(lua_State *L, int reg) {
       }
 /* ------------------------------------------------------------------------ */
       case OP_LOADBOOL: {
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i) && store_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC(*i, 0); /* Ra <- Ib:bool */
           } else if (ttisboolean(RA(*i))) {
@@ -153,10 +176,10 @@ void luaVS_specialize(lua_State *L, int reg) {
       case OP_LOADNIL: {
         int a = GETARG_A(*i);
         int b = GETARG_B(*i);
-        if (reg >= a && reg <= a+b) {
+        if (reg >= a && reg <= a+b && store_possible) {
           int flag = 0;
           do {
-            if (!is_polymorphic(p, pc, a) || !ttisnil(base+a)) {
+            if (!is_polymorphic(p, pc, a, 1) || !ttisnil(base+a)) {
               flag = 1;
               break;
             }
@@ -172,14 +195,14 @@ void luaVS_specialize(lua_State *L, int reg) {
 /* ------------------------------------------------------------------------ */
       case OP_GETTABUP:
       case OP_GETTABLE: {
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i) && store_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);            
           } else {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
         }
-        if (!c_is_const(*i) && reg == GETARG_C(*i)) {
+        if (!c_is_const(*i) && reg == GETARG_C(*i) && load_possible) {
           TValue *rc = RC(*i);
           if (reg_is_polymorphic) {
             SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);            
@@ -203,7 +226,7 @@ void luaVS_specialize(lua_State *L, int reg) {
 /* ------------------------------------------------------------------------ */
       case OP_SETTABUP:
       case OP_SETTABLE: {        
-        if (!b_is_const(*i) && reg == GETARG_B(*i)) {
+        if (!b_is_const(*i) && reg == GETARG_B(*i) && load_possible) {
           TValue *rb = RB(*i);
           if (reg_is_polymorphic) {
             SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);            
@@ -226,7 +249,7 @@ void luaVS_specialize(lua_State *L, int reg) {
       }
 /* ------------------------------------------------------------------------ */
       case OP_NEWTABLE: {
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i) && store_possible) {
           if (reg_is_polymorphic || ttistable(RA(*i))) {
             SET_OPSPEC(*i, 0); /* Ra <- {} */
           } else {
@@ -242,15 +265,16 @@ void luaVS_specialize(lua_State *L, int reg) {
       case OP_DIV:
       case OP_MOD:
       case OP_POW: {
-        if (reg == GETARG_A(*i)) {          
+        if (reg == GETARG_A(*i) && store_possible) {          
           if (reg_is_polymorphic) {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);            
           } else {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
         }
-        if ((!b_is_const(*i) && reg == GETARG_B(*i)) || 
-            (!c_is_const(*i) && reg == GETARG_C(*i))) {
+        if (((!b_is_const(*i) && reg == GETARG_B(*i)) || 
+             (!c_is_const(*i) && reg == GETARG_C(*i))) && 
+            load_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
           } else {
@@ -267,14 +291,14 @@ void luaVS_specialize(lua_State *L, int reg) {
       }      
 /* ------------------------------------------------------------------------ */
       case OP_UNM: {
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i) && store_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
           } else {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
         }
-        if (reg == GETARG_B(*i)) {
+        if (reg == GETARG_B(*i) && load_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
           } else if (ttisnumber(RB(*i))) {
@@ -287,14 +311,14 @@ void luaVS_specialize(lua_State *L, int reg) {
       }
 /* ------------------------------------------------------------------------ */
       case OP_LEN: {
-        if (reg == GETARG_A(*i)) {
+        if (reg == GETARG_A(*i) && store_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
           } else {
             SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           }
         }
-        if (reg == GETARG_B(*i)) {
+        if (reg == GETARG_B(*i) && load_possible) {
           TValue *rb = RB(*i);
           if (reg_is_polymorphic) {
             SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
@@ -313,8 +337,9 @@ void luaVS_specialize(lua_State *L, int reg) {
       case OP_LE: {
         TValue *rb = b_is_const(*i) ? KB(*i) : RB(*i);
         TValue *rc = c_is_const(*i) ? KC(*i) : RC(*i);
-        if ((!b_is_const(*i) && reg == GETARG_B(*i)) ||
-            (!c_is_const(*i) && reg == GETARG_C(*i))) {
+        if (((!b_is_const(*i) && reg == GETARG_B(*i)) ||
+             (!c_is_const(*i) && reg == GETARG_C(*i))) &&
+            load_possible) {
           if (reg_is_polymorphic) {
             SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
           } else if (ttisequal(rb, rc)) {
@@ -338,10 +363,10 @@ void luaVS_specialize(lua_State *L, int reg) {
         int j;
         int n = cast_int(base - L->ci->func) - p->numparams - 1;
         if (b < 0) b = n;
-        if (reg >= a && reg <= a+b) {
+        if (reg >= a && reg <= a+b && store_possible) {
           int flag = 0;
           for (j = 0; j < b; j++) {
-            if (!is_polymorphic(p, pc, a+j)) {
+            if (!is_polymorphic(p, pc, a+j, 1)) {
               flag = 1;
             }
           }
@@ -357,5 +382,9 @@ void luaVS_specialize(lua_State *L, int reg) {
       default:
         break;
     }
+
+    printf(" --> %i (op=%i/%s sp=%i/", GET_OP(*i), GET_OPCODE(*i), luaP_opnames[GET_OPCODE(*i)], GET_OPSPEC(*i));
+    PrintSpec(*i);
+    printf(")\n");
   }
 }

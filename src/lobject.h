@@ -466,11 +466,13 @@ typedef struct LocVar {
 
 
 typedef struct RegInfo {  
-  int startpc;  /* -1 for function arguments */ // TODO: or not?
+  int startpc;
   int endpc;
   struct RegInfo *next;
   lu_byte state;  
   lu_byte nspec; /* how often this register has been specialized */
+  lu_byte firstuse; /* usage at startpc */
+  lu_byte lastuse; /* usage at endpc */
 } RegInfo;
 
 #define REGINFO_STATE_TEMP         0
@@ -478,7 +480,9 @@ typedef struct RegInfo {
 #define REGINFO_STATE_LOCAL_CLOSED 2
 #define REGINFO_STATE_UNUSED       3
 #define REGINFO_STATE_LOCAL_UNUSED 4
-// TODO: this final state is blergh
+
+#define REGINFO_USE_LOAD  0
+#define REGINFO_USE_STORE 1
 
 /*
 ** Function Prototypes

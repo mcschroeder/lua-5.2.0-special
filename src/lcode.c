@@ -254,7 +254,10 @@ void reginfo_insert(FuncState *fs, int pc, int reg, int store) {
       if (store) goto l_add_scope;
       /* else fall through */
     case REGINFO_STATE_LOCAL_OPEN: /* extend scope */
-      if (reginfo->endpc < pc) reginfo->endpc = pc;
+      if (reginfo->endpc < pc) { 
+        reginfo->endpc = pc;
+        reginfo->lastuse = store;
+      }
       break;
     case REGINFO_STATE_LOCAL_CLOSED: /* add new scope */
     l_add_scope:
@@ -266,6 +269,8 @@ void reginfo_insert(FuncState *fs, int pc, int reg, int store) {
       reginfo->endpc = pc;
       reginfo->state = REGINFO_STATE_TEMP;
       reginfo->nspec = 0;
+      reginfo->firstuse = store;
+      reginfo->lastuse = store;
       reginfo->next = NULL;      
       break;
     case REGINFO_STATE_LOCAL_UNUSED:
@@ -273,6 +278,8 @@ void reginfo_insert(FuncState *fs, int pc, int reg, int store) {
       reginfo->endpc = pc;
       reginfo->state = REGINFO_STATE_LOCAL_OPEN;
       reginfo->nspec = 0;
+      reginfo->firstuse = store;
+      reginfo->lastuse = store;
       reginfo->next = NULL;      
       break;      
   }
