@@ -1199,6 +1199,7 @@ void luaV_execute (lua_State *L) {
         }
       )
 /* ------------------------------------------------------------------------ */
+// TODO: specialize external index / variables
       vmcase(OP_FORLOOP, 0,
         lua_Number step = nvalue(ra+2);
         lua_Number idx = luai_numadd(L, nvalue(ra), step); /* increment index */

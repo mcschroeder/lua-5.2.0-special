@@ -1343,50 +1343,62 @@ static int exp1 (LexState *ls) {
 
 
 static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
+  printf(">>>>>>>>> %s BEGIN\n", __func__);
   /* forbody -> DO block */
   BlockCnt bl;
   FuncState *fs = ls->fs;
   int prep, endfor;
   adjustlocalvars(ls, 3);  /* control variables */
   checknext(ls, TK_DO);
-  if (isnum) {    
+  if (isnum) {
+    reginfo_add_load(fs, base);
     reginfo_add_load(fs, base+1);
     reginfo_add_load(fs, base+2);
+    reginfo_add_load(fs, base+3); /* external index */
     reginfo_add_store(fs, base);
     prep = luaK_codeAsBx(fs, OP_FORPREP, 0, base, NO_JUMP);
   } else {
+    reginfo_add_load(fs, base);
+    reginfo_add_load(fs, base+1);
+    reginfo_add_load(fs, base+2);
+    int cb; /* call base */
+    for (cb = base+3; cb <= base+2+nvars; cb++)
+      reginfo_add_load(fs, cb);
     prep = luaK_jump(fs);
   }
   enterblock(fs, &bl, 0);  /* scope for declared variables */
   adjustlocalvars(ls, nvars);
   luaK_reserveregs(fs, nvars);
   block(ls);
-  leaveblock(fs);  /* end of scope for declared variables */
-  luaK_patchtohere(fs, prep);
-  if (isnum) {  /* numeric for? */
-    reginfo_add_load(fs, base); // TODO: ??
-    reginfo_add_load(fs, base+1);
-    reginfo_add_load(fs, base+2);
-    reginfo_add_store(fs, base);
-    reginfo_add_store(fs, base+3);
-    // TODO: keep in mind they'll always be numbers (never respecialized)
-    endfor = luaK_codeAsBx(fs, OP_FORLOOP, 0, base, NO_JUMP);
-  }
-  else {  /* generic for */
+  if (isnum) { 
     reginfo_add_load(fs, base);
     reginfo_add_load(fs, base+1);
     reginfo_add_load(fs, base+2);
-    int ra;
-    for (ra = base+3; ra <= base+2+nvars; ra++)
-      reginfo_add_store(fs, ra);
+    reginfo_add_store(fs, base);
+    reginfo_add_store(fs, base+3); /* ext. index */
+  } else {
+    reginfo_add_load(fs, base);
+    reginfo_add_load(fs, base+1);
+    reginfo_add_load(fs, base+2);
+    int cb; /* call base */    
+    for (cb = base+3; cb <= base+2+nvars; cb++)
+      reginfo_add_store(fs, cb);
+    reginfo_insert_load(fs, fs->pc+1, base+1);
+    reginfo_insert_store(fs, fs->pc+1, base);
+  }
+  leaveblock(fs);  /* end of scope for declared variables */
+  luaK_patchtohere(fs, prep);
+  if (isnum) {  /* numeric for? */
+    endfor = luaK_codeAsBx(fs, OP_FORLOOP, 0, base, NO_JUMP);
+  }
+  else {  /* generic for */
     luaK_codeABC(fs, OP_TFORCALL, 0, base, 0, nvars);    
     luaK_fixline(fs, line);
-    reginfo_add_load(fs, base+2+1);
-    reginfo_add_store(fs, base+2);
     endfor = luaK_codeAsBx(fs, OP_TFORLOOP, 0, base + 2, NO_JUMP);
   }
   luaK_patchlist(fs, endfor, prep + 1);
   luaK_fixline(fs, line);
+  printf(">>>>>>>>> %s END\n", __func__);
 }
 
 
