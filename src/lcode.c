@@ -230,6 +230,7 @@ void reginfo_grow(FuncState *fs, int reg) {
   fs->f->sizereginfos = newsize;
   while (oldsize < newsize) {
     printf("%s %i\n", __func__, oldsize);
+    fs->f->reginfos[oldsize].next = NULL;
     fs->f->reginfos[oldsize++].state = REGINFO_STATE_UNUSED;    
   }
 }
