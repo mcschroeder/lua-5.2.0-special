@@ -1037,7 +1037,7 @@ void luaV_execute (lua_State *L) {
 /* ------------------------------------------------------------------------ */
 #undef sp
 #define sp(t,bk,ck) \
-      (OPSPEC_##ck<<4 | OPSPEC_##bk<<3 | OPSPEC_LESS_TYPE_##t<<1)
+      (OPSPEC_##ck<<4 | OPSPEC_##bk<<3 | OPSPEC_LESS_TYPE_##t)
 
 #define _vmcase_less_chk(op) \
       vmcasenb(op, sp(chk,reg,reg), /* ? < ? */ \
@@ -1336,10 +1336,11 @@ void luaV_execute (lua_State *L) {
         lua_assert(0);
       )
 /* ------------------------------------------------------------------------ */
-      default:
+      default:        
         printf("ILLEGAL OP: %i (code=%i/%s spec=%i)\n", 
         GET_OP(i), GET_OPCODE(i), GET_OPCODE(i) < NUM_OPCODES ? 
         luaP_opnames[GET_OPCODE(i)] : "unknown", GET_OPSPEC(i));
+        lua_assert(0);
         break;
     }
   }
