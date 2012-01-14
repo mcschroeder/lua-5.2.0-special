@@ -142,7 +142,8 @@ void reginfos_free(lua_State *L, Proto *f) {
   RegInfo *reginfo, *tmp;
   for (i = 0; i < f->sizereginfos; i++) {
     reginfo = &(f->reginfos[i]);
-    if (reginfo->state == REGINFO_STATE_UNUSED)
+    if (reginfo->state == REGINFO_STATE_UNUSED ||
+        reginfo->state == REGINFO_STATE_LOCAL_UNUSED)
       continue;
     reginfo = reginfo->next;
     while (reginfo != NULL) {
