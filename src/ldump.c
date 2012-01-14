@@ -147,6 +147,8 @@ static void DumpReginfos(const Proto *f, DumpState *D)
       DumpNumber(reginfo->endpc, D);
       DumpChar(reginfo->state, D);
       DumpChar(reginfo->nspec, D);
+      DumpChar(reginfo->firstuse, D);
+      DumpChar(reginfo->lastuse, D);
       reginfo = reginfo->next;
     }
     DumpNumber(-42,D); /* magic sentinel number */

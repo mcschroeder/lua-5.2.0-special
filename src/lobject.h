@@ -465,6 +465,7 @@ typedef struct LocVar {
 } LocVar;
 
 
+// DON'T FORGET TO KEEP dump/undump UP-TO-DATE!!
 typedef struct RegInfo {  
   int startpc;
   int endpc;
