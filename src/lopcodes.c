@@ -134,3 +134,40 @@ void PrintSpec(Instruction i) {
   }
 }
 
+extern void PrintOp(Instruction i) {  
+  printf("%i", GET_OP(i));
+
+  int opcode = GET_OPCODE(i);
+  printf(" (%i", opcode);
+  if (opcode < NUM_OPCODES)
+    printf("/%s", luaP_opnames[opcode]);
+  
+  printf(" %i", GET_OPSPEC(i));
+  switch (opcode) {
+    case OP_GETTABLE:
+    case OP_GETTABUP:
+      printf("/%s %s", SpecNamesOut[GET_OPSPEC_OUT(i)],
+                         SpecNamesTabKey[GET_OPSPEC_GETTAB_KEY(i)]);
+      break;
+    case OP_SETTABLE:
+    case OP_SETTABUP:
+      printf("/%s", SpecNamesTabKey[GET_OPSPEC_SETTAB_KEY(i)]);
+      break;
+    case OP_ADD: case OP_SUB: case OP_MUL: 
+    case OP_DIV: case OP_MOD: case OP_POW:
+    case OP_UNM:
+      printf("/%s %s", SpecNamesOut[GET_OPSPEC_OUT(i)],
+                         SpecNamesArithIn[GET_OPSPEC_ARITH_IN(i)]);
+      break;
+    case OP_LEN:
+      printf("/%s %s", SpecNamesOut[GET_OPSPEC_OUT(i)],
+                         SpecNamesLenIn[GET_OPSPEC_ARITH_IN(i)]);
+      break;
+    case OP_LT: case OP_LE:
+      printf("/%s", SpecNamesLessType[GET_OPSPEC_LESS_TYPE(i)]);
+      break;      
+    default:
+      break;
+  }
+  printf(")");
+}

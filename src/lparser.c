@@ -177,7 +177,7 @@ static int registerlocalvar (LexState *ls, TString *varname) {
 
 static void new_localvar (LexState *ls, TString *name) {  
   FuncState *fs = ls->fs;
-  printf("%s %s [%i]\n", __func__, getstr(name), fs->pc);
+  // printf("%s %s [%i]\n", __func__, getstr(name), fs->pc);
   Dyndata *dyd = ls->dyd;
   // printf("BEGIN: freereg=%i nactvar=%i nlocvars=%i firstlocal=%i\n", fs->freereg, fs->nactvar, fs->nlocvars, fs->firstlocal);
   int reg = registerlocalvar(ls, name); 
@@ -209,37 +209,21 @@ static LocVar *getlocvar (FuncState *fs, int i) {
 
 static void adjustlocalvars (LexState *ls, int nvars) {  
   FuncState *fs = ls->fs;
-  //printf("%s nvars=%i | nactvar=%i\n", __func__, nvars, fs->nactvar);
   // printf("%s", __func__);
   fs->nactvar = cast_byte(fs->nactvar + nvars);
   for (; nvars; nvars--) {
     getlocvar(fs, fs->nactvar - nvars)->startpc = fs->pc;
     reginfo_adjustlocal(fs, fs->nactvar - nvars);
-    // printf(" %i", fs->nactvar - nvars);
   }
-  // printf("\n");
-  //printf("\t\t nactvar=%i\n", fs->nactvar);
-  // TODO
-  // the diff b/w the nactvar at the beginning and the end of the func
-  // is the number of local vars that have been added
-  // start with the destination register of the last used instruction
-  // and go back that number and mark the reginfos as local
 }
 
 
 static void removevars (FuncState *fs, int tolevel) {  
-  //printf("%s tolevel=%i | nactvar=%i\n", __func__, tolevel, fs->nactvar);
-  // printf("%s", __func__);
   fs->ls->dyd->actvar.n -= (fs->nactvar - tolevel);
   while (fs->nactvar > tolevel) {    
     getlocvar(fs, --fs->nactvar)->endpc = fs->pc;    
     reginfo_removelocal(fs, fs->nactvar);
-    // printf(" %i", fs->nactvar);
   }
-  //printf("\t nactvar=%i\n", fs->nactvar);
-  // printf("\n");
-  // TODO
-  // like above, but end local scope
 }
 
 
@@ -496,7 +480,7 @@ static l_noret undefgoto (LexState *ls, Labeldesc *gt) {
 
 
 static void leaveblock (FuncState *fs) {
-  printf("%s\n", __func__);
+  // printf("%s\n", __func__);
   BlockCnt *bl = fs->bl;
   LexState *ls = fs->ls;
   if (bl->previous && bl->upval) {
@@ -705,7 +689,7 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   if (val.k == VK) { 
     ck = OPSPEC_kst;
   } else {
-    reginfo_add_load(fs, rkval);
+    addregload(fs, rkval);
     ck = OPSPEC_reg;
   }
   if (key.k == VK) {
@@ -723,10 +707,10 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
       sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_str, OPSPEC_kst, ck);
     }
   } else {
-    reginfo_add_load(fs, rkkey);
+    addregload(fs, rkkey);
     sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_chk, OPSPEC_reg, ck);
   }
-  reginfo_add_load(fs, cc->t->u.info);
+  addregload(fs, cc->t->u.info);
 
   luaK_codeABC(fs, OP_SETTABLE, sp, cc->t->u.info, rkkey, rkval);
   fs->freereg = reg;  /* free registers */
@@ -922,8 +906,8 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
   }  
   int ra;
   for (ra = base; ra <= base+nparams; ra++)
-    reginfo_add_load(fs, ra);
-  reginfo_add_store(fs, base); // TODO: not quite sure here
+    addregload(fs, ra);
+  addregstore(fs, base); // TODO: not quite sure here
   init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, 0, base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
@@ -1193,7 +1177,7 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
   if (conflict) {
     /* copy upvalue/local value to a temporary (in position 'extra') */
     OpCode op = (v->k == VLOCAL) ? OP_MOVE : OP_GETUPVAL;
-    reginfo_add_store(fs, extra);
+    addregstore(fs, extra);
     luaK_codeABC(fs, op, 1, extra, v->u.info, 0);
     luaK_reserveregs(fs, 1);
   }
@@ -1343,7 +1327,7 @@ static int exp1 (LexState *ls) {
 
 
 static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
-  printf(">>>>>>>>> %s BEGIN\n", __func__);
+  // printf(">>>>>>>>> %s BEGIN\n", __func__);
   /* forbody -> DO block */
   BlockCnt bl;
   FuncState *fs = ls->fs;
@@ -1351,21 +1335,20 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   adjustlocalvars(ls, 3);  /* control variables */
   checknext(ls, TK_DO);
   if (isnum) {
-    // TODO these aren't really stores at this point
-    //      but we need to establish a unique scope
-    // maybe we should add more states to reginfo?
-    reginfo_add_store(fs, base);
-    reginfo_add_store(fs, base+1);
-    reginfo_add_store(fs, base+2);
-    reginfo_add_store(fs, base+3); /* external index */
+    // TODO: this is an artifical store to establish
+    // the scope of these locals
+    addregstore(fs, base+1);
+    addregstore(fs, base+2);    
+    addregstore(fs, base);
+    addregstore(fs, base+3);
     prep = luaK_codeAsBx(fs, OP_FORPREP, 0, base, NO_JUMP);
   } else {
-    reginfo_add_store(fs, base);
-    reginfo_add_store(fs, base+1);
-    reginfo_add_store(fs, base+2);
+    addregstore(fs, base);
+    addregstore(fs, base+1);
+    addregstore(fs, base+2);
     int cb; /* call base */
     for (cb = base+3; cb <= base+2+nvars; cb++)
-      reginfo_add_store(fs, cb);
+      addregstore(fs, cb);
     prep = luaK_jump(fs);
   }
   enterblock(fs, &bl, 0);  /* scope for declared variables */
@@ -1373,20 +1356,19 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   luaK_reserveregs(fs, nvars);
   block(ls);
   if (isnum) { 
-    reginfo_add_load(fs, base);
-    reginfo_add_load(fs, base+1);
-    reginfo_add_load(fs, base+2);
-    reginfo_add_store(fs, base);
-    reginfo_add_store(fs, base+3); /* ext. index */
+    addregload(fs, base+1);
+    addregload(fs, base+2);
+    addregstore(fs, base);
+    addregstore(fs, base+3); /* ext. index */
   } else {
-    reginfo_add_load(fs, base);
-    reginfo_add_load(fs, base+1);
-    reginfo_add_load(fs, base+2);
+    addregload(fs, base);
+    addregload(fs, base+1);
+    addregload(fs, base+2);
     int cb; /* call base */    
     for (cb = base+3; cb <= base+2+nvars; cb++)
-      reginfo_add_store(fs, cb);
-    reginfo_insert_load(fs, fs->pc+1, base+1);
-    reginfo_insert_store(fs, fs->pc+1, base);
+      addregstore(fs, cb);
+    luaK_extendreginfo(fs, base+1, fs->pc+1, REGINFO_USE_LOAD);
+    luaK_extendreginfo(fs, base, fs->pc+1, REGINFO_USE_STORE);
   }
   leaveblock(fs);  /* end of scope for declared variables */
   luaK_patchtohere(fs, prep);
@@ -1400,7 +1382,7 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   }
   luaK_patchlist(fs, endfor, prep + 1);
   luaK_fixline(fs, line);
-  printf(">>>>>>>>> %s END\n", __func__);
+  // printf(">>>>>>>>> %s END\n", __func__);
 }
 
 

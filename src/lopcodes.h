@@ -421,6 +421,7 @@ LUAI_DDEC const char *const luaP_opnames[NUM_OPCODES+1];  /* opcode names */
 
 
 
+extern void PrintOp(Instruction i);
 
 
 

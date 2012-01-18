@@ -52,14 +52,14 @@ void luaK_nil (FuncState *fs, int from, int n) {
         SETARG_B(*previous, l - from);
         int ra;
         for (ra = from; ra <= l - from; ra++)
-          reginfo_insert_store(fs, fs->pc-1, ra);
+          luaK_extendreginfo(fs, ra, fs->pc-1, REGINFO_USE_STORE);
         return;
       }
     }  /* else go through */
   }  
   int ra;
   for (ra = from; ra <= from+n; ra++)
-    reginfo_add_store(fs, ra);
+    addregstore(fs, ra);
   luaK_codeABC(fs, OP_LOADNIL, 1, from, n - 1, 0);  /* else no optimization */
 }
 
@@ -142,7 +142,8 @@ static int patchtestreg (FuncState *fs, int node, int reg) {
     return 0;  /* cannot patch other instructions */
   if (reg != NO_REG && reg != GETARG_B(*i)) {
     SETARG_A(*i, reg);
-    reginfo_insert_store(fs, testTMode(GET_OPCODE(*i)) ? node-1 : node, reg);
+    luaK_extendreginfo(fs, reg, testTMode(GET_OPCODE(*i)) ? node-1 : node,
+                       REGINFO_USE_STORE);
   }
   else  /* no register to put value or register already has the value */
     *i = CREATE_ABC(OP_TEST, 0, GETARG_B(*i), 0, GETARG_C(*i));  
@@ -219,130 +220,6 @@ void luaK_concat (FuncState *fs, int *l1, int l2) {
 }
 
 
-/* -- register info ------------------------------------------------------ */
-
-// TODO: naming: it doesn't grow the reginfo scope list it grows fs->reginfos
-void reginfo_grow(FuncState *fs, int reg) {
-  if (reg < fs->f->sizereginfos) return;  
-  int oldsize = fs->f->sizereginfos;
-  int newsize = reg+1;
-  luaM_reallocvector(fs->ls->L, fs->f->reginfos, oldsize, newsize, RegInfo);
-  fs->f->sizereginfos = newsize;
-  while (oldsize < newsize) {
-    printf("%s %i\n", __func__, oldsize);
-    fs->f->reginfos[oldsize].next = NULL;
-    fs->f->reginfos[oldsize++].state = REGINFO_STATE_UNUSED;    
-  }
-}
-
-RegInfo *reginfo_get_last(FuncState *fs, int reg) {
-  lua_assert(reg < fs->f->sizereginfos);
-  RegInfo *reginfo = &(fs->f->reginfos[reg]);
-  if (reginfo->state != REGINFO_STATE_UNUSED &&
-      reginfo->state != REGINFO_STATE_LOCAL_UNUSED) {
-    while (reginfo->next != NULL)
-      reginfo = reginfo->next;
-  }
-  return reginfo;
-}
-
-void reginfo_insert(FuncState *fs, int pc, int reg, int store) {
-  printf("%s: [%i] %i %s\t\n", __func__, pc, reg, store ? "store" : "load");
-  reginfo_grow(fs, reg);
-  RegInfo *reginfo = reginfo_get_last(fs, reg);
-  switch (reginfo->state) {
-    case REGINFO_STATE_TEMP:
-      if (store) goto l_add_scope;
-      /* else fall through */
-    case REGINFO_STATE_LOCAL_OPEN: /* extend scope */
-      if (reginfo->endpc < pc) { 
-        reginfo->endpc = pc;
-        reginfo->lastuse = store;
-      }
-      break;
-    case REGINFO_STATE_LOCAL_CLOSED: /* add new scope */
-    l_add_scope:
-      reginfo->next = luaM_new(fs->ls->L, RegInfo);
-      reginfo = reginfo->next;
-      /* fall through */
-    case REGINFO_STATE_UNUSED: /* initialize scope */      
-      reginfo->startpc = pc;
-      reginfo->endpc = pc;
-      reginfo->state = REGINFO_STATE_TEMP;
-      reginfo->nspec = 0;
-      reginfo->firstuse = store;
-      reginfo->lastuse = store;
-      reginfo->next = NULL;      
-      break;
-    case REGINFO_STATE_LOCAL_UNUSED:
-      reginfo->startpc = pc;
-      reginfo->endpc = pc;
-      reginfo->state = REGINFO_STATE_LOCAL_OPEN;
-      reginfo->nspec = 0;
-      reginfo->firstuse = store;
-      reginfo->lastuse = store;
-      reginfo->next = NULL;      
-      break;      
-  }
-}
-
-void reginfo_adjustlocal(FuncState *fs, int reg) {
-  printf("%s: %i\n", __func__, reg);
-  reginfo_grow(fs, reg);
-  RegInfo *reginfo = reginfo_get_last(fs, reg);
-  
-  if (reginfo->state == REGINFO_STATE_UNUSED) /* function argument */ {
-    //reginfo_insert(fs, /*-1*/0, reg, 1);
-    reginfo->state = REGINFO_STATE_LOCAL_UNUSED;
-    return;
-  }
-    // TODO: how do we do this so it makes sense?
-    // is a pc of 0 (or -1 for that matter) potentially dangerous?
-    // can there be temp uses before the first use of func arg reg?
-  
-  // OK, so apparently this function can get called before there is
-  // a temp scope at reg (either the reg is a hitherto unusued funcarg or
-  // we have a previously closed local and start a semantically new scope
-  // in the same reg)
-  // SOLUTIONS: we need to ensure theres a temp scope before calling this
-  //  1) either we do it
-  //  2) or the caller does it
-  // in both cases we need the pc of where we at
-  // OR
-  //     additional uninitialized state either in state or startpc = -1
-  // TODO: blergh
-  if (reginfo->state == REGINFO_STATE_LOCAL_CLOSED) {
-    reginfo_insert(fs, 0, reg, 1);
-    reginfo_get_last(fs, reg)->state = REGINFO_STATE_LOCAL_UNUSED;
-    return;
-  }
-
-
-  //printf("state=%i\n", reginfo->state);
-
-  // adjustlocalvars is often called after the locals have been used and
-  // their reginfos inserted, but at that point there were still known as 
-  // temps. so now we simply rebrand them.
-  lua_assert(reginfo->state == REGINFO_STATE_TEMP);
-  reginfo->state = REGINFO_STATE_LOCAL_OPEN;
-}
-
-void reginfo_removelocal(FuncState *fs, int reg) {
-  printf("%s: %i\n", __func__, reg);
-  RegInfo *reginfo = reginfo_get_last(fs, reg);
-  if (reginfo->state == REGINFO_STATE_LOCAL_UNUSED) {
-    reginfo->state = REGINFO_STATE_UNUSED;
-    return;
-    // TODO: remove reginfo? 
-    // NO, since reginfos needs to have at least one entry per register
-  }
-  lua_assert(reginfo->state == REGINFO_STATE_LOCAL_OPEN);
-  reginfo->state = REGINFO_STATE_LOCAL_CLOSED;
-}
-
-/* ----------------------------------------------------------------------- */
-
-
 static int luaK_code (FuncState *fs, Instruction i) {
   Proto *f = fs->f;
   dischargejpc(fs);  /* `pc' will change */
@@ -387,11 +264,11 @@ static int codeextraarg (FuncState *fs, int a) {
 
 int luaK_codek (FuncState *fs, int reg, int k) {
   if (k <= MAXARG_Bx) {
-    reginfo_add_store(fs, reg);
+    addregstore(fs, reg);
     return luaK_codeABx(fs, OP_LOADK, 1, reg, k);
   }
   else {
-    reginfo_add_store(fs, reg);
+    addregstore(fs, reg);
     int p = luaK_codeABx(fs, OP_LOADKX, 1, reg, 0);
     codeextraarg(fs, k);
     return p;
@@ -518,7 +395,7 @@ void luaK_setreturns (FuncState *fs, expdesc *e, int nresults) {
   
   int ra = GETARG_A(getcode(fs, e));
   while (nresults-- > 0)
-    reginfo_insert_store(fs, e->u.info, ra++);
+    luaK_extendreginfo(fs, ra++, e->u.info, REGINFO_USE_STORE);
 }
 
 
@@ -529,7 +406,8 @@ void luaK_setoneret (FuncState *fs, expdesc *e) {
   }
   else if (e->k == VVARARG) {
     SETARG_B(getcode(fs, e), 2);
-    reginfo_insert_store(fs, e->u.info, GETARG_A(getcode(fs, e)));
+    luaK_extendreginfo(fs, GETARG_A(getcode(fs, e)), e->u.info,
+                       REGINFO_USE_STORE);
     e->k = VRELOCABLE;  /* can relocate its simple result */
   }
 }
@@ -552,7 +430,7 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
       if (e->u.ind.vt == VLOCAL) {  /* 't' is in a register? */
         freereg(fs, e->u.ind.t);
         op = OP_GETTABLE;
-        reginfo_add_load(fs, e->u.ind.t);
+        addregload(fs, e->u.ind.t);
       }      
       
       int sp; /* specialization */
@@ -571,7 +449,7 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
           sp = CREATE_OPSPEC_GETTAB(1, OPSPEC_TAB_KEY_str, OPSPEC_kst);
         }
       } else {
-        reginfo_add_load(fs, e->u.ind.idx);
+        addregload(fs, e->u.ind.idx);
         sp = CREATE_OPSPEC_GETTAB(1, OPSPEC_TAB_KEY_chk, OPSPEC_reg);
       }
       
@@ -596,8 +474,6 @@ static int code_label (FuncState *fs, int A, int b, int jump) {
 
 
 static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
-  // printf("%s %i", __func__, reg);
-  // printf("\t[%i] nactvar=%i\n", fs->pc, fs->nactvar);
   luaK_dischargevars(fs, e);
   switch (e->k) {
     case VNIL: {
@@ -605,7 +481,7 @@ static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
       break;
     }
     case VFALSE:  case VTRUE: {
-      reginfo_add_store(fs, reg);
+      addregstore(fs, reg);
       luaK_codeABC(fs, OP_LOADBOOL, 1, reg, e->k == VTRUE, 0);
       break;
     }
@@ -620,13 +496,13 @@ static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
     case VRELOCABLE: {
       Instruction *pc = &getcode(fs, e);
       SETARG_A(*pc, reg);
-      reginfo_insert_store(fs, e->u.info, reg);
+      luaK_extendreginfo(fs, reg, e->u.info, REGINFO_USE_STORE);
       break;
     }
     case VNONRELOC: {
       if (reg != e->u.info) {
-        reginfo_add_load(fs, e->u.info);
-        reginfo_add_store(fs, reg);        
+        addregload(fs, e->u.info);
+        addregstore(fs, reg);
         luaK_codeABC(fs, OP_MOVE, 1, reg, e->u.info, 0);
       }
       break;
@@ -659,10 +535,10 @@ static void exp2reg (FuncState *fs, expdesc *e, int reg) {
     int p_t = NO_JUMP;  /* position of an eventual LOAD true */
     if (need_value(fs, e->t) || need_value(fs, e->f)) {
       int fj = (e->k == VJMP) ? NO_JUMP : luaK_jump(fs);
-      reginfo_add_store(fs, reg);
+      addregstore(fs, reg);            
       p_f = code_label(fs, reg, 0, 1);
-      reginfo_add_load(fs, reg); /* not really a load, but it extends the
-                                    temp scope to the second LOADBOOL */
+      addregload(fs, reg); /* not really a load, but it extends 
+                              the temp scope to the second LOADBOOL */
       p_t = code_label(fs, reg, 1, 0);
       luaK_patchtohere(fs, fj);
     }
@@ -752,7 +628,7 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
     }
     case VUPVAL: {
       int e = luaK_exp2anyreg(fs, ex);
-      reginfo_add_load(fs, e);
+      addregload(fs, e);      
       luaK_codeABC(fs, OP_SETUPVAL, 0, e, var->u.info, 0);
       break;
     }
@@ -765,7 +641,7 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
       if (isconst(ex)) {        
         ck = OPSPEC_kst;
       } else {
-        reginfo_add_load(fs, e);
+        addregload(fs, e);
         ck = OPSPEC_reg;
       }
       if (var->u.ind.isk) {
@@ -783,12 +659,12 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
           sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_str, OPSPEC_kst, ck);
         }
       } else {
-        reginfo_add_load(fs, var->u.ind.idx);
+        addregload(fs, var->u.ind.idx);
         sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_chk, OPSPEC_reg, ck);
       }      
       if (var->u.ind.vt == VLOCAL) {
         op = OP_SETTABLE;
-        reginfo_add_load(fs, var->u.ind.t);
+        addregload(fs, var->u.ind.t);
       } else {
         op = OP_SETTABUP;
       }      
@@ -815,10 +691,10 @@ void luaK_self (FuncState *fs, expdesc *e, expdesc *key) {
   luaK_reserveregs(fs, 2);  /* function and 'self' produced by op_self */
   int rkkey = luaK_exp2RK(fs, key);
   int sp = (isconst(key)<<4)|1;
-  reginfo_add_load(fs, ereg);
-  if (!isconst(key)) reginfo_add_load(fs, rkkey);
-  reginfo_add_store(fs, e->u.info);
-  reginfo_add_store(fs, e->u.info+1);  
+  addregload(fs, ereg);
+  if (!isconst(key)) addregload(fs, rkkey);
+  addregstore(fs, e->u.info);
+  addregstore(fs, e->u.info+1);
   luaK_codeABC(fs, OP_SELF, sp, e->u.info, ereg, rkkey);
   freeexp(fs, key);
 }
@@ -844,7 +720,7 @@ static int jumponcond (FuncState *fs, expdesc *e, int cond) {
   }
   discharge2anyreg(fs, e);
   freeexp(fs, e);
-  reginfo_add_load(fs, e->u.info);
+  addregload(fs, e->u.info);
   return condjump(fs, OP_TESTSET, 1, NO_REG, e->u.info, cond);
 }
 
@@ -915,7 +791,7 @@ static void codenot (FuncState *fs, expdesc *e) {
     case VNONRELOC: {
       discharge2anyreg(fs, e);
       freeexp(fs, e);
-      reginfo_add_load(fs, e->u.info);
+      addregload(fs, e->u.info);
       e->u.info = luaK_codeABC(fs, OP_NOT, 1, 0, e->u.info, 0);
       e->k = VRELOCABLE;
       break;
@@ -979,8 +855,8 @@ static void codearith (FuncState *fs, BinOpr opr,
       sp = CREATE_OPSPEC_ARITH(OPSPEC_OUT_chk, OPSPEC_ARITH_IN_chk,
                                isconst(e1) ? OPSPEC_kst : OPSPEC_reg,
                                isconst(e2) ? OPSPEC_kst : OPSPEC_reg);
-      if (!isconst(e1)) reginfo_add_load(fs, o1);
-      if (!isconst(e2)) reginfo_add_load(fs, o2);
+      if (!isconst(e1)) addregload(fs, o1);
+      if (!isconst(e2)) addregload(fs, o2);
     }
 
     e1->u.info = luaK_codeABC(fs, op, sp, 0, o1, o2);
@@ -998,7 +874,7 @@ static void codeunm (FuncState *fs, expdesc *e, int line) {
     int o = luaK_exp2RK(fs, e);
     freeexp(fs, e);
     int sp = (OPSPEC_ARITH_IN_chk<<1 | OPSPEC_OUT_chk);
-    reginfo_add_load(fs, o);
+    addregload(fs, o);
     e->u.info = luaK_codeABC(fs, OP_UNM, sp, 0, o, 0);
     e->k = VRELOCABLE;
     luaK_fixline(fs, line);
@@ -1011,7 +887,7 @@ static void codelen (FuncState *fs, expdesc *e, int line) {
   int o = luaK_exp2RK(fs, e);
   freeexp(fs, e);
   int sp = (OPSPEC_ARITH_IN_chk<<1 | OPSPEC_OUT_chk);
-  reginfo_add_load(fs, o);
+  addregload(fs, o);
   e->u.info = luaK_codeABC(fs, OP_LEN, sp, 0, o, 0);
   e->k = VRELOCABLE;
   luaK_fixline(fs, line);
@@ -1039,7 +915,7 @@ static void codeconcat (FuncState *fs, expdesc *e1, expdesc *e2, int line) {
       freeexp(fs, e1);
     }
     int r;
-    for (r = o1; r <= o2; r++) reginfo_add_load(fs, r);
+    for (r = o1; r <= o2; r++) addregload(fs, r);
     e1->u.info = luaK_codeABC(fs, OP_CONCAT, 1, 0, o1, o2);
     e1->k = VRELOCABLE;
     luaK_fixline(fs, line);
@@ -1057,8 +933,8 @@ static void codeeq (FuncState *fs, int cond, expdesc *e1, expdesc *e2) {
   int ck = isconst(e2) ? OPSPEC_kst : OPSPEC_reg;
   int sp = (ck<<4 | bk<<3);
 
-  if (bk == OPSPEC_reg) reginfo_add_load(fs, o1);
-  if (ck == OPSPEC_reg) reginfo_add_load(fs, o2);
+  if (bk == OPSPEC_reg) addregload(fs, o1);
+  if (ck == OPSPEC_reg) addregload(fs, o2);
   e1->u.info = condjump(fs, OP_EQ, sp, cond, o1, o2);
   e1->k = VJMP;
 }
@@ -1100,8 +976,8 @@ static void codecomp (FuncState *fs, BinOpr opr, expdesc *e1, expdesc *e2) {
     sp = CREATE_OPSPEC_LESS(OPSPEC_LESS_TYPE_chk, 
                             const1 ? OPSPEC_kst : OPSPEC_reg, 
                             const2 ? OPSPEC_kst : OPSPEC_reg);
-    if (!const1) reginfo_add_load(fs, o1);
-    if (!const2) reginfo_add_load(fs, o2);
+    if (!const1) addregload(fs, o1);
+    if (!const2) addregload(fs, o2);
   }
 
   e1->u.info = condjump(fs, op, sp, 1, o1, o2);
@@ -1200,3 +1076,121 @@ void luaK_setlist (FuncState *fs, int base, int nelems, int tostore) {
   fs->freereg = base + 1;  /* free registers with list values */
 }
 
+
+static void growreginfos (FuncState *fs, int reg) {
+  if (reg < fs->f->sizereginfos) return;
+  int oldsize = fs->f->sizereginfos;
+  int newsize = reg+1;
+  luaM_reallocvector(fs->ls->L, fs->f->reginfos, oldsize, newsize, RegInfo);
+  fs->f->sizereginfos = newsize;
+  while (oldsize < newsize)
+    fs->f->reginfos[oldsize++].state = REGINFO_STATE_UNUSED;
+}
+
+
+static RegInfo *lastreginfo (FuncState *fs, int reg) {
+  lua_assert(reg < fs->f->sizereginfos);
+  RegInfo *reginfo = &(fs->f->reginfos[reg]);
+  while (reginfo->state != REGINFO_STATE_UNUSED && 
+         reginfo->state != REGINFO_STATE_LOCAL_UNUSED &&
+         reginfo->next != NULL) {
+    reginfo = reginfo->next;
+  }
+  return reginfo;
+}
+
+
+void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use) {
+  growreginfos(fs, reg);
+  RegInfo *reginfo = lastreginfo(fs, reg);
+  switch (reginfo->state) {
+    case REGINFO_STATE_TEMP:
+      if (use == REGINFO_USE_STORE) goto l_add_scope;
+      /* else fall through */
+    case REGINFO_STATE_LOCAL_OPEN: /* extend scope */
+      if (reginfo->endpc < pc) { 
+        reginfo->endpc = pc;
+        reginfo->lastuse = use;
+      }
+      break;
+    case REGINFO_STATE_LOCAL_CLOSED: /* add new scope */
+    l_add_scope:
+      reginfo->next = luaM_new(fs->ls->L, RegInfo);
+      reginfo = reginfo->next;
+      /* fall through */
+    case REGINFO_STATE_UNUSED: /* initialize scope */      
+      reginfo->startpc = pc;
+      reginfo->endpc = pc;
+      reginfo->state = REGINFO_STATE_TEMP;
+      reginfo->nspec = 0;
+      reginfo->firstuse = use;
+      reginfo->lastuse = use;
+      reginfo->next = NULL;      
+      break;
+    case REGINFO_STATE_LOCAL_UNUSED:
+      reginfo->startpc = pc;
+      reginfo->endpc = pc;
+      reginfo->state = REGINFO_STATE_LOCAL_OPEN;
+      reginfo->nspec = 0;
+      reginfo->firstuse = use;
+      reginfo->lastuse = use;
+      reginfo->next = NULL;      
+      break;      
+  }
+}
+
+
+void reginfo_adjustlocal(FuncState *fs, int reg) {
+  growreginfos(fs, reg);
+  RegInfo *reginfo = lastreginfo(fs, reg);
+  
+  // these have just been grown
+  if (reginfo->state == REGINFO_STATE_UNUSED) /* function argument */ {
+    //reginfo_insert(fs, /*-1*/0, reg, 1);
+    reginfo->state = REGINFO_STATE_LOCAL_UNUSED;
+    return;
+  }
+    // TODO: how do we do this so it makes sense?
+    // is a pc of 0 (or -1 for that matter) potentially dangerous?
+    // can there be temp uses before the first use of func arg reg?
+  
+  // OK, so apparently this function can get called before there is
+  // a temp scope at reg (either the reg is a hitherto unusued funcarg or
+  // we have a previously closed local and start a semantically new scope
+  // in the same reg)
+  // SOLUTIONS: we need to ensure theres a temp scope before calling this
+  //  1) either we do it
+  //  2) or the caller does it
+  // in both cases we need the pc of where we at
+  // OR
+  //     additional uninitialized state either in state or startpc = -1
+  // TODO: blergh
+  if (reginfo->state == REGINFO_STATE_LOCAL_CLOSED) {
+    reginfo->next = luaM_new(fs->ls->L, RegInfo);
+    reginfo->next->state = REGINFO_STATE_LOCAL_UNUSED;
+    // luaK_extendreginfo(fs, reg, 0, 1);
+    // lastreginfo(fs, reg)->state = REGINFO_STATE_LOCAL_UNUSED;
+    return;
+  }
+
+
+  //printf("state=%i\n", reginfo->state);
+
+  // adjustlocalvars is often called after the locals have been used and
+  // their reginfos inserted, but at that point there were still known as 
+  // temps. so now we simply rebrand them.
+  lua_assert(reginfo->state == REGINFO_STATE_TEMP);
+  reginfo->state = REGINFO_STATE_LOCAL_OPEN;
+}
+
+void reginfo_removelocal(FuncState *fs, int reg) {
+  RegInfo *reginfo = lastreginfo(fs, reg);
+  if (reginfo->state == REGINFO_STATE_LOCAL_UNUSED) {
+    reginfo->state = REGINFO_STATE_UNUSED;
+    return;
+    // TODO: remove reginfo? 
+    // NO, since reginfos needs to have at least one entry per register
+  }
+  lua_assert(reginfo->state == REGINFO_STATE_LOCAL_OPEN);
+  reginfo->state = REGINFO_STATE_LOCAL_CLOSED;
+}
