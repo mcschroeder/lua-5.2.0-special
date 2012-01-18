@@ -209,7 +209,6 @@ static LocVar *getlocvar (FuncState *fs, int i) {
 
 static void adjustlocalvars (LexState *ls, int nvars) {  
   FuncState *fs = ls->fs;
-  // printf("%s", __func__);
   fs->nactvar = cast_byte(fs->nactvar + nvars);
   for (; nvars; nvars--) {
     getlocvar(fs, fs->nactvar - nvars)->startpc = fs->pc;
@@ -826,8 +825,13 @@ static void parlist (LexState *ls) {
       }
     } while (!f->is_vararg && testnext(ls, ','));
   }
+
   adjustlocalvars(ls, nparams);
   f->numparams = cast_byte(fs->nactvar);
+
+  f->paramtypes = luaM_newvector(fs->ls->L, f->numparams, int);
+  while (nparams > 0) f->paramtypes[--nparams] = LUA_TNIL;
+
   luaK_reserveregs(fs, fs->nactvar);  /* reserve register for parameters */
 }
 

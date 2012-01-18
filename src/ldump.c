@@ -168,6 +168,7 @@ static void DumpFunction(const Proto* f, DumpState* D)
  DumpConstants(f,D);
  DumpUpvalues(f,D);
  DumpReginfos(f,D);
+ DumpVector(f->paramtypes,f->numparams,sizeof(int),D);
  DumpDebug(f,D);
 }
 

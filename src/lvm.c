@@ -1140,14 +1140,6 @@ void luaV_execute (lua_State *L) {
         }
       )
 /* ------------------------------------------------------------------------ */
-      // the way calls are done now, we always call a tmp register since
-      // the return value is put in the spot where the function was.
-      // therefore, specialization doesn't make sense.
-      // if we want to specialize based on function type we will have to
-      // do the whole call thing differently.
-      // the question right now is: do we have to spec-check the result
-      // registers? no, since they're always temps, right?
-      // BUT: under the new scheme we can specialize temps!
       vmcase(OP_CALL, 0,
         int b = GETARG_B(i);
         int nresults = GETARG_C(i) - 1;
@@ -1159,11 +1151,12 @@ void luaV_execute (lua_State *L) {
         else {  /* Lua function */
           ci = L->ci;
           ci->callstatus |= CIST_REENTRY;
+          luaVS_specialize_params(L, clLvalue(ci->func)->p);
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
       )
 /* ------------------------------------------------------------------------ */
-      // see above caveat
+// TODO: spec, like above
       vmcase(OP_TAILCALL, 0,
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
@@ -1195,6 +1188,17 @@ void luaV_execute (lua_State *L) {
       )
 /* ------------------------------------------------------------------------ */
       vmcasenb(OP_RETURN, 0,
+        /* set argument types */
+        Proto *p = clLvalue(ci->func)->p;
+        int arg;
+        // printf("set types: ");
+        for (arg=0; arg < p->numparams; arg++) {
+          p->paramtypes[arg] = rttype(base+arg);
+          // printf("%i=%i ", arg, p->paramtypes[arg]);
+        }
+        // printf("\n");
+        // TODO
+
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b-1;
         if (cl->p->sizep > 0) luaF_close(L, base);

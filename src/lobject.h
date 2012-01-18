@@ -465,7 +465,7 @@ typedef struct LocVar {
 } LocVar;
 
 
-// DON'T FORGET TO KEEP dump/undump UP-TO-DATE!!
+// TODO: DON'T FORGET TO KEEP dump/undump UP-TO-DATE!!
 typedef struct RegInfo {  
   int startpc;
   int endpc;
@@ -485,6 +485,7 @@ typedef struct RegInfo {
 #define REGINFO_USE_LOAD  0
 #define REGINFO_USE_STORE 1
 
+
 /*
 ** Function Prototypes
 */
@@ -495,7 +496,9 @@ typedef struct Proto {
   struct Proto **p;  /* functions defined inside the function */
   int *lineinfo;  /* map from opcodes to source lines (debug information) */
   LocVar *locvars;  /* information about local variables (debug information) */
-  RegInfo *reginfos;
+  RegInfo *reginfos; /* information about registers */
+  int *paramtypes; /* types of parameters after last invocation */
+// TODO: add paramtypes to dump/undump etc.
   Upvaldesc *upvalues;  /* upvalue information */
   union Closure *cache;  /* last created closure with this prototype */
   TString  *source;  /* used for debug information */  

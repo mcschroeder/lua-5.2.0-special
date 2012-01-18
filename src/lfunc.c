@@ -132,6 +132,7 @@ Proto *luaF_newproto (lua_State *L) {
   f->lastlinedefined = 0;
   f->source = NULL;
   f->reginfos = NULL;  
+  f->paramtypes = NULL;
   f->sizereginfos = 0;
   return f;
 }
@@ -163,6 +164,7 @@ void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->lineinfo, f->sizelineinfo);
   luaM_freearray(L, f->locvars, f->sizelocvars);
   luaM_freearray(L, f->upvalues, f->sizeupvalues);
+  luaM_freearray(L, f->paramtypes, f->numparams);
   reginfos_free(L, f);
   luaM_free(L, f);
 }

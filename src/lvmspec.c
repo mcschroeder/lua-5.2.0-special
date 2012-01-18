@@ -321,7 +321,18 @@ static void _luaVS_specialize (lua_State *L, int reg, RegInfo *reginfo) {
   }
 }
 
+void luaVS_specialize_params (lua_State *L, Proto *p) {
+  #ifdef DEBUG_PRINT
+  printf("%s ", __func__);
+  #endif
+  int reg = 0;  
+  while (reg < p->numparams) {
+    RegInfo *reginfo = &p->reginfos[reg];
+    if (reginfo->state != REGINFO_STATE_UNUSED)
+      _luaVS_specialize(L, reg, reginfo);
+    reg++;
   }
+}
 
 void luaVS_specialize (lua_State *L, int reg, int use) {
   #ifdef DEBUG_PRINT

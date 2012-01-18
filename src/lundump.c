@@ -207,6 +207,9 @@ static Proto* LoadFunction(LoadState* S)
  LoadConstants(S,f);
  LoadUpvalues(S,f);
  LoadReginfos(S,f);
+ int n=LoadInt(S);
+ f->paramtypes=luaM_newvector(S->L,n,int);
+ LoadVector(S,f->paramtypes,n,sizeof(int));
  LoadDebug(S,f);
  S->L->top--;
  return f;
