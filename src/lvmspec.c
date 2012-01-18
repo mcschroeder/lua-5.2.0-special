@@ -220,13 +220,26 @@ static void _luaVS_specialize (lua_State *L, int reg, RegInfo *reginfo) {
           if (ispoly) {
             SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
           } else {
-            int bn = isconst_B ? ttisnumber(KB) : ttisnumber(RB);
-            int cn = isconst_C ? ttisnumber(KC) : ttisnumber(RC);
-            if (bn && cn) {
-              SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);              
-            } else {
-              SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+            TValue *b = isconst_B ? KB : RB;
+            TValue *c = isconst_C ? KC : RC;
+            if (ttisnumber(b)) {
+              if (ttisnumber(c)) 
+                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);
+              else if (ttisstring(c)) 
+                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+              else
+                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
             }
+            else if (ttisstring(b)) {
+              if (ttisnumber(c))
+                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+              else if (ttisstring(c))
+                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+              else 
+                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+            }
+            else
+              SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
           }
         }
       )
