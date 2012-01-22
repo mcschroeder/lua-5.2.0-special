@@ -498,7 +498,6 @@ typedef struct Proto {
   LocVar *locvars;  /* information about local variables (debug information) */
   RegInfo *reginfos; /* information about registers */
   int *paramtypes; /* types of parameters after last invocation */
-// TODO: add paramtypes to dump/undump etc.
   Upvaldesc *upvalues;  /* upvalue information */
   union Closure *cache;  /* last created closure with this prototype */
   TString  *source;  /* used for debug information */  

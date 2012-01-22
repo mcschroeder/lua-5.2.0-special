@@ -560,6 +560,20 @@ void luaV_finishOp (lua_State *L) {
 #define vmcasenb(o,s,b)	case OP_MAKE(o,s): {b}		/* nb = no break */
 
 
+// TODO: FUCK
+// as it turns out, this doesn't work
+// on the first store, we mustn't check the type of the old value, since
+// that may very well be different but it doesn't have any relation to the
+// type within the reginfo scope!
+// think of the contents of the register before the first store of a scope
+// as uninitialized.
+// so we have to store the type w/ the reginfo itself 
+// (where it semantically belongs)
+// BUT: finding the right reginfo everytime we need a chk....
+// that's a lot of work if we then maybe don't even need to specialize...
+
+// SEE ALSO: the comments in lvmspec.c
+
 #define SpecCheckRa(x) { int rat = rttype(ra); {x;} \
         if (rat != rttype(ra)) { \
           luaVS_specialize(L, GETARG_A(i), REGINFO_USE_STORE); } }
@@ -1140,6 +1154,10 @@ void luaV_execute (lua_State *L) {
         }
       )
 /* ------------------------------------------------------------------------ */
+      vmcasenb(OP_CALL, 1,
+        ci->callstatus |= CIST_SPECRES;
+        /* fall through */
+      )
       vmcase(OP_CALL, 0,
         int b = GETARG_B(i);
         int nresults = GETARG_C(i) - 1;
@@ -1156,7 +1174,10 @@ void luaV_execute (lua_State *L) {
         }
       )
 /* ------------------------------------------------------------------------ */
-// TODO: spec, like above
+      vmcasenb(OP_TAILCALL, 1,      
+        ci->callstatus |= CIST_SPECRES;
+        /* fall through */
+      )
       vmcase(OP_TAILCALL, 0,
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
@@ -1183,28 +1204,25 @@ void luaV_execute (lua_State *L) {
           oci->callstatus |= CIST_TAIL;  /* function was tail called */
           ci = L->ci = oci;  /* remove new frame */
           lua_assert(L->top == oci->u.l.base + getproto(ofunc)->maxstacksize);
+          luaVS_specialize_params(L, clLvalue(ci->func)->p);
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
       )
 /* ------------------------------------------------------------------------ */
       vmcasenb(OP_RETURN, 0,
-        /* set argument types */
+        /* remember parameter types */
         Proto *p = clLvalue(ci->func)->p;
         int arg;
-        // printf("set types: ");
-        for (arg=0; arg < p->numparams; arg++) {
+        for (arg=0; arg < p->numparams; arg++)
           p->paramtypes[arg] = rttype(base+arg);
-          // printf("%i=%i ", arg, p->paramtypes[arg]);
-        }
-        // printf("\n");
-        // TODO
 
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b-1;
         if (cl->p->sizep > 0) luaF_close(L, base);
         b = luaD_poscall(L, ra);
-        if (!(ci->callstatus & CIST_REENTRY))  /* 'ci' still the called one */
+        if (!(ci->callstatus & CIST_REENTRY)) { /* 'ci' still the called one */
           return;  /* external invocation: return */
+        }
         else {  /* invocation via reentry: continue execution */
           ci = L->ci;
           if (b) L->top = ci->top;

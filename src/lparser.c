@@ -912,7 +912,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
   for (ra = base; ra <= base+nparams; ra++)
     addregload(fs, ra);
   addregstore(fs, base); // TODO: not quite sure here
-  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, 0, base, nparams+1, 2));  
+  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, 1, base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
                             (unless changed) one result */

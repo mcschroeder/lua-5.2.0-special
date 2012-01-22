@@ -30,6 +30,7 @@
 #include "lundump.h"
 #include "lvm.h"
 #include "lzio.h"
+#include "lvmspec.h"
 
 
 
@@ -368,10 +369,34 @@ int luaD_poscall (lua_State *L, StkId firstResult) {
   wanted = ci->nresults;
   L->ci = ci = ci->previous;  /* back to caller */
   /* move results to correct place */
-  for (i = wanted; i != 0 && firstResult < L->top; i--)
-    setobjs2s(L, res++, firstResult++);
-  while (i-- > 0)
-    setnilvalue(res++);
+  if (ci->callstatus & CIST_SPECRES) {
+    // printf("*** %s SPECRES wanted=%i\n", __func__, wanted);
+    lua_assert(isLua(ci));
+    int reg = res - ci->u.l.base;
+    for (i = wanted; i != 0 && firstResult < L->top; i--) {
+      if (!ttisequal(res, firstResult)) {
+        setobjs2s(L, res, firstResult);
+        luaVS_specialize(L, reg, REGINFO_USE_STORE);
+      } else {
+        setobjs2s(L, res, firstResult);
+      }
+      res++; firstResult++; reg++;
+    }
+    while (i-- > 0) {
+      if (!ttisnil(res)) {
+        setnilvalue(res);
+        luaVS_specialize(L, reg, REGINFO_USE_STORE);
+      }
+      res++; reg++;
+    }
+    ci->callstatus &= ~CIST_SPECRES; /* reset spec flag */
+  }
+  else { /* no result register specialization */
+    for (i = wanted; i != 0 && firstResult < L->top; i--)
+      setobjs2s(L, res++, firstResult++);
+    while (i-- > 0)
+      setnilvalue(res++);    
+  }
   L->top = res;
   return (wanted - LUA_MULTRET);  /* 0 iff wanted == LUA_MULTRET */
 }

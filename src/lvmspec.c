@@ -17,6 +17,14 @@
 #define DEBUG_PRINT
 
 
+// TODO: FUCK 2
+// we can't forward specialize, since the types currently in the
+// registers mean shit (see also: lvm.c comments above SpecCheckRa macro)
+// and I don't mean the register we are specializing on, but the other registers
+// an instruction uses upon which the spec is partly based
+// e.g. when speccing a parameter whose reg is used in an add but where the
+// other operand register of the add doesn't at this point have a valid value...
+
 
 #define use_possible(reginfo, pc, use) \
         ((reginfo->startpc < pc && reginfo->endpc > pc) || \
@@ -73,7 +81,8 @@ static void _luaVS_specialize (lua_State *L, int reg, RegInfo *reginfo) {
   lua_assert(reginfo->state == REGINFO_STATE_TEMP ||
              reginfo->state == REGINFO_STATE_LOCAL_CLOSED);
 #ifdef DEBUG_PRINT
-  if (reginfo->nspec > MAX_SPEC) { printf("> %i\n", MAX_SPEC); return; }
+  printf("%s %i", __func__, reg);
+  if (reginfo->nspec > MAX_SPEC) { printf(" nspec=%i > %i\n", reginfo->nspec, MAX_SPEC); return; }
 #else
   if (reginfo->nspec > MAX_SPEC) return;
 #endif
@@ -85,7 +94,7 @@ static void _luaVS_specialize (lua_State *L, int reg, RegInfo *reginfo) {
   TValue *k = p->k;
 
 #ifdef DEBUG_PRINT
-  printf("%s %i (%i,%i) %s%s %i%s\n", __func__, reg, reginfo->startpc, reginfo->endpc, reginfo->firstuse ? "S" : "L", reginfo->lastuse ? "S" : "L", reginfo->nspec, ispoly ? " (poly)" : "");
+  printf(" (%i,%i) %s%s nspec=%i%s\n", reginfo->startpc, reginfo->endpc, reginfo->firstuse ? "S" : "L", reginfo->lastuse ? "S" : "L", reginfo->nspec, ispoly ? " (poly)" : "");
 #endif
 
   int pc;
@@ -345,6 +354,9 @@ void luaVS_specialize_params (lua_State *L, Proto *p) {
       _luaVS_specialize(L, reg, reginfo);
     reg++;
   }
+  #ifdef DEBUG_PRINT
+  printf("\n");
+  #endif
 }
 
 void luaVS_specialize (lua_State *L, int reg, int use) {
@@ -353,9 +365,14 @@ void luaVS_specialize (lua_State *L, int reg, int use) {
   #endif
   Proto *p = clLvalue(L->ci->func)->p;
   int pc = L->ci->u.l.savedpc - p->code - 1;
-  RegInfo *reginfo = findreginfo(p, reg, pc, use);
-  if (reginfo) _luaVS_specialize(L, reg, reginfo);
+  if (reg < p->sizereginfos) { // TODO: quick hack: when luaD_poscall specializes on a return that is a LUA_MULTRET, it may want to specialize on registers that arent actually used within the function but are only used to hand over values to the following return instruction (e.g. when we have a return that calls a function which returns multiple arguments, so in bytecode a CALL with c=0 followed by a RETURN with b=0 (or something like that))
+    RegInfo *reginfo = findreginfo(p, reg, pc, use);
+    if (reginfo) _luaVS_specialize(L, reg, reginfo);
+    #ifdef DEBUG_PRINT
+    else printf(" NULL\n");
+    #endif
+  }
   #ifdef DEBUG_PRINT
-  else printf("\n");
+  else printf(" >= sizereginfos=%i\n", p->sizereginfos);
   #endif
 }
