@@ -10,20 +10,13 @@
 
 #include "lopcodes.h"
 #include "lstate.h"
+#include "ldebug.h"  // TODO: for pcRel; can we do without this?
 #include "lvmspec.h"
 
 
 
 #define DEBUG_PRINT
 
-
-// TODO: FUCK 2
-// we can't forward specialize, since the types currently in the
-// registers mean shit (see also: lvm.c comments above SpecCheckRa macro)
-// and I don't mean the register we are specializing on, but the other registers
-// an instruction uses upon which the spec is partly based
-// e.g. when speccing a parameter whose reg is used in an add but where the
-// other operand register of the add doesn't at this point have a valid value...
 
 
 #define use_possible(reginfo, pc, use) \
@@ -43,27 +36,205 @@ static RegInfo *findreginfo (Proto *p, int reg, int pc, int use) {
   return reginfo;
 }
 
-// TODO: hoist to llimits.h?
-#define MAX_SPEC 2
-
-#define A (GETARG_A(*i))
-#define B (GETARG_B(*i))
-#define C (GETARG_C(*i))
-
-#define RA (base+GETARG_A(*i))
-#define RB (base+GETARG_B(*i))
-#define RC (base+GETARG_C(*i))
-
-#define KB (k+GETARG_B(*i))
-#define KC (k+GETARG_C(*i))
-
-#define isconst_B (GET_OPSPEC_BK(*i) == OPSPEC_kst)
-#define isconst_C (GET_OPSPEC_CK(*i) == OPSPEC_kst)
-
-#define ispoly(reg, use) (findreginfo(p, reg, pc, use)->nspec > MAX_SPEC)
 
 #define store_possible use_possible(reginfo, pc, REGINFO_USE_STORE)
 #define load_possible  use_possible(reginfo, pc, REGINFO_USE_LOAD)
+
+#define ISK_B(i) (GET_OPSPEC_BK(i) == OPSPEC_kst)
+#define ISK_C(i) (GET_OPSPEC_CK(i) == OPSPEC_kst)
+
+
+void luaVS_despecialize (lua_State *L, int reg) {
+  Proto *p = clLvalue(L->ci->func)->p;
+  int pc = pcRel(L->ci->u.l.savedpc, p);
+  RegInfo *reginfo = findreginfo(p, reg, pc, REGINFO_USE_STORE);
+  lua_assert(reginfo != NULL);
+  for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
+    Instruction *i = &(p->code[pc]);
+    switch (GET_OPCODE(*i)) {
+      case OP_MOVE:
+      case OP_LOADK:
+      case OP_LOADKX:
+      case OP_LOADBOOL:
+      case OP_GETUPVAL:
+      case OP_NEWTABLE:
+      case OP_SELF:
+      case OP_CONCAT:
+      case OP_TESTSET:
+      case OP_CLOSURE:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPSPEC(*i, 0);
+          p->exptypes[pc].t = LUA_TNONE;
+        }
+        break;
+      case OP_LOADNIL: {
+        int a = GETARG_A(*i);
+        int b = GETARG_B(*i);
+        if (a <= reg && reg <= a+b && store_possible) {
+          int *exptypes = p->exptypes[pc].ts;
+          exptypes[reg-a] = LUA_TNONE;
+          int j;
+          for (j = 0; j < b; j++) {
+            if (exptypes[j] != LUA_TNONE) {
+              SET_OPSPEC(*i, 0);
+              break;
+            }
+          }
+        }
+        break;
+      }
+      case OP_GETTABLE: case OP_GETTABUP:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
+          p->exptypes[pc].t = LUA_TNONE;
+        }
+        if (!ISK_C(*i) && GETARG_C(*i) == reg && load_possible) {
+          SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);          
+        }
+        break;
+      case OP_SETTABLE: case OP_SETTABUP:
+        if (!ISK_B(*i) && GETARG_B(*i) == reg && load_possible) {
+          SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);
+        }
+        break;
+      case OP_ADD: case OP_SUB: case OP_MUL:
+      case OP_DIV: case OP_MOD: case OP_POW:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
+          p->exptypes[pc].t = LUA_TNONE;
+        }
+        if (!ISK_B(*i) && GETARG_B(*i) == reg && load_possible) {
+          SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        }
+        if (!ISK_C(*i) && GETARG_C(*i) == reg && load_possible) {
+          SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        }
+        break;
+      case OP_UNM: case OP_LEN:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
+          p->exptypes[pc].t = LUA_TNONE;
+        }
+        if (!ISK_B(*i) && GETARG_B(*i) == reg && load_possible) {
+          SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        }
+        break;
+      case OP_LE: case OP_LT:
+        if (!ISK_B(*i) && GETARG_B(*i) == reg && load_possible) {
+          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
+        }
+        if (!ISK_C(*i) && GETARG_C(*i) == reg && load_possible) {
+          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
+        }
+        break;
+      case OP_CALL: {
+        int a = GETARG_A(*i);
+        int nresults = GETARG_C(*i) - 1;
+        lua_assert(nresults != LUA_MULTRET);        
+        if (a <= reg && reg <= a+nresults) {
+          int *exptypes = p->exptypes[pc].ts;
+          exptypes[reg-a] = LUA_TNONE;
+          int j;
+          for (j = 0; j < nresults; j++) {
+            if (exptypes[j] != LUA_TNONE) {
+              SET_OPSPEC(*i, 0);
+              break;
+            }
+          }
+        }
+        break;
+      }
+      case OP_VARARG: {
+        int a = GETARG_A(*i);
+        int b = GETARG_B(*i) - 1;
+        lua_assert(b != -1);        
+        if (a <= reg && reg <= a+b) {
+          int *exptypes = p->exptypes[pc].ts;
+          exptypes[reg-a] = LUA_TNONE;
+          int j;
+          for (j = 0; j < b; j++) {
+            if (exptypes[j] != LUA_TNONE) {
+              SET_OPSPEC(*i, 0);
+              break;
+            }
+          }
+        }
+        break;        
+      }
+      default:
+        break;
+    }
+  }
+}
+
+
+/* add type guards to all stores of the register within the given scope */
+void add_guards (lua_State *L, int reg, RegInfo *reginfo, int type) {
+  Proto *p = clLvalue(L->ci->func)->p;
+  int pc;
+  for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
+    Instruction *i = &(p->code[pc]);
+    switch (GET_OPCODE(*i)) {
+      case OP_MOVE:
+      case OP_LOADK:
+      case OP_LOADKX:
+      case OP_LOADBOOL:
+      case OP_GETUPVAL:
+      case OP_NEWTABLE:
+      case OP_NOT:
+      case OP_CONCAT:
+      case OP_TESTSET:
+      case OP_CLOSURE:
+        if (GETARG_A(*i) == reg) {
+          SET_OPSPEC(*i, 1);
+          p->exptypes[pc].t = type;
+        }
+        break;
+      case OP_GETTABLE: case OP_GETTABUP:
+      case OP_SELF:
+      case OP_ADD: case OP_SUB: case OP_MUL: 
+      case OP_DIV: case OP_MOD: case OP_POW:
+      case OP_UNM: case OP_LEN:
+        if (GETARG_A(*i) == reg) {
+          SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
+          p->exptypes[pc].t = type;
+        }
+        break;
+      case OP_LOADNIL: {
+        int a = GETARG_A(*i);
+        int b = GETARG_B(*i);
+        if (a <= reg && reg <= a+b) {
+          SET_OPSPEC(*i, 1);
+          p->exptypes[pc].ts[reg-a] = type;
+        }
+        break;      
+      }
+      case OP_CALL: {
+        int a = GETARG_A(*i);
+        int nresults = GETARG_C(*i) - 1;
+        if (nresults == LUA_MULTRET) break; /* direct input to another call */
+        if (a <= reg && reg <= a+nresults) {
+          SET_OPSPEC(*i, 1);
+          p->exptypes[pc].ts[reg-a] = type;
+        }
+        break;
+      }
+      case OP_VARARG: {
+        int a = GETARG_A(*i);
+        int b = GETARG_B(*i) - 1;
+        if (b == -1) break; /* direct input to a call */
+        if (a <= reg && reg <= a+b) {
+          SET_OPSPEC(*i, 1);
+          p->exptypes[pc].ts[reg-a] = type;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+}
+
 
 static int ttisint (TValue *v) {
   if (!ttisnumber(v)) return 0;
@@ -73,306 +244,95 @@ static int ttisint (TValue *v) {
   return luai_numeq(cast_num(k), n);
 }
 
-#define spdispatch(o) switch(o)
-#define spcase(o,b) case o: {b}  break;
-#define spcasem(o) case o:    /* m = multiple */
 
-static void _luaVS_specialize (lua_State *L, int reg, RegInfo *reginfo) {
-  lua_assert(reginfo->state == REGINFO_STATE_TEMP ||
-             reginfo->state == REGINFO_STATE_LOCAL_CLOSED);
-#ifdef DEBUG_PRINT
-  printf("%s %i", __func__, reg);
-  if (reginfo->nspec > MAX_SPEC) { printf(" nspec=%i > %i\n", reginfo->nspec, MAX_SPEC); return; }
-#else
-  if (reginfo->nspec > MAX_SPEC) return;
-#endif
-  int ispoly = (reginfo->nspec == MAX_SPEC);
-  reginfo->nspec++;
+#define RB(i) (base+GETARG_B(i))
+#define RC(i) (base+GETARG_C(i))
+#define KB(i) (k+GETARG_B(i))
+#define KC(i) (k+GETARG_C(i))
+#define RKB(i) (ISK_B(i) ? KB(i) : RB(i))
+#define RKC(i) (ISK_C(i) ? KC(i) : RC(i))
 
+
+#define _add_guards(r,t) { int _r = r; \
+    RegInfo *_reginfo = findreginfo(p, _r, pc, REGINFO_USE_LOAD); \
+    lua_assert(_reginfo != NULL); \
+    add_guards(L, _r, _reginfo, t); } \
+
+void luaVS_specialize (lua_State *L) {
   Proto *p = clLvalue(L->ci->func)->p;
+  int pc = pcRel(L->ci->u.l.savedpc, p);
   StkId base = L->ci->u.l.base;
-  TValue *k = p->k;
-
-#ifdef DEBUG_PRINT
-  printf(" (%i,%i) %s%s nspec=%i%s\n", reginfo->startpc, reginfo->endpc, reginfo->firstuse ? "S" : "L", reginfo->lastuse ? "S" : "L", reginfo->nspec, ispoly ? " (poly)" : "");
-#endif
-
-  int pc;
-  for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
-    Instruction *i = &(p->code[pc]);
-    
-#ifdef DEBUG_PRINT    
-    printf("\t[%i] ", pc);
-    PrintOp(*i);
-#endif
-    
-    switch (GET_OPCODE(*i)) {
-/* ------------------------------------------------------------------------ */
-      spcase(OP_MOVE,
-        if (A == reg && store_possible) {
-          if (ispoly)                 SET_OPSPEC(*i, 0); /* Ra   <- Rb   */
-          else if (ttisequal(RA, RB)) SET_OPSPEC(*i, 2); /* Ra:x <- Rb:x */
-          else                        SET_OPSPEC(*i, 1); /* Ra:? <- Rb   */
-        }
-        if (B == reg && load_possible) {
-          if (ispoly) {
-            if (ispoly(A, REGINFO_USE_STORE)) 
-              SET_OPSPEC(*i, 0); /* Ra   <- Rb */
-            else
-              SET_OPSPEC(*i, 1); /* Ra:? <- Rb */
-          }
-          else if (ttisequal(RA, RB)) SET_OPSPEC(*i, 2); /* Ra:x <- Ra:x */
-          else                        SET_OPSPEC(*i, 1); /* Ra:? <- Rb   */
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcase(OP_LOADK,
-        if (A == reg && store_possible) {
-          if (ispoly)                 SET_OPSPEC(*i, 0); /* Ra   <- Kb   */
-          else if (ttisequal(RA, KB)) SET_OPSPEC(*i, 2); /* Ra:x <- Kb:x */
-          else                        SET_OPSPEC(*i, 1); /* Ra:? <- Kb   */
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcasem(OP_LOADKX)
-      spcasem(OP_GETUPVAL)
-      spcasem(OP_NOT)
-      spcasem(OP_CONCAT)
-      spcasem(OP_SELF)
-      spcasem(OP_TESTSET)
-      spcase(OP_CLOSURE,
-        if (A == reg && store_possible) {
-          if (ispoly) SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
-          else        SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcase(OP_LOADBOOL,
-        if (A == reg && store_possible) {
-          if (ispoly)               SET_OPSPEC(*i, 0); /* Ra   <- Ib:b */
-          else if (ttisboolean(RA)) SET_OPSPEC(*i, 2); /* Ra:b <- Ib:b */
-          else                      SET_OPSPEC(*i, 1); /* Ra:? <- Ib:b */
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcase(OP_LOADNIL,
-        int a = A;
-        int b = B;
-        if (a <= reg && a+b >= reg && store_possible) {
-          int allpoly = 1;
-          do {
-            if (!ispoly(a, REGINFO_USE_STORE) || !ttisnil(base+a)) {
-              allpoly = 0;
-              break;
-            }
-            a++;
-          } while (b--);
-          if (allpoly) SET_OPSPEC(*i, 1); /* R(a...a+b)   <- nil */
-          else         SET_OPSPEC(*i, 1); /* R(a...a+b):? <- nil */
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcasem(OP_GETTABUP)
-      spcase(OP_GETTABLE,      
-        if (A == reg && store_possible) {
-          if (ispoly) SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);            
-          else        SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
-        }
-        if (!isconst_C && C == reg && load_possible) {
-          TValue *rc = RC;
-          if (ispoly) 
-            SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);
-          else if (ttisstring(rc)) 
-            SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_str);
-          else if (ttisint(rc)) 
-            SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_int);
-          else
-            SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_obj);
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcasem(OP_SETTABUP)
-      spcase(OP_SETTABLE,
-        if (!isconst_B && B == reg && load_possible) {
-          TValue *rb = RB;
-          if (ispoly)
-            SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);            
-          else if (ttisstring(rb))
-            SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_str);
-          else if (ttisint(rb))
-            SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_int);
-          else
-            SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_obj);
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcase(OP_NEWTABLE,
-        if (A == reg && store_possible) {
-          if (ispoly || ttistable(RA)) SET_OPSPEC(*i, 0); /* Ra   <- {} */
-          else                         SET_OPSPEC(*i, 1); /* Ra:? <- {} */
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcasem(OP_ADD)
-      spcasem(OP_SUB)
-      spcasem(OP_MUL)
-      spcasem(OP_DIV)
-      spcasem(OP_MOD)
-      spcase(OP_POW,
-        if (A == reg && store_possible) {
-          if (ispoly) SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);            
-          else        SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
-        }
-        if (((!isconst_B && B == reg) || 
-             (!isconst_C && C == reg)) &&
-            load_possible) {
-          if (ispoly) {
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-          } else {
-            TValue *b = isconst_B ? KB : RB;
-            TValue *c = isconst_C ? KC : RC;
-            if (ttisnumber(b)) {
-              if (ttisnumber(c)) 
-                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);
-              else if (ttisstring(c)) 
-                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-              else
-                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
-            }
-            else if (ttisstring(b)) {
-              if (ttisnumber(c))
-                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-              else if (ttisstring(c))
-                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-              else 
-                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
-            }
-            else
-              SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
-          }
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcase(OP_UNM,
-        if (A == reg && store_possible) {
-          if (ispoly) SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
-          else        SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
-        }
-        if (B == reg && load_possible) {
-          if (ispoly) 
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-          else if (ttisnumber(RB)) 
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);
-          else
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcase(OP_LEN,
-        if (A == reg && store_possible) {
-          if (ispoly) SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
-          else        SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
-        }
-        if (B == reg && load_possible) {
-          TValue *rb = RB;
-          if (ispoly)
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-          else if (ttisstring(rb)) 
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_str);
-          else if (ttistable(rb))
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_tab);
-          else
-            SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcasem(OP_LT)
-      spcase(OP_LE,
-        TValue *rb = isconst_B ? KB : RB;
-        TValue *rc = isconst_C ? KC : RC;
-        if (((!isconst_B && B == reg) ||
-             (!isconst_C && C == reg)) &&
-            load_possible) {
-          if (ispoly) {
-            SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
-          } else if (ttisequal(rb, rc)) {
-            if (ttisnumber(rb)) {
-              SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_num);
-            } else if (ttisstring(rb)) {
-              SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_str);
-            } else {
-              SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
-            }
-          } else {
-            SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
-          }
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      spcase(OP_VARARG,
-        int a = A;
-        int b = B - 1;
-        int j;
-        int n = cast_int(base - L->ci->func) - p->numparams - 1;
-        if (b < 0) b = n;
-        if (a <= reg && a+b >= reg && store_possible) {
-          int allpoly = 1;
-          for (j = 0; j < b; j++) {
-            if (!ispoly(a+j, REGINFO_USE_STORE)) {
-              allpoly = 0;
-              break;
-            }
-          }
-          if (allpoly) SET_OPSPEC(*i, 1); /* R(a...a+b-2)   <- ... */
-          else         SET_OPSPEC(*i, 1); /* R(a...a+b-2):? <- ... */
-        }
-      )
-/* ------------------------------------------------------------------------ */
-      default:
-      #ifdef DEBUG_PRINT
-        printf("\n");
-        continue;
-      #endif
-        break;
+  TValue *k = p->k;  
+  Instruction *i = &(p->code[pc]);
+  switch (GET_OPCODE(*i)) {
+    case OP_GETTABLE: case OP_GETTABUP: {
+      TValue *rc = RKC(*i);
+      if (ttisstring(rc))   SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_str);
+      else if (ttisint(rc)) SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_int);
+      else                  SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_obj);
+      if (!ISK_C(*i)) _add_guards(GETARG_C(*i), rttype(rc));
+      break;
     }
-#ifdef DEBUG_PRINT
-    printf(" --> ");
-    PrintOp(*i);
-    printf("\n");
-#endif
+    case OP_SETTABLE: case OP_SETTABUP: {
+      TValue *rb = RKB(*i);
+      if (ttisstring(rb))   SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_str);
+      else if (ttisint(rb)) SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_int);
+      else                  SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_obj);
+      if (!ISK_B(*i)) _add_guards(GETARG_B(*i), rttype(rb));
+      break;
+    }
+    case OP_ADD: case OP_SUB: case OP_MUL:
+    case OP_DIV: case OP_MOD: case OP_POW: {
+      TValue *rb = RKB(*i);
+      TValue *rc = RKC(*i);
+      if (ttisnumber(rb)) {
+        if (ttisnumber(rc))       SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);
+        else if (ttisstring(rc))  SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        else                      SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+      }
+      else if (ttisstring(rb)) {
+        if (ttisnumber(rc))       SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        else if (ttisstring(rc))  SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        else                      SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+      }
+      else                        SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+      if (!ISK_B(*i)) _add_guards(GETARG_B(*i), rttype(rb));
+      if (!ISK_C(*i)) _add_guards(GETARG_C(*i), rttype(rc));
+      break;
+    }
+    case OP_UNM: {
+      TValue *rb = RB(*i);
+      if (ttisnumber(rb)) SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);
+      else                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+      _add_guards(GETARG_B(*i), rttype(rb));
+      break;
+    }
+    case OP_LEN: {
+      TValue *rb = RB(*i);
+      if (ttisstring(rb))     SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_str);
+      else if (ttistable(rb)) SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_tab);
+      else                    SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+      _add_guards(GETARG_B(*i), rttype(rb));
+      break;
+    }
+    case OP_LT: case OP_LE: {
+      TValue *rb = RKB(*i);
+      TValue *rc = RKC(*i);
+      if (ttisequal(rb, rc)) {
+        if (ttisnumber(rb))       SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_num);
+        else if (ttisstring(rb))  SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_str);
+        else                      SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
+      } 
+      else                        SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
+      if (!ISK_B(*i)) _add_guards(GETARG_B(*i), rttype(rb));
+      if (!ISK_C(*i)) _add_guards(GETARG_C(*i), rttype(rc));
+      break;
+    }
+    default:
+      lua_assert(0);
+      break;
   }
 }
 
-void luaVS_specialize_params (lua_State *L, Proto *p) {
-  #ifdef DEBUG_PRINT
-  printf("%s ", __func__);
-  #endif
-  int reg = 0;  
-  while (reg < p->numparams) {
-    RegInfo *reginfo = &p->reginfos[reg];
-    if (reginfo->state != REGINFO_STATE_UNUSED)
-      _luaVS_specialize(L, reg, reginfo);
-    reg++;
-  }
-  #ifdef DEBUG_PRINT
-  printf("\n");
-  #endif
-}
 
-void luaVS_specialize (lua_State *L, int reg, int use) {
-  #ifdef DEBUG_PRINT
-  printf("%s %i %i ", __func__, reg, use);
-  #endif
-  Proto *p = clLvalue(L->ci->func)->p;
-  int pc = L->ci->u.l.savedpc - p->code - 1;
-  if (reg < p->sizereginfos) { // TODO: quick hack: when luaD_poscall specializes on a return that is a LUA_MULTRET, it may want to specialize on registers that arent actually used within the function but are only used to hand over values to the following return instruction (e.g. when we have a return that calls a function which returns multiple arguments, so in bytecode a CALL with c=0 followed by a RETURN with b=0 (or something like that))
-    RegInfo *reginfo = findreginfo(p, reg, pc, use);
-    if (reginfo) _luaVS_specialize(L, reg, reginfo);
-    #ifdef DEBUG_PRINT
-    else printf(" NULL\n");
-    #endif
-  }
-  #ifdef DEBUG_PRINT
-  else printf(" >= sizereginfos=%i\n", p->sizereginfos);
-  #endif
-}
+

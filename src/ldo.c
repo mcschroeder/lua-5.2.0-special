@@ -369,33 +369,24 @@ int luaD_poscall (lua_State *L, StkId firstResult) {
   wanted = ci->nresults;
   L->ci = ci = ci->previous;  /* back to caller */
   /* move results to correct place */
-  if (ci->callstatus & CIST_SPECRES) {
-    // printf("*** %s SPECRES wanted=%i\n", __func__, wanted);
-    lua_assert(isLua(ci));
-    int reg = res - ci->u.l.base;
-    for (i = wanted; i != 0 && firstResult < L->top; i--) {
-      if (!ttisequal(res, firstResult)) {
-        setobjs2s(L, res, firstResult);
-        luaVS_specialize(L, reg, REGINFO_USE_STORE);
-      } else {
-        setobjs2s(L, res, firstResult);
-      }
-      res++; firstResult++; reg++;
-    }
-    while (i-- > 0) {
-      if (!ttisnil(res)) {
-        setnilvalue(res);
-        luaVS_specialize(L, reg, REGINFO_USE_STORE);
-      }
-      res++; reg++;
-    }
-    ci->callstatus &= ~CIST_SPECRES; /* reset spec flag */
-  }
-  else { /* no result register specialization */
-    for (i = wanted; i != 0 && firstResult < L->top; i--)
+  for (i = wanted; i != 0 && firstResult < L->top; i--)
       setobjs2s(L, res++, firstResult++);
-    while (i-- > 0)
-      setnilvalue(res++);    
+  while (i-- > 0)
+      setnilvalue(res++);
+  /* return type guard */
+  if (ci->callstatus & CIST_SPECRES) {
+    lua_assert(wanted != LUA_MULTRET);
+    int pc = pcRel(ci->u.l.savedpc, clLvalue(ci->func)->p);
+    int *exptypes = clLvalue(ci->func)->p->exptypes[pc].ts;
+    res = ci->next->func;
+    int reg = res - ci->u.l.base;
+    int j;
+    for (j = 0; j < wanted; j++) {
+      if (exptypes[j] != rttype(res++))
+        luaVS_despecialize(L, reg);
+      reg++;
+    }
+    ci->callstatus &= ~CIST_SPECRES; // TODO: this maybe isn't necessary?
   }
   L->top = res;
   return (wanted - LUA_MULTRET);  /* 0 iff wanted == LUA_MULTRET */

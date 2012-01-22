@@ -146,9 +146,9 @@ ldo.o: ldo.c lua.h luaconf.h lapi.h llimits.h lstate.h lobject.h ltm.h \
  lzio.h lmem.h ldebug.h ldo.h lfunc.h lgc.h lopcodes.h lparser.h \
  lstring.h ltable.h lundump.h lvm.h lvmspec.h
 ldump.o: ldump.c lua.h luaconf.h lobject.h llimits.h lstate.h ltm.h \
- lzio.h lmem.h lundump.h
+ lzio.h lmem.h lopcodes.h lundump.h
 lfunc.o: lfunc.c lua.h luaconf.h lfunc.h lobject.h llimits.h lgc.h \
- lstate.h ltm.h lzio.h lmem.h
+ lstate.h ltm.h lzio.h lmem.h lopcodes.h
 lgc.o: lgc.c lua.h luaconf.h ldebug.h lstate.h lobject.h llimits.h ltm.h \
  lzio.h lmem.h ldo.h lfunc.h lgc.h lstring.h ltable.h
 linit.o: linit.c lua.h luaconf.h lualib.h lauxlib.h
@@ -181,7 +181,8 @@ lua.o: lua.c lua.h luaconf.h lauxlib.h lualib.h
 luac.o: luac.c lua.h luaconf.h lauxlib.h lobject.h llimits.h lstate.h \
  ltm.h lzio.h lmem.h lundump.h ldebug.h lopcodes.h
 lundump.o: lundump.c lua.h luaconf.h ldebug.h lstate.h lobject.h \
- llimits.h ltm.h lzio.h lmem.h ldo.h lfunc.h lstring.h lgc.h lundump.h
+ llimits.h ltm.h lzio.h lmem.h ldo.h lfunc.h lstring.h lgc.h lopcodes.h \
+ lundump.h
 lvm.o: lvm.c lua.h luaconf.h ldebug.h lstate.h lobject.h llimits.h ltm.h \
  lzio.h lmem.h ldo.h lfunc.h lgc.h lopcodes.h lstring.h ltable.h \
  lvmspec.h lvm.h

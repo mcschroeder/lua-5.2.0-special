@@ -19,6 +19,7 @@
 #include "lstring.h"
 #include "lundump.h"
 #include "lzio.h"
+#include "lopcodes.h" // TODO: needed for exptypes; remove if possible
 
 typedef struct {
  lua_State* L;
@@ -174,7 +175,7 @@ static void LoadReginfos(LoadState* S, Proto* f)
     reginfo->startpc = LoadNumber(S);
     reginfo->endpc = LoadNumber(S);
     reginfo->state = LoadChar(S);
-    reginfo->nspec = LoadChar(S);
+    // reginfo->nspec = LoadChar(S);
     reginfo->firstuse = LoadChar(S);
     reginfo->lastuse = LoadChar(S);
     reginfo->next = NULL;
@@ -186,10 +187,33 @@ static void LoadReginfos(LoadState* S, Proto* f)
       reginfo->startpc = startpc;
       reginfo->endpc = LoadNumber(S);
       reginfo->state = LoadChar(S);
-      reginfo->nspec = LoadChar(S);
+      // reginfo->nspec = LoadChar(S);
       reginfo->firstuse = LoadChar(S);
       reginfo->lastuse = LoadChar(S);      
       reginfo->next = NULL;
+    }
+  }
+}
+
+static void LoadExptypes(LoadState *S, Proto *f)
+{
+  int pc,n = f->sizecode;
+  f->exptypes = luaM_newvector(S->L,n,ExpType);
+  for (pc = 0; pc<n; pc++)
+  {
+    Instruction i = f->code[pc];
+    switch (GET_OPCODE(i)) {
+      case OP_LOADNIL:
+      case OP_CALL:
+      case OP_VARARG: {
+        int size = LoadInt(S);
+        f->exptypes[pc].ts = luaM_newvector(S->L,size,int);
+        LoadVector(S,f->exptypes[pc].ts,size,sizeof(int));
+        break;   
+      }
+      default:
+        f->exptypes[pc].t = LoadInt(S);
+        break;
     }
   }
 }
@@ -210,6 +234,7 @@ static Proto* LoadFunction(LoadState* S)
  int n=LoadInt(S);
  f->paramtypes=luaM_newvector(S->L,n,int);
  LoadVector(S,f->paramtypes,n,sizeof(int));
+ LoadExptypes(S,f);
  LoadDebug(S,f);
  S->L->top--;
  return f;

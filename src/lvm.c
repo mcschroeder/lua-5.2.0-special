@@ -28,7 +28,7 @@
 #include "lvmspec.h"
 
 
-#define DEBUG_PRINT
+// #define DEBUG_PRINT
 
 
 /* limit for table tag-method chains (to avoid loops) */
@@ -436,13 +436,12 @@ void luaV_finishOp (lua_State *L) {
     case OP_GETTABLE:
     case OP_SELF: {
       StkId ra = base + GETARG_A(inst);
+      setobjs2s(L, ra, --L->top);      
       if (GET_OPSPEC_OUT(inst) == OPSPEC_OUT_chk) {
-        int rat = rttype(ra);
-        setobjs2s(L, ra, --L->top);
-        if (rat != rttype(ra)) 
-          luaVS_specialize(L, GETARG_A(inst), REGINFO_USE_STORE);
-      } else {
-        setobjs2s(L, ra, --L->top);
+        LClosure *cl = clLvalue(ci->func);
+        int pc = pcRel(ci->u.l.savedpc, cl->p);
+        if (rttype(ra) != cl->p->exptypes[pc].t)
+          luaVS_despecialize(L, GETARG_A(inst));
       }
       break;
     }
@@ -470,13 +469,12 @@ void luaV_finishOp (lua_State *L) {
       }
       /* move final result to final position */
       StkId ra = ci->u.l.base + GETARG_A(inst);
+      setobj2s(L, ra, L->top - 1);
       if (GET_OPSPEC_OUT(inst) == OPSPEC_OUT_chk) {
-        int rat = rttype(ra);
-        setobj2s(L, ra, L->top - 1);
-        if (rat != rttype(ra)) 
-          luaVS_specialize(L, GETARG_A(inst), REGINFO_USE_STORE);
-      } else {
-        setobj2s(L, ra, L->top - 1);
+                LClosure *cl = clLvalue(ci->func);
+        int pc = pcRel(ci->u.l.savedpc, cl->p);
+        if (rttype(ra) != cl->p->exptypes[pc].t)
+          luaVS_despecialize(L, GETARG_A(inst));
       }
       L->top = ci->top;  /* restore top */
       break;
@@ -560,23 +558,18 @@ void luaV_finishOp (lua_State *L) {
 #define vmcasenb(o,s,b)	case OP_MAKE(o,s): {b}		/* nb = no break */
 
 
-// TODO: FUCK
-// as it turns out, this doesn't work
-// on the first store, we mustn't check the type of the old value, since
-// that may very well be different but it doesn't have any relation to the
-// type within the reginfo scope!
-// think of the contents of the register before the first store of a scope
-// as uninitialized.
-// so we have to store the type w/ the reginfo itself 
-// (where it semantically belongs)
-// BUT: finding the right reginfo everytime we need a chk....
-// that's a lot of work if we then maybe don't even need to specialize...
 
-// SEE ALSO: the comments in lvmspec.c
 
-#define SpecCheckRa(x) { int rat = rttype(ra); {x;} \
-        if (rat != rttype(ra)) { \
-          luaVS_specialize(L, GETARG_A(i), REGINFO_USE_STORE); } }
+#define TypeGuard \
+  if (rttype(ra) != cl->p->exptypes[pcRel(ci->u.l.savedpc, cl->p)].t) { \
+    luaVS_despecialize(L, GETARG_A(i)); }
+
+
+#define ParamTypeGuard { int reg; \
+  for (reg = 0; reg < cl->p->numparams; reg++) { \
+    if (rttype(ci->u.l.base+reg) != cl->p->paramtypes[reg]) { \
+      luaVS_despecialize(L, reg); } } }
+
 
 #define dispatch_again { ci->u.l.savedpc--; continue; }
 
@@ -621,13 +614,13 @@ void luaV_execute (lua_State *L) {
       vmcase(OP_MOVE, 1, /* Ra:? <- Rb */
       // printf("\t\t\tOP_MOVE: ra <- %f\n", nvalue(RB(i)));
         setobjs2s(L, ra, RB(i));
-        luaVS_specialize(L, GETARG_A(i), REGINFO_USE_STORE);
+        TypeGuard
       )
-      vmcase(OP_MOVE, 2, /* Ra:x <- Rb:x (any two equal types) */
-      // TODO: why won't this work?
-        // setobjs2s_fast(L, ra, RB(i));
-        setobjs2s(L, ra, RB(i));
-      )
+      // vmcase(OP_MOVE, 2, /* Ra:x <- Rb:x (any two equal types) */
+      // // TODO: why won't this work?
+      //   // setobjs2s_fast(L, ra, RB(i));
+      //   setobjs2s(L, ra, RB(i));
+      // )
       vmcase(OP_MOVE, 0, /* Ra <- Rb */
         setobjs2s(L, ra, RB(i));
       )
@@ -635,13 +628,13 @@ void luaV_execute (lua_State *L) {
       vmcase(OP_LOADK, 1, /* Ra:? <- Kb */
         // printf("\t\t\tOP_LOADK: ra <- %f\n", nvalue(KBx(i)));
         setobj2s(L, ra, KBx(i));
-        luaVS_specialize(L, GETARG_A(i), REGINFO_USE_STORE);
+        TypeGuard
       )
-      vmcase(OP_LOADK, 2, /* Ra:x <- Kb:x (any two equal types) */
-      // TODO: why won't this work?
-        // setobj2s_fast(L, ra, KBx(i));
-        setobj2s(L, ra, KBx(i));
-      )
+      // vmcase(OP_LOADK, 2, /* Ra:x <- Kb:x (any two equal types) */
+      // // TODO: why won't this work?
+      //   // setobj2s_fast(L, ra, KBx(i));
+      //   setobj2s(L, ra, KBx(i));
+      // )
       vmcase(OP_LOADK, 0, /* Ra <- Kb */
         setobj2s(L, ra, KBx(i));
       )
@@ -650,7 +643,8 @@ void luaV_execute (lua_State *L) {
         TValue *rb;
         lua_assert(GET_OPCODE(*ci->u.l.savedpc) == OP_EXTRAARG);
         rb = k + GETARG_Ax(*ci->u.l.savedpc++);
-        SpecCheckRa(setobj2s(L, ra, rb));
+        setobj2s(L, ra, rb);
+        TypeGuard
       )
       vmcase(OP_LOADKX, 0, /* Ra <- extra arg */
         TValue *rb;
@@ -659,21 +653,21 @@ void luaV_execute (lua_State *L) {
         setobj2s(L, ra, rb);
       )
 /* ------------------------------------------------------------------------ */
-      vmcase(OP_LOADBOOL, 2, /* Ra:bool <- Ib:bool */
-      // TODO: of course this can't work, since it's the first store in 
-      //       a temp scope, but the register has probably been reused before
-      //       so at this point it's most likely NOT bool already!!!!
-        // changebvalue(ra, GETARG_B(i));
-        setbvalue(ra, GETARG_B(i));
-        if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
-      )
+      // vmcase(OP_LOADBOOL, 2, /* Ra:bool <- Ib:bool */
+      // // TODO: of course this can't work, since it's the first store in 
+      // //       a temp scope, but the register has probably been reused before
+      // //       so at this point it's most likely NOT bool already!!!!
+      //   // changebvalue(ra, GETARG_B(i));
+      //   setbvalue(ra, GETARG_B(i));
+      //   if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
+      // )
       vmcase(OP_LOADBOOL, 0, /* Ra <- Ib:bool */
         setbvalue(ra, GETARG_B(i));
         if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
       )
       vmcase(OP_LOADBOOL, 1, /* Ra:? <- Ib:bool */
         setbvalue(ra, GETARG_B(i));
-        luaVS_specialize(L, GETARG_A(i), REGINFO_USE_STORE);
+        TypeGuard
         if (GETARG_C(i)) ci->u.l.savedpc++; /* skip next instruction (if C) */
       )
 /* ------------------------------------------------------------------------ */
@@ -686,14 +680,24 @@ void luaV_execute (lua_State *L) {
       vmcase(OP_LOADNIL, 1, /* R(a...a+b):? <- nil */        
         int b = GETARG_B(i);
         do {
-          setnilvalue(ra);
-          luaVS_specialize(L, GETARG_A(i), REGINFO_USE_STORE);
-          ra++;
+          setnilvalue(ra++);
         } while (b--);
+
+        ra = RA(i);
+        b = GETARG_B(i);
+        int a = GETARG_A(i);
+        int *exptypes = cl->p->exptypes[pcRel(ci->u.l.savedpc, cl->p)].ts;
+        int j;
+        for (j = 0; j < b; j++) {
+          int t = exptypes[j];
+          if (t != LUA_TNONE && t != rttype(ra+j))
+            luaVS_despecialize(L, a+j);
+        }
       )
 /* ------------------------------------------------------------------------ */
       vmcase(OP_GETUPVAL, 1, /* Ra:? <- Ub */
-        SpecCheckRa(setobj2s(L, ra, cl->upvals[GETARG_B(i)]->v));
+        setobj2s(L, ra, cl->upvals[GETARG_B(i)]->v);
+        TypeGuard
       )
       vmcase(OP_GETUPVAL, 0, /* Ra <- Ub */
         setobj2s(L, ra, cl->upvals[GETARG_B(i)]->v);
@@ -706,7 +710,7 @@ void luaV_execute (lua_State *L) {
 #define _vmcase_gettab_chk(op) \
       vmcasenb(op, sp(raw,chk,reg), /* raw <- b[?] */) \
       vmcasenb(op, sp(chk,chk,reg), /* ? <- b[?] */ \
-        luaVS_specialize(L, GETARG_C(i), REGINFO_USE_LOAD); \
+        luaVS_specialize(L); \
         dispatch_again; \
       )
 #define _vmcase_gettab_str(op,b,c,ck) \
@@ -714,28 +718,33 @@ void luaV_execute (lua_State *L) {
         Protect(luaV_gettable_str(L, b, c, ra)); \
       ) \
       vmcase(op, sp(chk,str,ck), /* ? <- b[str] */ \
-        SpecCheckRa(Protect(luaV_gettable_str(L, b, c, ra))); \
+        Protect(luaV_gettable_str(L, b, c, ra)); \
+        TypeGuard \
       )
 #define _vmcase_gettab_int(op,b,c,ck) \
       vmcase(op, sp(raw,int,ck), /* raw <- b[int] */ \
         Protect(luaV_gettable_int(L, b, c, ra)); \
       ) \
       vmcase(op, sp(chk,int,ck), /* ? <- b[int] */ \
-        SpecCheckRa(Protect(luaV_gettable_int(L, b, c, ra))); \
+        Protect(luaV_gettable_int(L, b, c, ra)); \
+        TypeGuard \
       )
+// TODO: this is wrong: a kst can also be obj if it's a float!
 #define _vmcase_gettab_obj(op,b) \
       vmcase(op, sp(raw,obj,reg), /* raw <- b[obj] */ \
         Protect(luaV_gettable_obj(L, b, RC(i), ra)); \
       ) \
       vmcase(op, sp(chk,obj,reg), /* ? <- b[obj] */ \
-        SpecCheckRa(Protect(luaV_gettable_obj(L, b, RC(i), ra))); \
+        Protect(luaV_gettable_obj(L, b, RC(i), ra)); \
+        TypeGuard \
       )
 #define _vmcase_gettab_raw(op,b) \
       vmcase(op, sp(raw,raw,reg), /* raw <- b[c] */ \
         Protect(luaV_gettable(L, b, RC(i), ra)); \
       ) \
       vmcase(op, sp(chk,raw,reg), /* ? <- b[c] */ \
-        SpecCheckRa(Protect(luaV_gettable(L, b, RC(i), ra))); \
+        Protect(luaV_gettable(L, b, RC(i), ra)); \
+        TypeGuard \
       )
 #define vmcase_gettab(op,b) \
       _vmcase_gettab_chk(op) \
@@ -743,7 +752,6 @@ void luaV_execute (lua_State *L) {
       _vmcase_gettab_str(op,b,KC(i),kst) \
       _vmcase_gettab_int(op,b,RC(i),reg) \
       _vmcase_gettab_int(op,b,KC(i),kst) \
-      _vmcase_gettab_obj(op,b) \
       _vmcase_gettab_raw(op,b)      
 
       vmcase_gettab(OP_GETTABLE, RB(i))
@@ -756,7 +764,7 @@ void luaV_execute (lua_State *L) {
 #define _vmcase_settab_chk(op) \
       vmcasenb(op, sp(chk,reg,reg), /* a[?] <- c*/) \
       vmcasenb(op, sp(chk,reg,kst), /* a[?] <- c*/ \
-        luaVS_specialize(L, GETARG_B(i), REGINFO_USE_LOAD); \
+        luaVS_specialize(L); \
         dispatch_again \
       )
 #define _vmcase_settab_str(op,a,b,bk,c,ck) \
@@ -801,33 +809,25 @@ void luaV_execute (lua_State *L) {
         luaC_barrier(L, uv, ra);
       )
 /* ------------------------------------------------------------------------ */
+#define _vmcase_newtable \
+      int b = GETARG_B(i); \
+      int c = GETARG_C(i); \
+      Table *t = luaH_new(L); \
+      sethvalue(L, ra, t); \
+      if (b != 0 || c != 0) \
+        luaH_resize(L, t, luaO_fb2int(b), luaO_fb2int(c)); \
+      checkGC(L, \
+        L->top = ra + 1;  /* limit of live values */ \
+        luaC_step(L); \
+        L->top = ci->top;  /* restore top */ \
+      )
+
       vmcase(OP_NEWTABLE, 1, /* Ra:? <- {} */
-        int b = GETARG_B(i);
-        int c = GETARG_C(i);
-        Table *t = luaH_new(L);
-        SpecCheckRa(
-          sethvalue(L, ra, t);
-        )
-        if (b != 0 || c != 0)
-          luaH_resize(L, t, luaO_fb2int(b), luaO_fb2int(c));
-        checkGC(L,
-          L->top = ra + 1;  /* limit of live values */
-          luaC_step(L);
-          L->top = ci->top;  /* restore top */
-        )
+        _vmcase_newtable
+        TypeGuard
       )
       vmcase(OP_NEWTABLE, 0, /* Ra <- {} */
-        int b = GETARG_B(i);
-        int c = GETARG_C(i);
-        Table *t = luaH_new(L);        
-        sethvalue(L, ra, t);
-        if (b != 0 || c != 0)
-          luaH_resize(L, t, luaO_fb2int(b), luaO_fb2int(c));
-        checkGC(L,
-          L->top = ra + 1;  /* limit of live values */
-          luaC_step(L);
-          L->top = ci->top;  /* restore top */
-        )
+        _vmcase_newtable
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_self(c,ck) \
@@ -839,9 +839,8 @@ void luaV_execute (lua_State *L) {
       vmcase(OP_SELF, (ck<<4)|1, /* R(a+1) <- Rb; Ra:? <- Rb[c:str] */ \
         StkId rb = RB(i); \
         setobjs2s(L, ra+1, rb); \
-        SpecCheckRa( \
-          Protect(luaV_gettable_str(L, rb, c, ra)); \
-        ) \
+        Protect(luaV_gettable_str(L, rb, c, ra)); \
+        TypeGuard \
       )
       vmcase_self(RC(i), 0);
       vmcase_self(KC(i), 1);
@@ -853,19 +852,12 @@ void luaV_execute (lua_State *L) {
 
 #define _vmcase_arith_chk(op) \
       vmcasenb(op, sp(raw,chk,reg,reg), /* raw <- ? . ? */) \
-      vmcasenb(op, sp(chk,chk,reg,reg), /* ? <- ? . ? */ \
-        luaVS_specialize(L, GETARG_B(i), REGINFO_USE_LOAD); \
-        luaVS_specialize(L, GETARG_C(i), REGINFO_USE_LOAD); \
-        dispatch_again \
-      ) \
+      vmcasenb(op, sp(chk,chk,reg,reg), /* ?   <- ? . ? */) \
       vmcasenb(op, sp(raw,chk,reg,kst), /* raw <- ? . K */) \
-      vmcasenb(op, sp(chk,chk,reg,kst), /* ? <- ? . K */ \
-        luaVS_specialize(L, GETARG_B(i), REGINFO_USE_LOAD); \
-        dispatch_again \
-      ) \
+      vmcasenb(op, sp(chk,chk,reg,kst), /* ?   <- ? . K */) \
       vmcasenb(op, sp(raw,chk,kst,reg), /* raw <- K . ? */) \
-      vmcasenb(op, sp(chk,chk,kst,reg), /* ? <- K . ? */ \
-        luaVS_specialize(L, GETARG_C(i), REGINFO_USE_LOAD); \
+      vmcasenb(op, sp(chk,chk,kst,reg), /* ?   <- K . ? */ \
+        luaVS_specialize(L); \
         dispatch_again \
       )
 #define _vmcase_arith_num(op,func,b,bk,c,ck) \
@@ -873,7 +865,8 @@ void luaV_execute (lua_State *L) {
         setnvalue(ra, func(L, nvalue(b), nvalue(c))); \
       ) \
       vmcase(op, sp(chk,num,bk,ck), /* ? <- num . num */ \
-        SpecCheckRa(setnvalue(ra, func(L, nvalue(b), nvalue(c)))); \
+        setnvalue(ra, func(L, nvalue(b), nvalue(c))); \
+        TypeGuard \
       )
 #define _vmcase_arith_obj(op,tm,b,bk,c,ck) \
       vmcase(op, sp(raw,obj,bk,ck), /* raw <- obj . obj */ \
@@ -885,15 +878,15 @@ void luaV_execute (lua_State *L) {
         ) \
       ) \
       vmcase(op, sp(chk,obj,bk,ck), /* ? <- obj . obj */ \
-        SpecCheckRa( \
-          Protect( \
-            TValue *rb = b; \
-            TValue *rc = c; \
-            if (!call_binTM(L, rb, rc, ra, tm)) \
-              luaG_aritherror(L, rb, rc); \
-          ) \
+        Protect( \
+          TValue *rb = b; \
+          TValue *rc = c; \
+          if (!call_binTM(L, rb, rc, ra, tm)) \
+            luaG_aritherror(L, rb, rc); \
         ) \
+        TypeGuard \
       )
+// TODO: strings fall under raw; make more explicit? or spec str ?
 #define _vmcase_arith_raw(op,func,tm,b,bk,c,ck) \
       vmcase(op, sp(raw,raw,bk,ck), /* raw <- raw . raw */ \
         TValue *rb = b; \
@@ -906,16 +899,15 @@ void luaV_execute (lua_State *L) {
         else { Protect(luaV_arith(L, ra, rb, rc, tm)); } \
       ) \
       vmcase(op, sp(chk,raw,bk,ck), /* ? <- raw . raw */ \
-        SpecCheckRa( \
-          TValue *rb = b; \
-          TValue *rc = c; \
-          if (ttisnumber(rb) && ttisnumber(rc)) { \
-            lua_Number nb = nvalue(rb); \
-            lua_Number nc = nvalue(rc); \
-            setnvalue(ra, func(L, nb, nc)); \
-          } \
-          else { Protect(luaV_arith(L, ra, rb, rc, tm)); } \
-        ) \
+        TValue *rb = b; \
+        TValue *rc = c; \
+        if (ttisnumber(rb) && ttisnumber(rc)) { \
+          lua_Number nb = nvalue(rb); \
+          lua_Number nc = nvalue(rc); \
+          setnvalue(ra, func(L, nb, nc)); \
+        } \
+        else { Protect(luaV_arith(L, ra, rb, rc, tm)); } \
+        TypeGuard \
       )
 #define vmcase_arith(op,func,tm) \
       _vmcase_arith_chk(op) \
@@ -942,14 +934,15 @@ void luaV_execute (lua_State *L) {
 
       vmcasenb(OP_UNM, sp(raw,chk),) /* raw <- -chk */
       vmcasenb(OP_UNM, sp(chk,chk), /* chk <- -chk */
-        luaVS_specialize(L, GETARG_B(i), REGINFO_USE_LOAD);
+        luaVS_specialize(L);
         dispatch_again
       )
       vmcase(OP_UNM, sp(raw,num), /* raw <- -num */
         setnvalue(ra, luai_numunm(L, nvalue(RB(i))));
       )
       vmcase(OP_UNM, sp(chk,num), /* chk <- -num */
-        SpecCheckRa(setnvalue(ra, luai_numunm(L, nvalue(RB(i)))));
+        setnvalue(ra, luai_numunm(L, nvalue(RB(i))));
+        TypeGuard
       )
       vmcase(OP_UNM, sp(raw,raw), /* raw <- -raw */
         TValue *rb = RB(i);
@@ -957,14 +950,16 @@ void luaV_execute (lua_State *L) {
       )
       vmcase(OP_UNM, sp(chk,raw), /* chk <- -raw */
         TValue *rb = RB(i);
-        SpecCheckRa(Protect(luaV_arith(L, ra, rb, rb, TM_UNM)));
+        Protect(luaV_arith(L, ra, rb, rb, TM_UNM));
+        TypeGuard
       )
 /* ------------------------------------------------------------------------ */
       vmcase(OP_NOT, 0, /* raw <- not raw */
         setbvalue(ra, l_isfalse(RB(i)));
       )
       vmcase(OP_NOT, 1,/* chk <- not raw */
-        SpecCheckRa(setbvalue(ra, l_isfalse(RB(i))));
+        setbvalue(ra, l_isfalse(RB(i)));
+        TypeGuard
       )
 /* ------------------------------------------------------------------------ */
 #undef sp
@@ -972,73 +967,61 @@ void luaV_execute (lua_State *L) {
 
       vmcasenb(OP_LEN, sp(raw,chk), /* raw <- #chk */)
       vmcasenb(OP_LEN, sp(chk,chk), /* chk <- #chk */
-        luaVS_specialize(L, GETARG_B(i), REGINFO_USE_LOAD);
+        luaVS_specialize(L);
         dispatch_again
       )
       vmcase(OP_LEN, sp(raw,str), /* raw <- #str */
         setnvalue(ra, cast_num(tsvalue(RB(i))->len));
       )
       vmcase(OP_LEN, sp(chk,str), /* chk <- #str */
-        SpecCheckRa(setnvalue(ra, cast_num(tsvalue(RB(i))->len)));
+        setnvalue(ra, cast_num(tsvalue(RB(i))->len))
+        TypeGuard;
       )
-      vmcase(OP_LEN, sp(raw,tab), /* raw <- #tab */
-        TValue *rb = RB(i);
-        Table *h = hvalue(rb);
-        const TValue *tm = fasttm(L, h->metatable, TM_LEN);
-        if (tm) {
-          callTM(L, tm, rb, rb, ra, 1);
-        } else {
-          setnvalue(ra, cast_num(luaH_getn(h)));
+#define _vmcase_len_tab \
+        TValue *rb = RB(i); \
+        Table *h = hvalue(rb); \
+        const TValue *tm = fasttm(L, h->metatable, TM_LEN); \
+        if (tm) { \
+          callTM(L, tm, rb, rb, ra, 1); \
+        } else { \
+          setnvalue(ra, cast_num(luaH_getn(h))); \
         }
+      vmcase(OP_LEN, sp(raw,tab), /* raw <- #tab */
+        _vmcase_len_tab
       )
       vmcase(OP_LEN, sp(chk,tab), /* chk <- #tab */
-        SpecCheckRa(
-          TValue *rb = RB(i);
-          Table *h = hvalue(rb);
-          const TValue *tm = fasttm(L, h->metatable, TM_LEN);
-          if (tm) {
-            callTM(L, tm, rb, rb, ra, 1);
-          } else {
-            setnvalue(ra, cast_num(luaH_getn(h)));
-          }
-        )
+        _vmcase_len_tab
+        TypeGuard
       )
       vmcase(OP_LEN, sp(raw,raw), /* raw <- raw */
         Protect(luaV_objlen(L, ra, RB(i)));
       )
       vmcase(OP_LEN, sp(chk,raw), /* chk <- raw */        
-        SpecCheckRa(Protect(luaV_objlen(L, ra, RB(i))));
+        Protect(luaV_objlen(L, ra, RB(i)));
+        TypeGuard
       )
 /* ------------------------------------------------------------------------ */
-      vmcase(OP_CONCAT, 0,/* raw <- raw.. ... ..raw */
-        int b = GETARG_B(i);
-        int c = GETARG_C(i);
-        StkId rb;
-        L->top = base + c + 1;  /* mark the end of concat operands */
-        Protect(luaV_concat(L, c - b + 1));
-        ra = RA(i);  /* 'luav_concat' may invoke TMs and move the stack */
-        rb = b + base;
-        setobjs2s(L, ra, rb);
-        checkGC(L,
-          L->top = (ra >= rb ? ra + 1 : rb);  /* limit of live values */
-          luaC_step(L);
-        )
+#define _vmcase_concat \
+        int b = GETARG_B(i); \
+        int c = GETARG_C(i); \
+        StkId rb; \
+        L->top = base + c + 1;  /* mark the end of concat operands */ \
+        Protect(luaV_concat(L, c - b + 1)); \
+        ra = RA(i);  /* 'luav_concat' may invoke TMs and move the stack */ \
+        rb = b + base; \
+        setobjs2s(L, ra, rb); \
+        checkGC(L, \
+          L->top = (ra >= rb ? ra + 1 : rb);  /* limit of live values */ \
+          luaC_step(L); \
+        ) \
         L->top = ci->top;  /* restore top */
+
+      vmcase(OP_CONCAT, 0,/* raw <- raw.. ... ..raw */
+        _vmcase_concat
       )
       vmcase(OP_CONCAT, 1,/* chk <- raw.. ... ..raw */
-        int b = GETARG_B(i);
-        int c = GETARG_C(i);
-        StkId rb;
-        L->top = base + c + 1;  /* mark the end of concat operands */
-        Protect(luaV_concat(L, c - b + 1));
-        ra = RA(i);  /* 'luav_concat' may invoke TMs and move the stack */
-        rb = b + base;
-        SpecCheckRa(setobjs2s(L, ra, rb));
-        checkGC(L,
-          L->top = (ra >= rb ? ra + 1 : rb);  /* limit of live values */
-          luaC_step(L);
-        )
-        L->top = ci->top;  /* restore top */
+        _vmcase_concat
+        TypeGuard
       )
 /* ------------------------------------------------------------------------ */
       vmcase(OP_JMP, 0,
@@ -1068,17 +1051,10 @@ void luaV_execute (lua_State *L) {
       (OPSPEC_##ck<<4 | OPSPEC_##bk<<3 | OPSPEC_LESS_TYPE_##t)
 
 #define _vmcase_less_chk(op) \
-      vmcasenb(op, sp(chk,reg,reg), /* ? < ? */ \
-        luaVS_specialize(L, GETARG_B(i), REGINFO_USE_LOAD); \
-        luaVS_specialize(L, GETARG_C(i), REGINFO_USE_LOAD); \
-        dispatch_again \
-      ) \
-      vmcasenb(op, sp(chk,reg,kst), /* ? < K */ \
-        luaVS_specialize(L, GETARG_B(i), REGINFO_USE_LOAD); \
-        dispatch_again \
-      ) \
+      vmcasenb(op, sp(chk,reg,reg), /* ? < ? */) \
+      vmcasenb(op, sp(chk,reg,kst), /* ? < K */) \
       vmcasenb(op, sp(chk,kst,reg), /* K < ? */ \
-        luaVS_specialize(L, GETARG_C(i), REGINFO_USE_LOAD); \
+        luaVS_specialize(L); \
         dispatch_again \
       )
 #define _vmcase_less_num(op,numfunc,b,bk,c,ck) \
@@ -1149,11 +1125,15 @@ void luaV_execute (lua_State *L) {
         if (GETARG_C(i) ? l_isfalse(rb) : !l_isfalse(rb))
           ci->u.l.savedpc++;
         else {
-          SpecCheckRa(setobjs2s(L, ra, rb));
+          setobjs2s(L, ra, rb);
+          TypeGuard
           donextjump(ci);
         }
       )
 /* ------------------------------------------------------------------------ */
+// TODO: it would maybe pay off to have separate 0-return and 1-return CALL
+//        variations (to avoid the exptypes.ts stuff...)
+
       vmcasenb(OP_CALL, 1,
         ci->callstatus |= CIST_SPECRES;
         /* fall through */
@@ -1169,15 +1149,18 @@ void luaV_execute (lua_State *L) {
         else {  /* Lua function */
           ci = L->ci;
           ci->callstatus |= CIST_REENTRY;
-          luaVS_specialize_params(L, clLvalue(ci->func)->p);
+          ParamTypeGuard
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
       )
 /* ------------------------------------------------------------------------ */
-      vmcasenb(OP_TAILCALL, 1,      
-        ci->callstatus |= CIST_SPECRES;
-        /* fall through */
-      )
+// TODO: this situation isn't possible! tail calls are ALWAYS multret, 
+//       therefore there is never a specialzation of any of its register, so
+//       type guards aren't ever necessary
+      // vmcasenb(OP_TAILCALL, 1,      
+      //   ci->callstatus |= CIST_SPECRES;
+      //   /* fall through */
+      // )
       vmcase(OP_TAILCALL, 0,
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
@@ -1204,7 +1187,7 @@ void luaV_execute (lua_State *L) {
           oci->callstatus |= CIST_TAIL;  /* function was tail called */
           ci = L->ci = oci;  /* remove new frame */
           lua_assert(L->top == oci->u.l.base + getproto(ofunc)->maxstacksize);
-          luaVS_specialize_params(L, clLvalue(ci->func)->p);
+          ParamTypeGuard
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
       )
@@ -1318,54 +1301,43 @@ void luaV_execute (lua_State *L) {
       )
 
       vmcase(OP_CLOSURE, 1, /* ? <- closure */
-        SpecCheckRa(_loadclosure)
+        _loadclosure
+        TypeGuard
       )
       vmcase(OP_CLOSURE, 0, /* raw <- closure */
         _loadclosure
       )
 /* ------------------------------------------------------------------------ */
-#define _vararg_prep \
-      int b = GETARG_B(i) - 1; \
-      int j; \
-      int n = cast_int(base - ci->func) - cl->p->numparams - 1; \
-      int spec = 1; /* TODO: kinda hackish. essentially what we're doing is
-                             not specialize when we're "directly handing over
-                             the dots as input to another function" 
-                             WHY? it's still a store to a temp reg, BUT
-                             we don't have any reginfo for those reg scopes
-                             since the actual number is only determined at
-                             runtime by the number of arguments to the input
-                             function! */ \
-      if (b < 0) {  /* B == 0? */ \
-        spec = 0; \
-        b = n;  /* get all var. arguments */ \
-        Protect(luaD_checkstack(L, n)); \
-        ra = RA(i);  /* previous call may change the stack */ \
-        L->top = ra + n; \
-      }
+#define _vmcase_vararg \
+        int b = GETARG_B(i) - 1; \
+        int j; \
+        int n = cast_int(base - ci->func) - cl->p->numparams - 1; \
+        if (b < 0) {  /* B == 0? */ \
+          b = n;  /* get all var. arguments */ \
+          Protect(luaD_checkstack(L, n)); \
+          ra = RA(i);  /* previous call may change the stack */ \
+          L->top = ra + n; \
+        } \
+        for (j = 0; j < b; j++) { \
+          if (j < n) { \
+            setobjs2s(L, ra + j, base - n + j); \
+          } \
+          else { \
+            setnilvalue(ra + j); \
+          } \
+        }
 
       vmcase(OP_VARARG, 0, /* R(a...a+b-2) <- ... */
-        _vararg_prep
-        for (j = 0; j < b; j++) {
-          if (j < n) {
-            setobjs2s(L, ra + j, base - n + j);
-          }
-          else {
-            setnilvalue(ra + j);
-          }
-        }
+        _vmcase_vararg
       )
       vmcase(OP_VARARG, 1, /* R(a...a+b-2):? <- ... */
-        _vararg_prep
+        _vmcase_vararg
         int a = GETARG_A(i);
+        int *exptypes = cl->p->exptypes[pcRel(ci->u.l.savedpc, cl->p)].ts;
         for (j = 0; j < b; j++) {
-          if (j < n) {
-            setobjs2s(L, ra + j, base - n + j);            
-          }
-          else {
-            setnilvalue(ra + j);
-          }
-          if (spec) luaVS_specialize(L, a + j, REGINFO_USE_STORE);
+          int t = exptypes[j];          
+          if (t != LUA_TNONE && t != rttype(ra+j))
+            luaVS_despecialize(L, a+j);
         }
       )
 /* ------------------------------------------------------------------------ */

@@ -14,6 +14,7 @@
 #include "lobject.h"
 #include "lstate.h"
 #include "lundump.h"
+#include "lopcodes.h" // TODO: needed for exptypes; remove if possible
 
 typedef struct {
  lua_State* L;
@@ -146,7 +147,7 @@ static void DumpReginfos(const Proto *f, DumpState *D)
       DumpNumber(reginfo->startpc, D);
       DumpNumber(reginfo->endpc, D);
       DumpChar(reginfo->state, D);
-      DumpChar(reginfo->nspec, D);
+      // DumpChar(reginfo->nspec, D);
       DumpChar(reginfo->firstuse, D);
       DumpChar(reginfo->lastuse, D);
       if (reginfo->state == REGINFO_STATE_UNUSED ||
@@ -155,6 +156,36 @@ static void DumpReginfos(const Proto *f, DumpState *D)
     }
     DumpNumber(-42,D); /* magic sentinel number */
   }    
+}
+
+static void DumpExptypes(const Proto *f, DumpState *D)
+{
+  int pc,n=f->sizecode;
+  for (pc=0; pc<n; pc++)  
+  {
+    int size;    
+    Instruction i = f->code[pc];
+    switch (GET_OPCODE(i)) {
+      case OP_LOADNIL: {
+        size = GETARG_B(i);
+        goto dumpts;
+      }
+      case OP_CALL: {
+        size = GETARG_C(i) - 1;        
+        goto dumpts;
+      }
+      case OP_VARARG: {
+        size = GETARG_B(i) - 1;
+      dumpts:
+        if (size < 0) size = 0;
+        DumpVector(f->exptypes[pc].ts,size,sizeof(int),D);
+        break;   
+      }
+      default:
+        DumpInt(f->exptypes[pc].t,D);
+        break;
+    }
+  }
 }
 
 static void DumpFunction(const Proto* f, DumpState* D)
@@ -169,6 +200,7 @@ static void DumpFunction(const Proto* f, DumpState* D)
  DumpUpvalues(f,D);
  DumpReginfos(f,D);
  DumpVector(f->paramtypes,f->numparams,sizeof(int),D);
+ DumpExptypes(f,D);
  DumpDebug(f,D);
 }
 

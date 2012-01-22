@@ -17,6 +17,7 @@
 #include "lmem.h"
 #include "lobject.h"
 #include "lstate.h"
+#include "lopcodes.h" // TODO: needed for exptypes init; remove if possible
 
 
 
@@ -134,11 +135,12 @@ Proto *luaF_newproto (lua_State *L) {
   f->reginfos = NULL;  
   f->paramtypes = NULL;
   f->sizereginfos = 0;
+  f->exptypes = NULL;
   return f;
 }
 
 
-void reginfos_free(lua_State *L, Proto *f) {
+void reginfos_free (lua_State *L, Proto *f) {
   int i;
   RegInfo *reginfo, *tmp;
   for (i = 0; i < f->sizereginfos; i++) {
@@ -157,7 +159,26 @@ void reginfos_free(lua_State *L, Proto *f) {
 }
 
 
+void exptypes_free (lua_State *L, Proto *f) {  
+  int pc, n;
+  for (pc = 0; pc < f->sizecode; pc++) {
+    Instruction i = f->code[pc];
+    switch (GET_OPCODE(i)) {      
+      case OP_LOADNIL:  n = GETARG_B(i)+1;  goto freets;
+      case OP_CALL:     n = GETARG_C(i)-1;  goto freets;
+      case OP_VARARG:   n = GETARG_B(i)-1;
+      freets:
+        if (n < 0) n = 0;
+        luaM_freearray(L, f->exptypes[pc].ts, n);
+      default: break;
+    }
+  }  
+  luaM_freearray(L, f->exptypes, f->sizecode);
+}
+
+
 void luaF_freeproto (lua_State *L, Proto *f) {
+  exptypes_free(L, f);
   luaM_freearray(L, f->code, f->sizecode);
   luaM_freearray(L, f->p, f->sizep);
   luaM_freearray(L, f->k, f->sizek);
@@ -165,7 +186,7 @@ void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->locvars, f->sizelocvars);
   luaM_freearray(L, f->upvalues, f->sizeupvalues);
   luaM_freearray(L, f->paramtypes, f->numparams);
-  reginfos_free(L, f);
+  reginfos_free(L, f);  
   luaM_free(L, f);
 }
 

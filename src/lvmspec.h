@@ -8,8 +8,8 @@
 #include "lobject.h"
 
 
-LUAI_FUNC void luaVS_specialize (lua_State *L, int reg, int use);
-LUAI_FUNC void luaVS_specialize_params (lua_State *L, Proto *p);
+LUAI_FUNC void luaVS_despecialize (lua_State *L, int reg);
+LUAI_FUNC void luaVS_specialize (lua_State *L);
 
 
 #endif

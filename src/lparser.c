@@ -517,7 +517,7 @@ static void codeclosure (LexState *ls, Proto *clp, expdesc *v) {
   }
   f->p[fs->np++] = clp;
   luaC_objbarrier(ls->L, f, clp);
-  init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE, 1, 0, fs->np-1));
+  init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE, 0, 0, fs->np-1));
   luaK_exp2nextreg(fs, v);  /* fix it at stack top (for GC) */
 }
 
@@ -536,8 +536,9 @@ static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
   fs->np = 0;
   fs->nups = 0;
   fs->nlocvars = 0;
-  fs->nactvar = 0;
+  fs->nactvar = 0;  
   fs->firstlocal = ls->dyd->actvar.n;
+  fs->sizeexptypes = 0;
   fs->bl = NULL;
   f = luaF_newproto(L);
   fs->f = f;
@@ -560,8 +561,8 @@ static void close_func (LexState *ls) {
   Proto *f = fs->f;
   luaK_ret(fs, 0, 0);  /* final return */
   leaveblock(fs);
-  luaM_reallocvector(L, f->code, f->sizecode, fs->pc, Instruction);
-  f->sizecode = fs->pc;
+  luaM_reallocvector(L, f->code, f->sizecode, fs->pc, Instruction);  
+  f->sizecode = fs->pc;  
   luaM_reallocvector(L, f->lineinfo, f->sizelineinfo, fs->pc, int);
   f->sizelineinfo = fs->pc;
   luaM_reallocvector(L, f->k, f->sizek, fs->nk, TValue);
@@ -572,6 +573,7 @@ static void close_func (LexState *ls) {
   f->sizelocvars = fs->nlocvars;
   luaM_reallocvector(L, f->upvalues, f->sizeupvalues, fs->nups, Upvaldesc);
   f->sizeupvalues = fs->nups;
+  luaM_reallocvector(L, f->exptypes, fs->sizeexptypes, fs->pc, ExpType);
   lua_assert(fs->bl == NULL);
   ls->fs = fs->prev;
   /* last token read was anchored in defunct function; must re-anchor it */
@@ -778,7 +780,7 @@ static void constructor (LexState *ls, expdesc *t) {
      sep -> ',' | ';' */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  int pc = luaK_codeABC(fs, OP_NEWTABLE, 1, 0, 0, 0);
+  int pc = luaK_codeABC(fs, OP_NEWTABLE, 0, 0, 0, 0);
   struct ConsControl cc;
   cc.na = cc.nh = cc.tostore = 0;
   cc.t = t;
@@ -912,10 +914,12 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
   for (ra = base; ra <= base+nparams; ra++)
     addregload(fs, ra);
   addregstore(fs, base); // TODO: not quite sure here
-  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, 1, base, nparams+1, 2));  
+  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, 0, base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
-                            (unless changed) one result */
+                            (unless changed) one result */  
+  fs->f->exptypes[fs->pc-1].ts = luaM_newvector(fs->ls->L, 1, int);
+  fs->f->exptypes[fs->pc-1].ts[0] = LUA_TNONE;
 }
 
 
@@ -1017,7 +1021,8 @@ static void simpleexp (LexState *ls, expdesc *v) {
       FuncState *fs = ls->fs;
       check_condition(ls, fs->f->is_vararg,
                       "cannot use " LUA_QL("...") " outside a vararg function");
-      init_exp(v, VVARARG, luaK_codeABC(fs, OP_VARARG, 1, 0, 1, 0));
+      init_exp(v, VVARARG, luaK_codeABC(fs, OP_VARARG, 0, 0, 1, 0));
+      fs->f->exptypes[fs->pc-1].ts = luaM_newvector(ls->L, 0, int);
       break;
     }
     case '{': {  /* constructor */
@@ -1182,7 +1187,7 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
     /* copy upvalue/local value to a temporary (in position 'extra') */
     OpCode op = (v->k == VLOCAL) ? OP_MOVE : OP_GETUPVAL;
     addregstore(fs, extra);
-    luaK_codeABC(fs, op, 1, extra, v->u.info, 0);
+    luaK_codeABC(fs, op, 0, extra, v->u.info, 0);
     luaK_reserveregs(fs, 1);
   }
 }
@@ -1567,8 +1572,12 @@ static void exprstat (LexState *ls) {
   FuncState *fs = ls->fs;
   struct LHS_assign v;
   primaryexp(ls, &v.v);
-  if (v.v.k == VCALL)  /* stat -> func */
-    SETARG_C(getcode(fs, &v.v), 1);  /* call statement uses no results */
+  if (v.v.k == VCALL) { /* stat -> func */    
+    Instruction i = getcode(fs, &v.v);
+    luaM_reallocvector(ls->L, fs->f->exptypes[(&v.v)->u.info].ts, 
+                       GETARG_C(i)-1, 0, int);
+    SETARG_C(i, 1);  /* call statement uses no results */
+  }
   else {  /* stat -> assignment */
     v.prev = NULL;
     assignment(ls, &v, 1);

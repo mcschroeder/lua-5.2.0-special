@@ -471,7 +471,7 @@ typedef struct RegInfo {
   int endpc;
   struct RegInfo *next;
   lu_byte state;  
-  lu_byte nspec; /* how often this register has been specialized */
+  // lu_byte nspec; /* how often this register has been specialized */
   lu_byte firstuse; /* usage at startpc */
   lu_byte lastuse; /* usage at endpc */
 } RegInfo;
@@ -486,6 +486,12 @@ typedef struct RegInfo {
 #define REGINFO_USE_STORE 1
 
 
+typedef union ExpType {
+  int t;
+  int *ts;
+} ExpType;
+
+
 /*
 ** Function Prototypes
 */
@@ -498,6 +504,9 @@ typedef struct Proto {
   LocVar *locvars;  /* information about local variables (debug information) */
   RegInfo *reginfos; /* information about registers */
   int *paramtypes; /* types of parameters after last invocation */
+  
+  union ExpType *exptypes; // TODO: dump / undump
+
   Upvaldesc *upvalues;  /* upvalue information */
   union Closure *cache;  /* last created closure with this prototype */
   TString  *source;  /* used for debug information */  
