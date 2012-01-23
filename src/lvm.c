@@ -564,12 +564,6 @@ void luaV_finishOp (lua_State *L) {
   if (rttype(ra) != cl->p->exptypes[pcRel(ci->u.l.savedpc, cl->p)].t) { \
     luaVS_despecialize(L, GETARG_A(i)); }
 
-// TODO: what about external calls?
-#define ParamTypeGuard { int reg; \
-  for (reg = 0; reg < cl->p->numparams; reg++) { \
-    if (rttype(ci->u.l.base+reg) != cl->p->paramtypes[reg]) { \
-      luaVS_despecialize_param(cl->p, reg); } } }
-
 
 //#define dispatch_again { ci->u.l.savedpc--; continue; }
 #define dispatch_again { i = *(ci->u.l.savedpc-1); goto l_dispatch_again; }
@@ -582,10 +576,23 @@ void luaV_execute (lua_State *L) {
   LClosure *cl;
   TValue *k;
   StkId base;
- newframe:  /* reentry point when frame changes (call/return) */
- #ifdef DEBUG_PRINT
- printf("\n---\n");
- #endif
+
+  #ifdef DEBUG_PRINT
+  printf("\n---\n");
+  #endif
+
+newframe_param_guard: { /* guard against polymorphic parameters */
+  Proto *p = clLvalue(ci->func)->p;
+  int reg;
+  for (reg = 0; reg < p->numparams; reg++) {
+    int t = p->paramtypes[reg];
+    if (t != LUA_TNONE && t != rttype(ci->u.l.base+reg)) {
+      luaVS_despecialize_param(p, reg);
+    }
+  }
+}
+
+newframe:  /* reentry point when frame changes (call/return) */
   lua_assert(ci == L->ci);
   cl = clLvalue(ci->func);
   k = cl->p->k;
@@ -1157,8 +1164,8 @@ void luaV_execute (lua_State *L) {
         else {  /* Lua function */
           ci = L->ci;
           ci->callstatus |= CIST_REENTRY;
-          ParamTypeGuard
-          goto newframe;  /* restart luaV_execute over new Lua function */
+          /* restart luaV_execute over new Lua function */
+          goto newframe_param_guard;
         }
       )
 /* ------------------------------------------------------------------------ */
@@ -1195,8 +1202,8 @@ void luaV_execute (lua_State *L) {
           oci->callstatus |= CIST_TAIL;  /* function was tail called */
           ci = L->ci = oci;  /* remove new frame */
           lua_assert(L->top == oci->u.l.base + getproto(ofunc)->maxstacksize);
-          ParamTypeGuard
-          goto newframe;  /* restart luaV_execute over new Lua function */
+          /* restart luaV_execute over new Lua function */
+          goto newframe_param_guard;
         }
       )
 /* ------------------------------------------------------------------------ */
