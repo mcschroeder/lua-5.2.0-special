@@ -128,7 +128,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
         int a = GETARG_A(*i);
         int nresults = GETARG_C(*i) - 1;
         if (nresults < 1) break; /* also handles LUA_MULTRET */
-        if (a <= reg && reg <= a+nresults) {
+        if (a <= reg && reg <= a+nresults && store_possible) {
           int *exptypes = p->exptypes[pc].ts;
           exptypes[reg-a] = LUA_TNONE;
           int j;
@@ -145,7 +145,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
         int a = GETARG_A(*i);
         int b = GETARG_B(*i) - 1;
         lua_assert(b != -1);        
-        if (a <= reg && reg <= a+b) {
+        if (a <= reg && reg <= a+b && store_possible) {
           int *exptypes = p->exptypes[pc].ts;
           exptypes[reg-a] = LUA_TNONE;
           int j;
@@ -195,7 +195,7 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
       case OP_CONCAT:
       case OP_TESTSET:
       case OP_CLOSURE:
-        if (GETARG_A(*i) == reg) {
+        if (GETARG_A(*i) == reg && store_possible) {
           SET_OPSPEC(*i, 1);
           p->exptypes[pc].t = type;
         }
@@ -205,7 +205,7 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
       case OP_ADD: case OP_SUB: case OP_MUL: 
       case OP_DIV: case OP_MOD: case OP_POW:
       case OP_UNM: case OP_LEN:
-        if (GETARG_A(*i) == reg) {
+        if (GETARG_A(*i) == reg && store_possible) {
           SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
           p->exptypes[pc].t = type;
         }
@@ -213,7 +213,7 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
       case OP_LOADNIL: {
         int a = GETARG_A(*i);
         int b = GETARG_B(*i);
-        if (a <= reg && reg <= a+b) {
+        if (a <= reg && reg <= a+b && store_possible) {
           SET_OPSPEC(*i, 1);
           p->exptypes[pc].ts[reg-a] = type;
         }
@@ -222,8 +222,8 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
       case OP_CALL: {
         int a = GETARG_A(*i);
         int nresults = GETARG_C(*i) - 1;
-        if (nresults == LUA_MULTRET) break; /* direct input to another call */
-        if (a <= reg && reg <= a+nresults) {
+        if (nresults < 1) break; /* also handles LUA_MULTRET */
+        if (a <= reg && reg <= a+nresults && store_possible) {
           SET_OPSPEC(*i, 1);
           p->exptypes[pc].ts[reg-a] = type;
         }
@@ -233,7 +233,7 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
         int a = GETARG_A(*i);
         int b = GETARG_B(*i) - 1;
         if (b == -1) break; /* direct input to a call */
-        if (a <= reg && reg <= a+b) {
+        if (a <= reg && reg <= a+b && store_possible) {
           SET_OPSPEC(*i, 1);
           p->exptypes[pc].ts[reg-a] = type;
         }
