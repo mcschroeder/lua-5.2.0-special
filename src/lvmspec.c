@@ -172,8 +172,7 @@ void luaVS_despecialize (lua_State *L, int reg) {
   despecialize(p, reg, reginfo);
 }
 
-void luaVS_despecialize_param (lua_State *L, int reg) {
-  Proto *p = clLvalue(L->ci->func)->p;
+void luaVS_despecialize_param (Proto *p, int reg) {
   lua_assert(reg < p->numparams);
   RegInfo *reginfo = &p->reginfos[reg];
   if (reginfo->state == REGINFO_STATE_UNUSED) return;

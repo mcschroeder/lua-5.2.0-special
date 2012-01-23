@@ -564,11 +564,11 @@ void luaV_finishOp (lua_State *L) {
   if (rttype(ra) != cl->p->exptypes[pcRel(ci->u.l.savedpc, cl->p)].t) { \
     luaVS_despecialize(L, GETARG_A(i)); }
 
-
+// TODO: what about external calls?
 #define ParamTypeGuard { int reg; \
   for (reg = 0; reg < cl->p->numparams; reg++) { \
     if (rttype(ci->u.l.base+reg) != cl->p->paramtypes[reg]) { \
-      luaVS_despecialize_param(L, reg); } } }
+      luaVS_despecialize_param(cl->p, reg); } } }
 
 
 #define dispatch_again { ci->u.l.savedpc--; continue; }
