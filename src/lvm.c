@@ -430,11 +430,9 @@ void luaV_finishOp (lua_State *L) {
   Instruction inst = *(ci->u.l.savedpc - 1);  /* interrupted instruction */
   OpCode op = GET_OPCODE(inst);
   switch (op) {  /* finish its execution */
-    case OP_ADD: case OP_SUB: case OP_MUL: 
-    case OP_DIV: case OP_MOD: case OP_POW: 
-    case OP_UNM: case OP_LEN:     
-    case OP_GETTABLE:
-    case OP_SELF: {
+    case OP_ADD: case OP_SUB: case OP_MUL: case OP_DIV: 
+    case OP_MOD: case OP_POW: case OP_UNM: case OP_LEN:     
+    case OP_GETTABUP: case OP_GETTABLE: case OP_SELF: {
       StkId ra = base + GETARG_A(inst);
       setobjs2s(L, ra, --L->top);      
       if (GET_OPSPEC_OUT(inst) == OPSPEC_OUT_chk) {
