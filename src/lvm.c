@@ -729,13 +729,12 @@ void luaV_execute (lua_State *L) {
         Protect(luaV_gettable_int(L, b, c, ra)); \
         TypeGuard \
       )
-// TODO: this is wrong: a kst can also be obj if it's a float!
-#define _vmcase_gettab_obj(op,b) \
-      vmcase(op, sp(raw,obj,reg), /* raw <- b[obj] */ \
-        Protect(luaV_gettable_obj(L, b, RC(i), ra)); \
+#define _vmcase_gettab_obj(op,b,c,ck) \
+      vmcase(op, sp(raw,obj,ck), /* raw <- b[obj] */ \
+        Protect(luaV_gettable_obj(L, b, c, ra)); \
       ) \
-      vmcase(op, sp(chk,obj,reg), /* ? <- b[obj] */ \
-        Protect(luaV_gettable_obj(L, b, RC(i), ra)); \
+      vmcase(op, sp(chk,obj,ck), /* ? <- b[obj] */ \
+        Protect(luaV_gettable_obj(L, b, c, ra)); \
         TypeGuard \
       )
 #define _vmcase_gettab_raw(op,b) \
@@ -752,6 +751,8 @@ void luaV_execute (lua_State *L) {
       _vmcase_gettab_str(op,b,KC(i),kst) \
       _vmcase_gettab_int(op,b,RC(i),reg) \
       _vmcase_gettab_int(op,b,KC(i),kst) \
+      _vmcase_gettab_obj(op,b,RC(i),reg) \
+      _vmcase_gettab_obj(op,b,KC(i),kst) \
       _vmcase_gettab_raw(op,b)      
 
       vmcase_gettab(OP_GETTABLE, RB(i))
