@@ -171,10 +171,10 @@ static void DumpExptypes(const Proto *f, DumpState *D)
       case OP_VARARG:   size = GETARG_B(i)-1; 
       dumpts:
         if (size < 0) size = 0;
-        DumpVector(f->exptypes[pc].ts,size,sizeof(int),D);
+        DumpVector(f->exptypes[pc].ts,size,sizeof(int),D); 
         break;
       default:
-        DumpInt(f->exptypes[pc].t,D);
+        DumpNumber(f->exptypes[pc].t,D);
         break;
     }
   }

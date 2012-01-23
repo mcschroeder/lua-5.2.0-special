@@ -159,17 +159,17 @@ void reginfos_free (lua_State *L, Proto *f) {
 }
 
 
-void exptypes_free (lua_State *L, Proto *f) {  
+void exptypes_free (lua_State *L, Proto *f) {
+  if (f->exptypes == NULL) return; /* corrupt chunk */
   int pc, n;
   for (pc = 0; pc < f->sizecode; pc++) {
     Instruction i = f->code[pc];
     switch (GET_OPCODE(i)) {      
-      case OP_LOADNIL:  n = GETARG_B(i)+1;  goto freets;
-      case OP_CALL:     n = GETARG_C(i)-1;  goto freets;
+      case OP_LOADNIL:  n = GETARG_B(i)+1; goto freets;
+      case OP_CALL:     n = GETARG_C(i)-1; goto freets;
       case OP_VARARG:   n = GETARG_B(i)-1;
       freets:
-        if (n < 0) n = 0;
-        luaM_freearray(L, f->exptypes[pc].ts, n);
+        if (n > 0) luaM_freearray(L, f->exptypes[pc].ts, n);
       default: break;
     }
   }  

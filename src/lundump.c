@@ -205,14 +205,14 @@ static void LoadExptypes(LoadState *S, Proto *f)
     switch (GET_OPCODE(i)) {
       case OP_LOADNIL:
       case OP_CALL:
-      case OP_VARARG: {
+      case OP_VARARG: {        
         int size = LoadInt(S);
         f->exptypes[pc].ts = luaM_newvector(S->L,size,int);
         LoadVector(S,f->exptypes[pc].ts,size,sizeof(int));
         break;   
       }
       default:
-        f->exptypes[pc].t = LoadInt(S);
+        f->exptypes[pc].t = LoadNumber(S);
         break;
     }
   }
