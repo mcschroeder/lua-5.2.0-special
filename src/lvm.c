@@ -568,7 +568,7 @@ void luaV_finishOp (lua_State *L) {
 #define ParamTypeGuard { int reg; \
   for (reg = 0; reg < cl->p->numparams; reg++) { \
     if (rttype(ci->u.l.base+reg) != cl->p->paramtypes[reg]) { \
-      luaVS_despecialize(L, reg); } } }
+      luaVS_despecialize_param(L, reg); } } }
 
 
 #define dispatch_again { ci->u.l.savedpc--; continue; }

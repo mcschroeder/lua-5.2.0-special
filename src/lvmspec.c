@@ -44,11 +44,8 @@ static RegInfo *findreginfo (Proto *p, int reg, int pc, int use) {
 #define ISK_C(i) (GET_OPSPEC_CK(i) == OPSPEC_kst)
 
 
-void luaVS_despecialize (lua_State *L, int reg) {
-  Proto *p = clLvalue(L->ci->func)->p;
-  int pc = pcRel(L->ci->u.l.savedpc, p);
-  RegInfo *reginfo = findreginfo(p, reg, pc, REGINFO_USE_STORE);
-  lua_assert(reginfo != NULL);
+void despecialize (Proto *p, int reg, RegInfo *reginfo) {
+  int pc;
   for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
     Instruction *i = &(p->code[pc]);
     switch (GET_OPCODE(*i)) {
@@ -167,10 +164,24 @@ void luaVS_despecialize (lua_State *L, int reg) {
   }
 }
 
+void luaVS_despecialize (lua_State *L, int reg) {
+  Proto *p = clLvalue(L->ci->func)->p;
+  int pc = pcRel(L->ci->u.l.savedpc, p);
+  RegInfo *reginfo = findreginfo(p, reg, pc, REGINFO_USE_STORE);
+  lua_assert(reginfo != NULL);
+  despecialize(p, reg, reginfo);
+}
+
+void luaVS_despecialize_param (lua_State *L, int reg) {
+  Proto *p = clLvalue(L->ci->func)->p;
+  lua_assert(reg < p->numparams);
+  RegInfo *reginfo = &p->reginfos[reg];
+  if (reginfo->state == REGINFO_STATE_UNUSED) return;
+  despecialize(p, reg, reginfo);
+}
 
 /* add type guards to all stores of the register within the given scope */
-void add_guards (lua_State *L, int reg, RegInfo *reginfo, int type) {
-  Proto *p = clLvalue(L->ci->func)->p;
+void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {  
   int pc;
   for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
     Instruction *i = &(p->code[pc]);
@@ -256,7 +267,7 @@ static int ttisint (TValue *v) {
 #define _add_guards(r,t) { int _r = r; \
     RegInfo *_reginfo = findreginfo(p, _r, pc, REGINFO_USE_LOAD); \
     lua_assert(_reginfo != NULL); \
-    add_guards(L, _r, _reginfo, t); } \
+    add_guards(p, _r, _reginfo, t); } \
 
 void luaVS_specialize (lua_State *L) {
   Proto *p = clLvalue(L->ci->func)->p;
