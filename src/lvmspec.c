@@ -270,6 +270,7 @@ void luaVS_specialize (lua_State *L) {
       TValue *rc = RKC(*i);
       if (ttisstring(rc))   SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_str);
       else if (ttisint(rc)) SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_int);
+      else if (ttisnil(rc)) SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);
       else                  SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_obj);
       if (!ISK_C(*i)) _add_guards(GETARG_C(*i), rttype(rc));
       break;
@@ -278,6 +279,7 @@ void luaVS_specialize (lua_State *L) {
       TValue *rb = RKB(*i);
       if (ttisstring(rb))   SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_str);
       else if (ttisint(rb)) SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_int);
+      else if (ttisnil(rb)) SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);
       else                  SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_obj);
       if (!ISK_B(*i)) _add_guards(GETARG_B(*i), rttype(rb));
       break;
@@ -320,11 +322,14 @@ void luaVS_specialize (lua_State *L) {
       TValue *rb = RKB(*i);
       TValue *rc = RKC(*i);
       if (ttisequal(rb, rc)) {
-        if (ttisnumber(rb))       SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_num);
-        else if (ttisstring(rb))  SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_str);
-        else                      SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
-      } 
-      else                        SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
+        if (ttisnumber(rb))       
+          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_num);
+        else if (ttisstring(rb))  
+          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_str);
+        else                      
+          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
+      } else 
+        SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
       if (!ISK_B(*i)) _add_guards(GETARG_B(*i), rttype(rb));
       if (!ISK_C(*i)) _add_guards(GETARG_C(*i), rttype(rc));
       break;

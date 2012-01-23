@@ -741,11 +741,11 @@ void luaV_execute (lua_State *L) {
         Protect(luaV_gettable_obj(L, b, c, ra)); \
         TypeGuard \
       )
-#define _vmcase_gettab_raw(op,b) \
-      vmcase(op, sp(raw,raw,reg), /* raw <- b[c] */ \
+#define _vmcase_gettab_raw(op,b,c,ck) \
+      vmcase(op, sp(raw,raw,ck), /* raw <- b[c] */ \
         Protect(luaV_gettable(L, b, RC(i), ra)); \
       ) \
-      vmcase(op, sp(chk,raw,reg), /* ? <- b[c] */ \
+      vmcase(op, sp(chk,raw,ck), /* ? <- b[c] */ \
         Protect(luaV_gettable(L, b, RC(i), ra)); \
         TypeGuard \
       )
@@ -757,7 +757,8 @@ void luaV_execute (lua_State *L) {
       _vmcase_gettab_int(op,b,KC(i),kst) \
       _vmcase_gettab_obj(op,b,RC(i),reg) \
       _vmcase_gettab_obj(op,b,KC(i),kst) \
-      _vmcase_gettab_raw(op,b)      
+      _vmcase_gettab_raw(op,b,RC(i),reg) \
+      _vmcase_gettab_raw(op,b,KC(i),kst)
 
       vmcase_gettab(OP_GETTABLE, RB(i))
       vmcase_gettab(OP_GETTABUP, cl->upvals[GETARG_B(i)]->v)
@@ -784,8 +785,8 @@ void luaV_execute (lua_State *L) {
       vmcase(op, sp(obj,bk,ck), /* a[obj] <- c */ \
         Protect(luaV_settable_obj(L, a, b, c)); \
       )
-#define _vmcase_settab_raw(op,a,c,ck) \
-      vmcase(op, sp(raw,reg,ck), /* a[b] <- c */ \
+#define _vmcase_settab_raw(op,a,b,bk,c,ck) \
+      vmcase(op, sp(raw,bk,ck), /* a[b] <- c */ \
         Protect(luaV_settable(L, a, RB(i), c)); \
       )
 #define vmcase_settab(op,a) \
@@ -802,8 +803,10 @@ void luaV_execute (lua_State *L) {
       _vmcase_settab_obj(op, a, RB(i), reg, KC(i), kst); \
       _vmcase_settab_obj(op, a, KB(i), kst, RC(i), reg); \
       _vmcase_settab_obj(op, a, KB(i), kst, KC(i), kst); \
-      _vmcase_settab_raw(op, a, RC(i), reg); \
-      _vmcase_settab_raw(op, a, KC(i), kst);
+      _vmcase_settab_raw(op, a, RB(i), reg, RC(i), reg); \
+      _vmcase_settab_raw(op, a, KB(i), kst, RC(i), reg); \
+      _vmcase_settab_raw(op, a, RB(i), reg, KC(i), kst); \
+      _vmcase_settab_raw(op, a, KB(i), kst, KC(i), kst);
 
       vmcase_settab(OP_SETTABLE, ra);
       vmcase_settab(OP_SETTABUP, cl->upvals[GETARG_A(i)]->v);

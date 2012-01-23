@@ -699,6 +699,8 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
       sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_str, OPSPEC_kst, ck);
     else if (ttisint(k))
       sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_int, OPSPEC_kst, ck);
+    else if (ttisnil(k))
+      sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_raw, OPSPEC_kst, ck);
     else
       sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_obj, OPSPEC_kst, ck);
   } 

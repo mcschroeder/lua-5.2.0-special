@@ -461,6 +461,8 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
           sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_str, OPSPEC_kst);
         else if (ttisint(k)) 
           sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_int, OPSPEC_kst);
+        else if (ttisnil(k))
+          sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_raw, OPSPEC_kst);
         else 
           sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_obj, OPSPEC_kst);
       } 
@@ -666,6 +668,8 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
           sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_str, OPSPEC_kst, ck);
         else if (ttisint(k))
           sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_int, OPSPEC_kst, ck);
+        else if (ttisnil(k))
+          sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_raw, OPSPEC_kst, ck);
         else
           sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_obj, OPSPEC_kst, ck);
       } 
