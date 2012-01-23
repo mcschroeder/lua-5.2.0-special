@@ -127,7 +127,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
       case OP_CALL: {
         int a = GETARG_A(*i);
         int nresults = GETARG_C(*i) - 1;
-        lua_assert(nresults != LUA_MULTRET);        
+        if (nresults == LUA_MULTRET) break;
         if (a <= reg && reg <= a+nresults) {
           int *exptypes = p->exptypes[pc].ts;
           exptypes[reg-a] = LUA_TNONE;
