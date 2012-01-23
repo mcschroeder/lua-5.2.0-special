@@ -394,11 +394,11 @@ static int nilK (FuncState *fs) {
 void luaK_setreturns (FuncState *fs, expdesc *e, int nresults) {  
   int oldn;
   if (e->k == VCALL) {  /* expression is an open function call? */
-    oldn = GETARG_C(getcode(fs, e));
+    oldn = GETARG_C(getcode(fs, e))-1;
     SETARG_C(getcode(fs, e), nresults+1);
   }
   else if (e->k == VVARARG) {
-    oldn = GETARG_B(getcode(fs, e));
+    oldn = GETARG_B(getcode(fs, e))-1;
     SETARG_B(getcode(fs, e), nresults+1);
     SETARG_A(getcode(fs, e), fs->freereg);
     luaK_reserveregs(fs, 1);
@@ -422,13 +422,13 @@ void luaK_setoneret (FuncState *fs, expdesc *e) {
     e->k = VNONRELOC;
     e->u.info = GETARG_A(getcode(fs, e));
   }
-  else if (e->k == VVARARG) {
-    Instruction i = getcode(fs, e);
+  else if (e->k == VVARARG) {    
     luaM_reallocvector(fs->ls->L, fs->f->exptypes[e->u.info].ts, 
-                       GETARG_B(i)-1, 1, int);
+                       GETARG_B(getcode(fs, e))-1, 1, int);
     fs->f->exptypes[e->u.info].ts[0] = LUA_TNONE;
-    SETARG_B(i, 2);
-    luaK_extendreginfo(fs, GETARG_A(i), e->u.info, REGINFO_USE_STORE);    
+    SETARG_B(getcode(fs, e), 2);
+    luaK_extendreginfo(fs, GETARG_A(getcode(fs, e)), e->u.info,
+                       REGINFO_USE_STORE);    
     e->k = VRELOCABLE;  /* can relocate its simple result */
   }
 }

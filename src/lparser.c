@@ -1573,10 +1573,9 @@ static void exprstat (LexState *ls) {
   struct LHS_assign v;
   primaryexp(ls, &v.v);
   if (v.v.k == VCALL) { /* stat -> func */    
-    Instruction i = getcode(fs, &v.v);
     luaM_reallocvector(ls->L, fs->f->exptypes[(&v.v)->u.info].ts, 
-                       GETARG_C(i)-1, 0, int);
-    SETARG_C(i, 1);  /* call statement uses no results */
+                       GETARG_C(getcode(fs, &v.v))-1, 0, int);
+    SETARG_C(getcode(fs, &v.v), 1);  /* call statement uses no results */
   }
   else {  /* stat -> assignment */
     v.prev = NULL;
