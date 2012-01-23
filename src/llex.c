@@ -101,8 +101,28 @@ static const char *txtToken (LexState *ls, int token) {
 }
 
 
+/*
+** removes some of the garbage values that remain in all functions
+** that haven't been closed at time of error.
+** this is to ensure the safety of certain operations down the road.
+*/
+static void safe_funcs (LexState *ls) {
+  FuncState *fs = ls->fs;
+  while (fs) {
+    Proto *f = fs->f;
+    if (fs->pc != f->sizecode) {
+      luaM_reallocvector(ls->L, f->code, f->sizecode, fs->pc, Instruction);
+      f->sizecode = fs->pc;
+      luaM_reallocvector(ls->L, f->exptypes, fs->sizeexptypes, fs->pc, ExpType);
+    }
+    fs = fs->prev;
+  }
+}
+
+
 static l_noret lexerror (LexState *ls, const char *msg, int token) {
-  char buff[LUA_IDSIZE];
+  safe_funcs(ls);
+  char buff[LUA_IDSIZE];  
   luaO_chunkid(buff, getstr(ls->source), LUA_IDSIZE);
   msg = luaO_pushfstring(ls->L, "%s:%d: %s", buff, ls->linenumber, msg);
   if (token)
