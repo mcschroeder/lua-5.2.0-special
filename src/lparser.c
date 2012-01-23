@@ -1382,7 +1382,9 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
     endfor = luaK_codeAsBx(fs, OP_FORLOOP, 0, base, NO_JUMP);
   }
   else {  /* generic for */
-    luaK_codeABC(fs, OP_TFORCALL, 0, base, 0, nvars);    
+    luaK_codeABC(fs, OP_TFORCALL, 0, base, 0, nvars);
+    fs->f->exptypes[fs->pc-1].ts = luaM_newvector(fs->ls->L, nvars, int);
+    while (--nvars >= 0) fs->f->exptypes[fs->pc-1].ts[nvars] = LUA_TNONE;
     luaK_fixline(fs, line);
     endfor = luaK_codeAsBx(fs, OP_TFORLOOP, 0, base + 2, NO_JUMP);
   }

@@ -168,7 +168,8 @@ static void DumpExptypes(const Proto *f, DumpState *D)
     switch (GET_OPCODE(i)) {
       case OP_LOADNIL:  size = GETARG_B(i)+1; goto dumpts;
       case OP_CALL:     size = GETARG_C(i)-1; goto dumpts;
-      case OP_VARARG:   size = GETARG_B(i)-1; 
+      case OP_TFORCALL: size = GETARG_C(i);   goto dumpts;
+      case OP_VARARG:   size = GETARG_B(i)-1;
       dumpts:
         if (size < 0) size = 0;
         DumpVector(f->exptypes[pc].ts,size,sizeof(int),D); 

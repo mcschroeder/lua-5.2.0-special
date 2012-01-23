@@ -1250,13 +1250,34 @@ void luaV_execute (lua_State *L) {
         ci->u.l.savedpc += GETARG_sBx(i);
       )
 /* ------------------------------------------------------------------------ */
+#define _vmcase_tforcall_pre \
+        StkId cb = ra + 3;  /* call base */ \
+        setobjs2s(L, cb+2, ra+2); \
+        setobjs2s(L, cb+1, ra+1); \
+        setobjs2s(L, cb, ra); \
+        L->top = cb + 3;  /* func. + 2 args (state and index) */ \
+        int nresults = GETARG_C(i);
+
+      vmcasenb(OP_TFORCALL, 1,
+        _vmcase_tforcall_pre
+        Protect(luaD_call(L, cb, nresults, 1));
+
+        int pc = pcRel(ci->u.l.savedpc, clLvalue(ci->func)->p);
+        int *exptypes = clLvalue(ci->func)->p->exptypes[pc].ts;        
+        int reg = cb - ci->u.l.base;
+        int j;
+        for (j = 0; j < nresults; j++) {
+          if (exptypes[j] != rttype(cb++))
+            luaVS_despecialize(L, reg);
+          reg++;
+        }
+
+        goto l_tforcall_post;        
+      )
       vmcasenb(OP_TFORCALL, 0,
-        StkId cb = ra + 3;  /* call base */
-        setobjs2s(L, cb+2, ra+2);
-        setobjs2s(L, cb+1, ra+1);
-        setobjs2s(L, cb, ra);
-        L->top = cb + 3;  /* func. + 2 args (state and index) */
-        Protect(luaD_call(L, cb, GETARG_C(i), 1));
+        _vmcase_tforcall_pre
+        Protect(luaD_call(L, cb, nresults, 1));
+      l_tforcall_post:
         L->top = ci->top;
         i = *(ci->u.l.savedpc++);  /* go to next instruction */
         ra = RA(i);
@@ -1268,7 +1289,7 @@ void luaV_execute (lua_State *L) {
         l_tforloop:
         if (!ttisnil(ra + 1)) {  /* continue loop? */
           setobjs2s(L, ra, ra + 1);  /* save control variable */
-           ci->u.l.savedpc += GETARG_sBx(i);  /* jump back */
+          ci->u.l.savedpc += GETARG_sBx(i);  /* jump back */
         }
       )
 /* ------------------------------------------------------------------------ */

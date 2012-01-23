@@ -167,6 +167,7 @@ void exptypes_free (lua_State *L, Proto *f) {
     switch (GET_OPCODE(i)) {      
       case OP_LOADNIL:  n = GETARG_B(i)+1; goto freets;
       case OP_CALL:     n = GETARG_C(i)-1; goto freets;
+      case OP_TFORCALL: n = GETARG_C(i);   goto freets;
       case OP_VARARG:   n = GETARG_B(i)-1;
       freets:
         if (n > 0) luaM_freearray(L, f->exptypes[pc].ts, n);

@@ -141,6 +141,23 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
         }
         break;
       }
+      case OP_TFORCALL: {
+        int a = GETARG_A(*i);
+        int nresults = GETARG_C(*i);
+        int cb = a + 3; /* call base */
+        if (cb <= reg && reg <= cb+nresults-1 && store_possible) {
+          int *exptypes = p->exptypes[pc].ts;
+          exptypes[reg-cb] = LUA_TNONE;
+          int j;
+          for (j = 0; j < nresults; j++) {
+            if (exptypes[j] != LUA_TNONE) {
+              SET_OPSPEC(*i, 0);
+              break;
+            }
+          }
+        }
+        break;
+      }
       case OP_VARARG: {
         int a = GETARG_A(*i);
         int b = GETARG_B(*i) - 1;
@@ -226,6 +243,16 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
         if (a <= reg && reg <= a+nresults && store_possible) {
           SET_OPSPEC(*i, 1);
           p->exptypes[pc].ts[reg-a] = type;
+        }
+        break;
+      }
+      case OP_TFORCALL: {
+        int a = GETARG_A(*i);
+        int nresults = GETARG_C(*i);
+        int cb = a + 3; /* call base */
+        if (cb <= reg && reg <= cb+nresults-1 && store_possible) {
+          SET_OPSPEC(*i, 1);
+          p->exptypes[pc].ts[reg-cb] = type;
         }
         break;
       }
