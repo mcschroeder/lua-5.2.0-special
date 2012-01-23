@@ -571,7 +571,10 @@ void luaV_finishOp (lua_State *L) {
       luaVS_despecialize_param(cl->p, reg); } } }
 
 
-#define dispatch_again { ci->u.l.savedpc--; continue; }
+//#define dispatch_again { ci->u.l.savedpc--; continue; }
+#define dispatch_again { i = *(ci->u.l.savedpc-1); goto l_dispatch_again; }
+// TODO: is there a nicer way to do this?
+//       - we could specialize in-place and jump directly to labels...
 
 
 void luaV_execute (lua_State *L) {
@@ -595,11 +598,12 @@ void luaV_execute (lua_State *L) {
         (--L->hookcount == 0 || L->hookmask & LUA_MASKLINE)) {
       Protect(traceexec(L));
     }
+  l_dispatch_again:
     /* WARNING: several calls may realloc the stack and invalidate `ra' */
     ra = RA(i);
     lua_assert(base == ci->u.l.base);
     lua_assert(base <= L->top && L->top < L->stack + L->stacksize);
-  //dispatch_again:
+  
     
     #ifdef DEBUG_PRINT
     #define getfuncline(f,pc) (((f)->lineinfo) ? (f)->lineinfo[pc] : 0)
