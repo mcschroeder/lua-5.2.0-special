@@ -457,19 +457,14 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
       int sp; /* specialization */
       if (e->u.ind.isk) {
         TValue *k = fs->f->k + e->u.ind.idx;
-        if (ttisnumber(k)) {
-          int ik;
-          lua_number2int(ik, nvalue(k));
-          if (luai_numeq(cast_num(ik), nvalue(k))) {
-            sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_int, OPSPEC_kst);
-          } else {
-            sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_obj, OPSPEC_kst);
-          }
-        } else {
-          lua_assert(ttisstring(k));
+        if (ttisstring(k))
           sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_str, OPSPEC_kst);
-        }
-      } else {
+        else if (ttisint(k)) 
+          sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_int, OPSPEC_kst);
+        else 
+          sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_obj, OPSPEC_kst);
+      } 
+      else {
         addregload(fs, e->u.ind.idx);
         sp = CREATE_OPSPEC_GETTAB(0, OPSPEC_TAB_KEY_chk, OPSPEC_reg);
       }
@@ -667,19 +662,14 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
       }
       if (var->u.ind.isk) {
         TValue *k = fs->f->k + var->u.ind.idx;
-        if (ttisnumber(k)) {
-          int ik;
-          lua_number2int(ik, nvalue(k));
-          if (luai_numeq(cast_num(ik), nvalue(k))) {
-            sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_int, OPSPEC_kst, ck);
-          } else {
-            sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_obj, OPSPEC_kst, ck);
-          }
-        } else {
-          lua_assert(ttisstring(k));
+        if (ttisstring(k))
           sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_str, OPSPEC_kst, ck);
-        }
-      } else {
+        else if (ttisint(k))
+          sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_int, OPSPEC_kst, ck);
+        else
+          sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_obj, OPSPEC_kst, ck);
+      } 
+      else {
         addregload(fs, var->u.ind.idx);
         sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_chk, OPSPEC_reg, ck);
       }      

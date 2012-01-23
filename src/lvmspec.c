@@ -246,15 +246,6 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
 }
 
 
-static int ttisint (TValue *v) {
-  if (!ttisnumber(v)) return 0;
-  int k;
-  lua_Number n = nvalue(v);  
-  lua_number2int(k, n);
-  return luai_numeq(cast_num(k), n);
-}
-
-
 #define RB(i) (base+GETARG_B(i))
 #define RC(i) (base+GETARG_C(i))
 #define KB(i) (k+GETARG_B(i))

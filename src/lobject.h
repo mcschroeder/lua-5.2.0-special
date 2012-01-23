@@ -120,6 +120,7 @@ typedef struct lua_TValue TValue;
 /* Macros to test type */
 #define checktag(o,t)		(rttype(o) == (t))
 #define ttisnumber(o)		checktag((o), LUA_TNUMBER)
+#define ttisint(o) (ttisnumber(o) && luaO_numisint(nvalue(o)))
 #define ttisnil(o)		checktag((o), LUA_TNIL)
 #define ttisboolean(o)		checktag((o), LUA_TBOOLEAN)
 #define ttislightuserdata(o)	checktag((o), LUA_TLIGHTUSERDATA)
@@ -634,6 +635,7 @@ LUAI_FUNC int luaO_ceillog2 (unsigned int x);
 LUAI_FUNC lua_Number luaO_arith (int op, lua_Number v1, lua_Number v2);
 LUAI_FUNC int luaO_str2d (const char *s, size_t len, lua_Number *result);
 LUAI_FUNC int luaO_hexavalue (int c);
+LUAI_FUNC int luaO_numisint (lua_Number n);
 LUAI_FUNC const char *luaO_pushvfstring (lua_State *L, const char *fmt,
                                                        va_list argp);
 LUAI_FUNC const char *luaO_pushfstring (lua_State *L, const char *fmt, ...);

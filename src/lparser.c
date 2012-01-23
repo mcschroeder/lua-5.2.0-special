@@ -695,19 +695,14 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   }
   if (key.k == VK) {
     TValue *k = fs->f->k + rkkey;
-    if (ttisnumber(k)) {
-      int ik;
-      lua_number2int(ik, nvalue(k));
-      if (luai_numeq(cast_num(ik), nvalue(k))) {
-        sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_int, OPSPEC_kst, ck);
-      } else {
-        sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_obj, OPSPEC_kst, ck);
-      }
-    } else {
-      lua_assert(ttisstring(k));
+    if (ttisstring(k))
       sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_str, OPSPEC_kst, ck);
-    }
-  } else {
+    else if (ttisint(k))
+      sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_int, OPSPEC_kst, ck);
+    else
+      sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_obj, OPSPEC_kst, ck);
+  } 
+  else {
     addregload(fs, rkkey);
     sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_chk, OPSPEC_reg, ck);
   }

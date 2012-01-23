@@ -90,6 +90,13 @@ int luaO_hexavalue (int c) {
 }
 
 
+int luaO_numisint (lua_Number n) {
+  int k;
+  lua_number2int(k, n);
+  return luai_numeq(cast_num(k), n);
+}
+
+
 #if !defined(lua_strx2number)
 
 #include <math.h>
