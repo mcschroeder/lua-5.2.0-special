@@ -743,10 +743,10 @@ void luaV_execute (lua_State *L) {
       )
 #define _vmcase_gettab_raw(op,b,c,ck) \
       vmcase(op, sp(raw,raw,ck), /* raw <- b[c] */ \
-        Protect(luaV_gettable(L, b, RC(i), ra)); \
+        Protect(luaV_gettable(L, b, c, ra)); \
       ) \
       vmcase(op, sp(chk,raw,ck), /* ? <- b[c] */ \
-        Protect(luaV_gettable(L, b, RC(i), ra)); \
+        Protect(luaV_gettable(L, b, c, ra)); \
         TypeGuard \
       )
 #define vmcase_gettab(op,b) \
@@ -787,7 +787,7 @@ void luaV_execute (lua_State *L) {
       )
 #define _vmcase_settab_raw(op,a,b,bk,c,ck) \
       vmcase(op, sp(raw,bk,ck), /* a[b] <- c */ \
-        Protect(luaV_settable(L, a, RB(i), c)); \
+        Protect(luaV_settable(L, a, b, c)); \
       )
 #define vmcase_settab(op,a) \
       _vmcase_settab_chk(op) \
