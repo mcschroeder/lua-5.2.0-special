@@ -202,7 +202,7 @@ static void LoadExptypes(LoadState *S, Proto *f)
   for (pc = 0; pc<n; pc++)
   {
     Instruction i = f->code[pc];
-    switch (GET_OPCODE(i)) {
+    switch (GET_OPGROUP(i)) {
       case OP_LOADNIL:
       case OP_CALL:
       case OP_TFORCALL:

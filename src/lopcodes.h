@@ -15,19 +15,15 @@
   There are three possible field layouts:
 
   +----+----+----+----+----+
-  | B  | C  | A  | SP | OP | iABC
+  | B  | C  | A  |   OP    | iABC
   +----+----+----+----+----+
-  |  (s)Bx  | A  | SP | OP | iABx / iAsBx
+  |  (s)Bx  | A  |   OP    | iABx / iAsBx
   +---------+----+----+----+
-  |      Ax      | SP | OP | iAx
+  |      Ax      |   OP    | iAx
   +--------------+----+----+
   msb                    lsb
 
-  OP : 6 bit operation identifier (OPCODE)
-  SP : 5 bit type specialization code (OPSPEC)
-
-  The VM dispatches on the combined 11 bits of SP + OP. The semantics of the
-  specialization bitmask depend on the operation (see below).
+  OP : 11 bit opcode
 
   A,B,C : 7 bits
   Ax : 21 bits (A,B and C together)
@@ -54,12 +50,10 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define SIZE_A		7
 #define SIZE_Ax		(SIZE_C + SIZE_B + SIZE_A)
 
-#define SIZE_OP 6
-#define SIZE_SP 5
+#define SIZE_OP   11
 
 #define POS_OP	0
-#define POS_SP  (POS_OP + SIZE_OP)
-#define POS_A		(POS_SP + SIZE_SP)
+#define POS_A		(POS_OP + SIZE_OP)
 #define POS_C		(POS_A + SIZE_A)
 #define POS_B		(POS_C + SIZE_C)
 #define POS_Bx		POS_C
@@ -105,14 +99,6 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define SET_OPCODE(i,o)	((i) = (((i)&MASK0(SIZE_OP,POS_OP)) | \
 		((cast(Instruction, o)<<POS_OP)&MASK1(SIZE_OP,POS_OP))))
 
-#define GET_OPSPEC(i) (cast(int, ((i)>>POS_SP) & MASK1(SIZE_SP,0)))
-#define SET_OPSPEC(i,s) ((i) = (((i)&MASK0(SIZE_SP,POS_SP)) | \
-    ((cast(Instruction, s)<<POS_SP)&MASK1(SIZE_SP,POS_SP))))
-
-/* this is what the VM dispatches on */
-#define GET_OP(i) (cast(int, ((i>>POS_OP) & MASK1(SIZE_OP+SIZE_SP,0))))
-#define OP_MAKE(op,sp) (cast(int, ((sp)<<POS_SP) | (op)))
-
 #define getarg(i,pos,size)	(cast(int, ((i)>>pos) & MASK1(size,0)))
 #define setarg(i,v,pos,size)	((i) = (((i)&MASK0(size,pos)) | \
                 ((cast(Instruction, v)<<pos)&MASK1(size,pos))))
@@ -136,19 +122,16 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define SETARG_sBx(i,b)	SETARG_Bx((i),cast(unsigned int, (b)+MAXARG_sBx))
 
 
-#define CREATE_ABC(o,s,a,b,c)	((cast(Instruction, o)<<POS_OP) \
-      | (cast(Instruction, s)<<POS_SP) \
+#define CREATE_ABC(o,a,b,c)	((cast(Instruction, o)<<POS_OP) \
 			| (cast(Instruction, a)<<POS_A) \
 			| (cast(Instruction, b)<<POS_B) \
 			| (cast(Instruction, c)<<POS_C))
 
-#define CREATE_ABx(o,s,a,bc)	((cast(Instruction, o)<<POS_OP) \
-      | (cast(Instruction, s)<<POS_SP) \
+#define CREATE_ABx(o,a,bc)	((cast(Instruction, o)<<POS_OP) \
 			| (cast(Instruction, a)<<POS_A) \
 			| (cast(Instruction, bc)<<POS_Bx))
 
-#define CREATE_Ax(o,s,a)		((cast(Instruction, o)<<POS_OP) \
-      | (cast(Instruction, s)<<POS_SP) \
+#define CREATE_Ax(o,a)		((cast(Instruction, o)<<POS_OP) \
 			| (cast(Instruction, a)<<POS_Ax))
 
 
@@ -159,139 +142,11 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define NO_REG		MAXARG_A
 
 
-/* -- specialization mask constants -------------------------------------- */
-
-/* OUT is always the lowest bit in the spec mask */
-#define GET_OPSPEC_OUT(i) (((i)&MASK1(1,POS_SP))>>POS_SP)
-#define SET_OPSPEC_OUT(i,o) ((i) = (((i)&MASK0(1,POS_SP)) | \
-    (((o)<<POS_SP)&MASK1(1,POS_SP))))
-
-#define OPSPEC_OUT_raw 0
-#define OPSPEC_OUT_chk 1
-
-/* BK and CK should be in the two most significant bits of the spec mask */
-#define GET_OPSPEC_BK(i) (((i)&MASK1(1,POS_SP+3))>>(POS_SP+3))
-#define GET_OPSPEC_CK(i) (((i)&MASK1(1,POS_SP+4))>>(POS_SP+4))
-
-#define OPSPEC_reg 0
-#define OPSPEC_kst 1
-
-/* used by SETTABLE, SETTABUP, GETTABLE, GETTABUP */
-#define OPSPEC_TAB_KEY_raw 0
-#define OPSPEC_TAB_KEY_str 1
-#define OPSPEC_TAB_KEY_int 2
-#define OPSPEC_TAB_KEY_obj 3
-#define OPSPEC_TAB_KEY_chk 4
-
-/* used by arithmetic operations (ADD, SUB, MUL, DIV, MOD, POW, UNM, LEN) */
-#define OPSPEC_ARITH_IN_raw 0
-#define OPSPEC_ARITH_IN_num 1
-#define OPSPEC_ARITH_IN_obj 2 /* only for binary ops */
-#define OPSPEC_ARITH_IN_chk 3
-
-/* only for LEN */
-#define OPSPEC_ARITH_IN_str 1
-#define OPSPEC_ARITH_IN_tab 2
-
-/* used by LT, LE */
-#define OPSPEC_LESS_TYPE_raw 0
-#define OPSPEC_LESS_TYPE_num 1
-#define OPSPEC_LESS_TYPE_str 2
-#define OPSPEC_LESS_TYPE_chk 3
-
-
-/* -- GETTABLE & GETTABUP specialization ------------------------------------
-
-  +----+-----+-----+
-  | CK | KEY | OUT |
-  +----+-----+-----+
-  msb            lsb
-
-  OUT : 1 bit, determines if A needs a specialization check
-  KEY : 3 bit, type of C (the table key)
-  CK  : 1 bit, determines if C is a constant index
-
-*/
-
-#define CREATE_OPSPEC_GETTAB(out,key,ck) \
-        (((ck)<<4) | ((key)<<1) | (out))
-
-#define GET_OPSPEC_GETTAB_KEY(i) (((i)&MASK1(3,POS_SP+1))>>(POS_SP+1))
-#define SET_OPSPEC_GETTAB_KEY(i,key) ((i) = (((i)&MASK0(3,POS_SP+1)) | \
-    (((key)<<(POS_SP+1))&MASK1(3,POS_SP+1))))
-
-
-/* -- SETTABLE & SETTABUP specialization ------------------------------------
-       
-  +----+----+-----+
-  | CK | BK | KEY |
-  +----+----+-----+
-  msb             lsb
-
-  KEY : 3 bit, type of B (the table key)
-  BK : 1 bit, determines if B is a constant index  
-  CK : 1 bit, determines if C is a constant index  
-
-*/
-
-#define CREATE_OPSPEC_SETTAB(key,bk,ck) \
-        (((ck)<<4) | ((bk)<<3) | (key))
-
-#define GET_OPSPEC_SETTAB_KEY(i) (((i)&MASK1(3,POS_SP))>>POS_SP)
-#define SET_OPSPEC_SETTAB_KEY(i,key) ((i) = (((i)&MASK0(3,POS_SP)) | \
-    (((key)<<POS_SP)&MASK1(3,POS_SP))))
-
-
-/* -- ADD, SUB, MUL, DIV, MOD, POW, UNM specialization --------------------
-
-  +----+----+----+-----+
-  | CK | BK | IN | OUT |
-  +----+----+----+-----+
-  msb                lsb
-
-  OUT : 1 bit, determines if A needs a specialization check
-  IN  : 2 bit, input type
-  BK  : 1 bit, if B is a constant index
-  CK  : 1 bit, if C is a constant index
-
-*/
-
-#define CREATE_OPSPEC_ARITH(out,in,bk,ck) \
-        (((ck)<<4) | ((bk)<<3) | ((in)<<1) | (out))
-
-#define GET_OPSPEC_ARITH_IN(i) (((i)&MASK1(2,POS_SP+1))>>(POS_SP+1))
-#define SET_OPSPEC_ARITH_IN(i,in) ((i) = (((i)&MASK0(2,POS_SP+1)) | \
-    (((in)<<(POS_SP+1))&MASK1(2,POS_SP+1))))
-
-
-/* -- LE & LT specialization ----------------------------------------------
-
-  +----+----+------+
-  | CK | BK | TYPE |
-  +----+----+------+
-  msb            lsb
-  
-  TYPE : 3 bit, input type
-  BK   : 1 bit, if B is a constant index
-  CK   : 1 bit, if C is a constant index
-
-*/
-
-#define CREATE_OPSPEC_LESS(type,bk,ck) \
-        (((ck)<<4) | ((bk)<<3) | (type))
-
-#define GET_OPSPEC_LESS_TYPE(i) (((i)&MASK1(3,POS_SP))>>POS_SP)
-#define SET_OPSPEC_LESS_TYPE(i,t) ((i) = (((i)&MASK0(3,POS_SP)) | \
-    (((t)<<POS_SP)&MASK1(3,POS_SP))))
-
-/* ----------------------------------------------------------------------- */
-
 /*
 ** R(x) - register
 ** Kst(x) - constant (in constant table)
 ** RK(x) == if ISK(x) then Kst(INDEXK(x)) else R(x)
 */
-
 
 /*
 ** grep "ORDER OP" if you change these enums
@@ -357,11 +212,10 @@ OP_CLOSURE,/* A Bx  R(A) := closure(KPROTO[Bx])     */
 OP_VARARG,/*  A B R(A), R(A+1), ..., R(A+B-2) = vararg    */
 
 OP_EXTRAARG/* Ax  extra (larger) argument for previous opcode */
-} OpCode;
+} OpGroup;
 
 
-#define NUM_OPCODES (cast(int, OP_EXTRAARG) + 1)
-
+#define NUM_OPGROUPS (cast(int, OP_EXTRAARG) + 1)
 
 
 /*===========================================================================
@@ -388,6 +242,425 @@ OP_EXTRAARG/* Ax  extra (larger) argument for previous opcode */
 ===========================================================================*/
 
 
+
+/* op out in bk ck */
+#define OPDEF(_) \
+_(MOVE, raw, ___, ___, ___) \
+_(MOVE, chk, ___, ___, ___) \
+_(LOADK, raw, ___, ___, ___) \
+_(LOADK, chk, ___, ___, ___) \
+_(LOADKX, raw, ___, ___, ___) \
+_(LOADKX, chk, ___, ___, ___) \
+_(LOADBOOL, raw, ___, ___, ___) \
+_(LOADBOOL, chk, ___, ___, ___) \
+_(LOADNIL, raw, ___, ___, ___) \
+_(LOADNIL, chk, ___, ___, ___) \
+_(GETUPVAL, raw, ___, ___, ___) \
+_(GETUPVAL, chk, ___, ___, ___) \
+\
+_(GETTABLE, raw, raw, ___, reg) \
+_(GETTABLE, raw, raw, ___, kst) \
+_(GETTABLE, raw, int, ___, reg) \
+_(GETTABLE, raw, int, ___, kst) \
+_(GETTABLE, raw, str, ___, reg) \
+_(GETTABLE, raw, str, ___, kst) \
+_(GETTABLE, raw, obj, ___, reg) \
+_(GETTABLE, raw, obj, ___, kst) \
+_(GETTABLE, raw, chk, ___, reg) \
+_(GETTABLE, chk, raw, ___, reg) \
+_(GETTABLE, chk, raw, ___, kst) \
+_(GETTABLE, chk, int, ___, reg) \
+_(GETTABLE, chk, int, ___, kst) \
+_(GETTABLE, chk, str, ___, reg) \
+_(GETTABLE, chk, str, ___, kst) \
+_(GETTABLE, chk, obj, ___, reg) \
+_(GETTABLE, chk, obj, ___, kst) \
+_(GETTABLE, chk, chk, ___, reg) \
+_(GETTABUP, raw, raw, ___, reg) \
+_(GETTABUP, raw, raw, ___, kst) \
+_(GETTABUP, raw, int, ___, reg) \
+_(GETTABUP, raw, int, ___, kst) \
+_(GETTABUP, raw, str, ___, reg) \
+_(GETTABUP, raw, str, ___, kst) \
+_(GETTABUP, raw, obj, ___, reg) \
+_(GETTABUP, raw, obj, ___, kst) \
+_(GETTABUP, raw, chk, ___, reg) \
+_(GETTABUP, chk, raw, ___, reg) \
+_(GETTABUP, chk, raw, ___, kst) \
+_(GETTABUP, chk, int, ___, reg) \
+_(GETTABUP, chk, int, ___, kst) \
+_(GETTABUP, chk, str, ___, reg) \
+_(GETTABUP, chk, str, ___, kst) \
+_(GETTABUP, chk, obj, ___, reg) \
+_(GETTABUP, chk, obj, ___, kst) \
+_(GETTABUP, chk, chk, ___, reg) \
+\
+_(SETTABLE, ___, raw, reg, reg) \
+_(SETTABLE, ___, raw, reg, kst) \
+_(SETTABLE, ___, raw, kst, reg) \
+_(SETTABLE, ___, raw, kst, kst) \
+_(SETTABLE, ___, int, reg, reg) \
+_(SETTABLE, ___, int, reg, kst) \
+_(SETTABLE, ___, int, kst, reg) \
+_(SETTABLE, ___, int, kst, kst) \
+_(SETTABLE, ___, str, reg, reg) \
+_(SETTABLE, ___, str, reg, kst) \
+_(SETTABLE, ___, str, kst, reg) \
+_(SETTABLE, ___, str, kst, kst) \
+_(SETTABLE, ___, obj, reg, reg) \
+_(SETTABLE, ___, obj, reg, kst) \
+_(SETTABLE, ___, obj, kst, reg) \
+_(SETTABLE, ___, obj, kst, kst) \
+_(SETTABLE, ___, chk, reg, reg) \
+_(SETTABLE, ___, chk, reg, kst) \
+_(SETTABUP, ___, raw, reg, reg) \
+_(SETTABUP, ___, raw, reg, kst) \
+_(SETTABUP, ___, raw, kst, reg) \
+_(SETTABUP, ___, raw, kst, kst) \
+_(SETTABUP, ___, int, reg, reg) \
+_(SETTABUP, ___, int, reg, kst) \
+_(SETTABUP, ___, int, kst, reg) \
+_(SETTABUP, ___, int, kst, kst) \
+_(SETTABUP, ___, str, reg, reg) \
+_(SETTABUP, ___, str, reg, kst) \
+_(SETTABUP, ___, str, kst, reg) \
+_(SETTABUP, ___, str, kst, kst) \
+_(SETTABUP, ___, obj, reg, reg) \
+_(SETTABUP, ___, obj, reg, kst) \
+_(SETTABUP, ___, obj, kst, reg) \
+_(SETTABUP, ___, obj, kst, kst) \
+_(SETTABUP, ___, chk, reg, reg) \
+_(SETTABUP, ___, chk, reg, kst) \
+\
+_(SETUPVAL, ___, ___, ___, ___) \
+\
+_(NEWTABLE, raw, ___, ___, ___) \
+_(NEWTABLE, chk, ___, ___, ___) \
+\
+_(SELF, raw, ___, ___, reg) \
+_(SELF, raw, ___, ___, kst) \
+_(SELF, chk, ___, ___, reg) \
+_(SELF, chk, ___, ___, kst) \
+\
+_(ADD, raw, raw, reg, reg) \
+_(ADD, raw, raw, reg, kst) \
+_(ADD, raw, raw, kst, reg) \
+_(ADD, raw, raw, kst, kst) \
+_(ADD, raw, num, reg, reg) \
+_(ADD, raw, num, reg, kst) \
+_(ADD, raw, num, kst, reg) \
+_(ADD, raw, obj, reg, reg) \
+_(ADD, raw, obj, reg, kst) \
+_(ADD, raw, obj, kst, reg) \
+_(ADD, raw, chk, reg, reg) \
+_(ADD, raw, chk, reg, kst) \
+_(ADD, raw, chk, kst, reg) \
+_(ADD, chk, raw, reg, reg) \
+_(ADD, chk, raw, reg, kst) \
+_(ADD, chk, raw, kst, reg) \
+_(ADD, chk, raw, kst, kst) \
+_(ADD, chk, num, reg, reg) \
+_(ADD, chk, num, reg, kst) \
+_(ADD, chk, num, kst, reg) \
+_(ADD, chk, obj, reg, reg) \
+_(ADD, chk, obj, reg, kst) \
+_(ADD, chk, obj, kst, reg) \
+_(ADD, chk, chk, reg, reg) \
+_(ADD, chk, chk, reg, kst) \
+_(ADD, chk, chk, kst, reg) \
+\
+_(SUB, raw, raw, reg, reg) \
+_(SUB, raw, raw, reg, kst) \
+_(SUB, raw, raw, kst, reg) \
+_(SUB, raw, raw, kst, kst) \
+_(SUB, raw, num, reg, reg) \
+_(SUB, raw, num, reg, kst) \
+_(SUB, raw, num, kst, reg) \
+_(SUB, raw, obj, reg, reg) \
+_(SUB, raw, obj, reg, kst) \
+_(SUB, raw, obj, kst, reg) \
+_(SUB, raw, chk, reg, reg) \
+_(SUB, raw, chk, reg, kst) \
+_(SUB, raw, chk, kst, reg) \
+_(SUB, chk, raw, reg, reg) \
+_(SUB, chk, raw, reg, kst) \
+_(SUB, chk, raw, kst, reg) \
+_(SUB, chk, raw, kst, kst) \
+_(SUB, chk, num, reg, reg) \
+_(SUB, chk, num, reg, kst) \
+_(SUB, chk, num, kst, reg) \
+_(SUB, chk, obj, reg, reg) \
+_(SUB, chk, obj, reg, kst) \
+_(SUB, chk, obj, kst, reg) \
+_(SUB, chk, chk, reg, reg) \
+_(SUB, chk, chk, reg, kst) \
+_(SUB, chk, chk, kst, reg) \
+\
+_(MUL, raw, raw, reg, reg) \
+_(MUL, raw, raw, reg, kst) \
+_(MUL, raw, raw, kst, reg) \
+_(MUL, raw, raw, kst, kst) \
+_(MUL, raw, num, reg, reg) \
+_(MUL, raw, num, reg, kst) \
+_(MUL, raw, num, kst, reg) \
+_(MUL, raw, obj, reg, reg) \
+_(MUL, raw, obj, reg, kst) \
+_(MUL, raw, obj, kst, reg) \
+_(MUL, raw, chk, reg, reg) \
+_(MUL, raw, chk, reg, kst) \
+_(MUL, raw, chk, kst, reg) \
+_(MUL, chk, raw, reg, reg) \
+_(MUL, chk, raw, reg, kst) \
+_(MUL, chk, raw, kst, reg) \
+_(MUL, chk, raw, kst, kst) \
+_(MUL, chk, num, reg, reg) \
+_(MUL, chk, num, reg, kst) \
+_(MUL, chk, num, kst, reg) \
+_(MUL, chk, obj, reg, reg) \
+_(MUL, chk, obj, reg, kst) \
+_(MUL, chk, obj, kst, reg) \
+_(MUL, chk, chk, reg, reg) \
+_(MUL, chk, chk, reg, kst) \
+_(MUL, chk, chk, kst, reg) \
+\
+_(DIV, raw, raw, reg, reg) \
+_(DIV, raw, raw, reg, kst) \
+_(DIV, raw, raw, kst, reg) \
+_(DIV, raw, raw, kst, kst) \
+_(DIV, raw, num, reg, reg) \
+_(DIV, raw, num, reg, kst) \
+_(DIV, raw, num, kst, reg) \
+_(DIV, raw, obj, reg, reg) \
+_(DIV, raw, obj, reg, kst) \
+_(DIV, raw, obj, kst, reg) \
+_(DIV, raw, chk, reg, reg) \
+_(DIV, raw, chk, reg, kst) \
+_(DIV, raw, chk, kst, reg) \
+_(DIV, chk, raw, reg, reg) \
+_(DIV, chk, raw, reg, kst) \
+_(DIV, chk, raw, kst, reg) \
+_(DIV, chk, raw, kst, kst) \
+_(DIV, chk, num, reg, reg) \
+_(DIV, chk, num, reg, kst) \
+_(DIV, chk, num, kst, reg) \
+_(DIV, chk, obj, reg, reg) \
+_(DIV, chk, obj, reg, kst) \
+_(DIV, chk, obj, kst, reg) \
+_(DIV, chk, chk, reg, reg) \
+_(DIV, chk, chk, reg, kst) \
+_(DIV, chk, chk, kst, reg) \
+\
+_(MOD, raw, raw, reg, reg) \
+_(MOD, raw, raw, reg, kst) \
+_(MOD, raw, raw, kst, reg) \
+_(MOD, raw, raw, kst, kst) \
+_(MOD, raw, num, reg, reg) \
+_(MOD, raw, num, reg, kst) \
+_(MOD, raw, num, kst, reg) \
+_(MOD, raw, obj, reg, reg) \
+_(MOD, raw, obj, reg, kst) \
+_(MOD, raw, obj, kst, reg) \
+_(MOD, raw, chk, reg, reg) \
+_(MOD, raw, chk, reg, kst) \
+_(MOD, raw, chk, kst, reg) \
+_(MOD, chk, raw, reg, reg) \
+_(MOD, chk, raw, reg, kst) \
+_(MOD, chk, raw, kst, reg) \
+_(MOD, chk, raw, kst, kst) \
+_(MOD, chk, num, reg, reg) \
+_(MOD, chk, num, reg, kst) \
+_(MOD, chk, num, kst, reg) \
+_(MOD, chk, obj, reg, reg) \
+_(MOD, chk, obj, reg, kst) \
+_(MOD, chk, obj, kst, reg) \
+_(MOD, chk, chk, reg, reg) \
+_(MOD, chk, chk, reg, kst) \
+_(MOD, chk, chk, kst, reg) \
+\
+_(POW, raw, raw, reg, reg) \
+_(POW, raw, raw, reg, kst) \
+_(POW, raw, raw, kst, reg) \
+_(POW, raw, raw, kst, kst) \
+_(POW, raw, num, reg, reg) \
+_(POW, raw, num, reg, kst) \
+_(POW, raw, num, kst, reg) \
+_(POW, raw, obj, reg, reg) \
+_(POW, raw, obj, reg, kst) \
+_(POW, raw, obj, kst, reg) \
+_(POW, raw, chk, reg, reg) \
+_(POW, raw, chk, reg, kst) \
+_(POW, raw, chk, kst, reg) \
+_(POW, chk, raw, reg, reg) \
+_(POW, chk, raw, reg, kst) \
+_(POW, chk, raw, kst, reg) \
+_(POW, chk, raw, kst, kst) \
+_(POW, chk, num, reg, reg) \
+_(POW, chk, num, reg, kst) \
+_(POW, chk, num, kst, reg) \
+_(POW, chk, obj, reg, reg) \
+_(POW, chk, obj, reg, kst) \
+_(POW, chk, obj, kst, reg) \
+_(POW, chk, chk, reg, reg) \
+_(POW, chk, chk, reg, kst) \
+_(POW, chk, chk, kst, reg) \
+\
+_(UNM, raw, raw, ___, ___) \
+_(UNM, raw, num, ___, ___) \
+_(UNM, raw, chk, ___, ___) \
+_(UNM, chk, raw, ___, ___) \
+_(UNM, chk, num, ___, ___) \
+_(UNM, chk, chk, ___, ___) \
+\
+_(NOT, raw, ___, ___, ___) \
+_(NOT, chk, ___, ___, ___) \
+\
+_(LEN, raw, raw, ___, ___) \
+_(LEN, raw, str, ___, ___) \
+_(LEN, raw, tab, ___, ___) \
+_(LEN, raw, chk, ___, ___) \
+_(LEN, chk, raw, ___, ___) \
+_(LEN, chk, str, ___, ___) \
+_(LEN, chk, tab, ___, ___) \
+_(LEN, chk, chk, ___, ___) \
+\
+_(CONCAT, raw, ___, ___, ___) \
+_(CONCAT, chk, ___, ___, ___) \
+\
+_(JMP, ___, ___, ___, ___) \
+\
+_(EQ, ___, ___, reg, reg) \
+_(EQ, ___, ___, reg, kst) \
+_(EQ, ___, ___, kst, reg) \
+_(EQ, ___, ___, kst, kst) \
+\
+_(LT, ___, raw, reg, reg) \
+_(LT, ___, raw, reg, kst) \
+_(LT, ___, raw, kst, reg) \
+_(LT, ___, raw, kst, kst) \
+_(LT, ___, num, reg, reg) \
+_(LT, ___, num, reg, kst) \
+_(LT, ___, num, kst, reg) \
+_(LT, ___, num, kst, kst) \
+_(LT, ___, str, reg, reg) \
+_(LT, ___, str, reg, kst) \
+_(LT, ___, str, kst, reg) \
+_(LT, ___, str, kst, kst) \
+_(LT, ___, chk, reg, reg) \
+_(LT, ___, chk, reg, kst) \
+_(LT, ___, chk, kst, reg) \
+\
+_(LE, ___, raw, reg, reg) \
+_(LE, ___, raw, reg, kst) \
+_(LE, ___, raw, kst, reg) \
+_(LE, ___, raw, kst, kst) \
+_(LE, ___, num, reg, reg) \
+_(LE, ___, num, reg, kst) \
+_(LE, ___, num, kst, reg) \
+_(LE, ___, num, kst, kst) \
+_(LE, ___, str, reg, reg) \
+_(LE, ___, str, reg, kst) \
+_(LE, ___, str, kst, reg) \
+_(LE, ___, str, kst, kst) \
+_(LE, ___, chk, reg, reg) \
+_(LE, ___, chk, reg, kst) \
+_(LE, ___, chk, kst, reg) \
+\
+_(TEST, ___, ___, ___, ___) \
+_(TESTSET, raw, ___, ___, ___) \
+_(TESTSET, chk, ___, ___, ___) \
+_(CALL, raw, ___, ___, ___) \
+_(CALL, chk, ___, ___, ___) \
+_(TAILCALL, ___, ___, ___, ___) \
+_(RETURN, ___, ___, ___, ___) \
+_(FORLOOP, ___, ___, ___, ___) \
+_(FORPREP, ___, ___, ___, ___) \
+_(TFORCALL, raw, ___, ___, ___) \
+_(TFORCALL, chk, ___, ___, ___) \
+_(TFORLOOP, ___, ___, ___, ___) \
+_(SETLIST, ___, ___, ___, ___) \
+_(CLOSURE, raw, ___, ___, ___) \
+_(CLOSURE, chk, ___, ___, ___) \
+_(VARARG, raw, ___, ___, ___) \
+_(VARARG, chk, ___, ___, ___) \
+_(EXTRAARG, ___, ___, ___, ___)
+
+
+#define OP(op,ret,spec,bk,ck) OP_##op##_##ret##_##spec##_##bk##_##ck
+
+#define sOP(op) OP(op,___,___,___,___)
+
+typedef enum {
+#define OPENUM(op,ret,spec,bk,ck) OP(op,ret,spec,bk,ck),
+  OPDEF(OPENUM)
+#undef OPENUM
+  NUM_OPCODES
+} OpCode;
+
+LUAI_DDEC OpGroup luaP_opcode2group[NUM_OPCODES];
+LUAI_DDEC OpCode luaP_opgroup2code[NUM_OPGROUPS];
+
+#define op2grp(op) luaP_opcode2group[op]
+#define grp2op(grp) luaP_opgroup2code[grp]
+
+#define GET_OPGROUP(i) luaP_opcode2group[GET_OPCODE(i)]
+
+typedef enum {  
+  OpType_raw,
+  OpType_num,
+  OpType_int,  
+  OpType_str,
+  OpType_tab,
+  OpType_obj,
+  OpType_chk,  
+  OpType_none
+} OpType;
+
+LUAI_DDEC OpType luaP_opout[NUM_OPCODES];
+LUAI_DDEC OpType luaP_opin[NUM_OPCODES];
+LUAI_DDEC int luaP_opbk[NUM_OPCODES];
+LUAI_DDEC int luaP_opck[NUM_OPCODES];
+
+#define opout(op) luaP_opout[op]
+#define opin(op) luaP_opin[op]
+#define opbk(op) luaP_opbk[op]
+#define opck(op) luaP_opck[op]
+
+
+LUAI_FUNC OpCode create_op_settab (OpGroup grp, OpType in, int bk, int ck);
+LUAI_FUNC OpCode create_op_gettab (OpGroup grp, OpType out, OpType in, 
+                                   int ck);
+LUAI_FUNC OpCode create_op_self (OpType out, int ck);
+LUAI_FUNC OpCode create_op_arith (OpGroup grp, OpType in, OpType out, 
+                                  int bk, int ck);
+LUAI_FUNC OpCode create_op_unm (OpType out, OpType in);
+LUAI_FUNC OpCode create_op_len (OpType out, OpType in);
+LUAI_FUNC OpCode create_op_eq (int bk, int ck);
+LUAI_FUNC OpCode create_op_less (OpGroup grp, OpType in, int bk, int ck);
+LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
+
+#define set_out_gettab(op,out) \
+  create_op_gettab(op2grp(op),out,opin(op),opck(op))
+#define set_out_self(op,out) create_op_self(out,luaP_opck[op])
+#define set_out_arith(op,out) \
+  create_op_arith(op2grp(op),out,opin(op),opbk(op),opck(op))
+#define set_out_unm(op,out) create_op_unm(opin(op),out)
+#define set_out_len(op,out) create_op_len(opin(op),out)
+#define set_out(op,out) create_op_out(op2grp(op),out)
+
+#define set_in_settab(op,in) create_op_settab(op2grp(op),in,opbk(op),opck(op))
+#define set_in_gettab(op,in) \
+  create_op_gettab(op2grp(op),opout(op),in,opck(op))
+#define set_in_arith(op,in) \
+  create_op_arith(op2grp(op),opout(op),in,opbk(op),opck(op))
+#define set_in_unm(op,in) create_op_unm(in,opout(op))
+#define set_in_len(op,in) create_op_len(in,opout(op))
+#define set_in_less(op,in) create_op_less(op2grp(op),in,opbk(op),opck(op))
+
+
+
+extern void printop(OpCode op);
+
+
 /*
 ** masks for instruction properties. The format is:
 ** bits 0-1: op mode
@@ -404,38 +677,20 @@ enum OpArgMask {
   OpArgK   /* argument is a constant or register/constant */
 };
 
-LUAI_DDEC const lu_byte luaP_opmodes[NUM_OPCODES];
+LUAI_DDEC const lu_byte luaP_opmodes[NUM_OPGROUPS];
 
-#define getOpMode(m)  (cast(enum OpMode, luaP_opmodes[m] & 3))
-#define getBMode(m) (cast(enum OpArgMask, (luaP_opmodes[m] >> 4) & 3))
-#define getCMode(m) (cast(enum OpArgMask, (luaP_opmodes[m] >> 2) & 3))
-#define testAMode(m)  (luaP_opmodes[m] & (1 << 6))
-#define testTMode(m)  (luaP_opmodes[m] & (1 << 7))
+#define getOpMode(m)  (cast(enum OpMode, luaP_opmodes[luaP_opcode2group[m]] & 3))
+#define getBMode(m) (cast(enum OpArgMask, (luaP_opmodes[luaP_opcode2group[m]] >> 4) & 3))
+#define getCMode(m) (cast(enum OpArgMask, (luaP_opmodes[luaP_opcode2group[m]] >> 2) & 3))
+#define testAMode(m)  (luaP_opmodes[luaP_opcode2group[m]] & (1 << 6))
+#define testTMode(m)  (luaP_opmodes[luaP_opcode2group[m]] & (1 << 7))
 
 
-LUAI_DDEC const char *const luaP_opnames[NUM_OPCODES+1];  /* opcode names */
+LUAI_DDEC const char *const luaP_opnames[NUM_OPGROUPS+1];  /* opcode names */
 
 
 /* number of list items to accumulate before a SETLIST instruction */
 #define LFIELDS_PER_FLUSH 50
-
-
-
-extern void PrintOp(Instruction i);
-
-
-
-/* TODO */
-static const char * const SpecNamesOut[2] = { "raw", "chk" };
-static const char * const SpecNamesTabKey[5] = { 
-"raw", "str", "int", "obj", "chk" };
-static const char * const SpecNamesArithIn[4] = { 
-"raw", "num", "obj", "chk" };
-static const char * const SpecNamesLenIn[4] = { 
-"raw", "str", "tab", "chk" };
-static const char * const SpecNamesLessType[4] = { 
-"raw", "num", "str", "chk" };
-extern void PrintSpec(Instruction i);
 
 
 

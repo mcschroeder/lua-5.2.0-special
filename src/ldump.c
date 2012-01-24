@@ -165,7 +165,7 @@ static void DumpExptypes(const Proto *f, DumpState *D)
   {
     int size;    
     Instruction i = f->code[pc];
-    switch (GET_OPCODE(i)) {
+    switch (GET_OPGROUP(i)) {
       case OP_LOADNIL:  size = GETARG_B(i)+1; goto dumpts;
       case OP_CALL:     size = GETARG_C(i)-1; goto dumpts;
       case OP_TFORCALL: size = GETARG_C(i);   goto dumpts;

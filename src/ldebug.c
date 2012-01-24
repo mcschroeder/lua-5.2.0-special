@@ -336,7 +336,7 @@ static int findsetreg (Proto *p, int lastpc, int reg) {
     Instruction i = p->code[pc];
     OpCode op = GET_OPCODE(i);
     int a = GETARG_A(i);
-    switch (op) {
+    switch (luaP_opcode2group[op]) {
       case OP_LOADNIL: {
         int b = GETARG_B(i);
         if (a <= reg && reg <= a + b)  /* set registers from 'a' to 'a+b' */
@@ -384,7 +384,8 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
   if (pc != -1) {  /* could find instruction? */
     Instruction i = p->code[pc];
     OpCode op = GET_OPCODE(i);
-    switch (op) {
+    OpGroup grp = GET_OPGROUP(i);
+    switch (grp) {
       case OP_MOVE: {
         int b = GETARG_B(i);  /* move from 'b' to 'a' */
         if (b < GETARG_A(i))
@@ -395,13 +396,13 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
       case OP_GETTABLE: {
         int k = GETARG_C(i);  /* key index */
         int t = GETARG_B(i);  /* table index */
-        const char *vn = (op == OP_GETTABLE)  /* name of indexed variable */
+        const char *vn = (grp == OP_GETTABLE)  /* name of indexed variable */
                          ? luaF_getlocalname(p, t + 1, pc)
                          : upvalname(p, t);
-        if (GET_OPSPEC_CK(i) == OPSPEC_reg)
-          rname(p, pc, k, name);
-        else 
+        if (opck(op))
           kname(p, pc, k, name);
+        else 
+          rname(p, pc, k, name);
         return (vn && strcmp(vn, LUA_ENV) == 0) ? "global" : "field";
         break;
       }
@@ -411,8 +412,8 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
       }
       case OP_LOADK:
       case OP_LOADKX: {
-        int b = (op == OP_LOADK) ? GETARG_Bx(i)
-                                 : GETARG_Ax(p->code[pc + 1]);
+        int b = (grp == OP_LOADK) ? GETARG_Bx(i)
+                                  : GETARG_Ax(p->code[pc + 1]);
         if (ttisstring(&p->k[b])) {
           *name = svalue(&p->k[b]);
           return "constant";
@@ -421,10 +422,10 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
       }
       case OP_SELF: {
         int k = GETARG_C(i);  /* key index */
-        if (GET_OPSPEC_CK(i) == OPSPEC_reg)
-          rname(p, pc, k, name);
-        else
+        if (opck(op))
           kname(p, pc, k, name);
+        else
+          rname(p, pc, k, name);
         return "method";
       }
       default: break;  /* go through to return NULL */
@@ -439,7 +440,7 @@ static const char *getfuncname (lua_State *L, CallInfo *ci, const char **name) {
   Proto *p = ci_func(ci)->p;  /* calling function */
   int pc = currentpc(ci);  /* calling instruction index */
   Instruction i = p->code[pc];  /* calling instruction */
-  switch (GET_OPCODE(i)) {
+  switch (GET_OPGROUP(i)) {
     case OP_CALL: case OP_TAILCALL:  /* get function name */
       return getobjname(p, pc, GETARG_A(i), name);
     case OP_TFORCALL: {  /* for iterator */

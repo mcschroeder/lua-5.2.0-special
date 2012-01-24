@@ -247,7 +247,7 @@ static void callhook (lua_State *L, CallInfo *ci) {
   ci->u.l.savedpc++;  /* hooks assume 'pc' is already incremented */
   if (isLua(ci->previous)) {
     OpCode op = GET_OPCODE(*(ci->previous->u.l.savedpc - 1));
-    if (op == OP_TAILCALL) {
+    if (op == sOP(TAILCALL)) {
       ci->callstatus |= CIST_TAIL;
       hook = LUA_HOOKTAILCALL;
     }

@@ -164,7 +164,7 @@ void exptypes_free (lua_State *L, Proto *f) {
   int pc, n;
   for (pc = 0; pc < f->sizecode; pc++) {
     Instruction i = f->code[pc];
-    switch (GET_OPCODE(i)) {      
+    switch (GET_OPGROUP(i)) {      
       case OP_LOADNIL:  n = GETARG_B(i)+1; goto freets;
       case OP_CALL:     n = GETARG_C(i)-1; goto freets;
       case OP_TFORCALL: n = GETARG_C(i);   goto freets;

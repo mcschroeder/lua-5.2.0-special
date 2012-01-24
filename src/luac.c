@@ -273,8 +273,6 @@ static void PrintConstant(const Proto* f, int i)
 
 #define UPVALNAME(x) ((f->upvalues[x].name) ? getstr(f->upvalues[x].name) : "-")
 #define MYK(x)    (-1-(x))
-#define ISKB(i) (GET_OPSPEC_BK(i) == OPSPEC_kst)
-#define ISKC(i) (GET_OPSPEC_CK(i) == OPSPEC_kst)
 
 static void PrintCode(const Proto* f)
 {
@@ -283,7 +281,8 @@ static void PrintCode(const Proto* f)
  for (pc=0; pc<n; pc++)
  {
   Instruction i=code[pc];
-  OpCode o=GET_OPCODE(i);
+  OpCode o = GET_OPCODE(i);
+  OpGroup grp=luaP_opcode2group[o];
   int a=GETARG_A(i);
   int b=GETARG_B(i);
   int c=GETARG_C(i);
@@ -293,43 +292,19 @@ static void PrintCode(const Proto* f)
   int line=getfuncline(f,pc);
   printf("\t%d\t",pc);
   if (line>0) printf("[%d]\t",line); else printf("[-]\t");
-  printf("%-9s",luaP_opnames[o]);
-  switch (o) {
-    case OP_GETTABLE:
-    case OP_GETTABUP:
-      printf(" %s %s\t", SpecNamesOut[GET_OPSPEC_OUT(i)],
-                         SpecNamesTabKey[GET_OPSPEC_GETTAB_KEY(i)]);
-      break;
-    case OP_SETTABLE:
-    case OP_SETTABUP:
-      printf(" %s    \t", SpecNamesTabKey[GET_OPSPEC_SETTAB_KEY(i)]);
-      break;
-    case OP_ADD: case OP_SUB: case OP_MUL: 
-    case OP_DIV: case OP_MOD: case OP_POW:
-    case OP_UNM:
-      printf(" %s %s\t", SpecNamesOut[GET_OPSPEC_OUT(i)],
-                         SpecNamesArithIn[GET_OPSPEC_ARITH_IN(i)]);
-      break;
-    case OP_LEN:
-      printf(" %s %s\t", SpecNamesOut[GET_OPSPEC_OUT(i)],
-                         SpecNamesLenIn[GET_OPSPEC_ARITH_IN(i)]);
-      break;
-    case OP_LT: case OP_LE:
-      printf(" %s    \t", SpecNamesLessType[GET_OPSPEC_LESS_TYPE(i)]);
-      break;
-    default:
-      printf(" %-7i\t", GET_OPSPEC(i));
-      break;
-  }
+  printop(o);
+  printf("\t");
+  // printf("%-9s",luaP_opnames[grp]);
+  // printf(" %-9i\t", GET_OPCODE(i));
   switch (getOpMode(o))
   {
    case iABC:
     printf("%d",a);
-    if (o == OP_GETTABLE || o == OP_GETTABUP)
+    if (grp == OP_GETTABLE || grp == OP_GETTABUP)
       printf(" %d", b);
     else if (getBMode(o)!=OpArgN) 
-      printf(" %d",ISKB(i) ? (MYK(b)) : b);
-    if (getCMode(o)!=OpArgN) printf(" %d",ISKC(i) ? (MYK(c)) : c);
+      printf(" %d",opbk(o) ? (MYK(b)) : b);
+    if (getCMode(o)!=OpArgN) printf(" %d",opck(o) ? (MYK(c)) : c);
     break;
    case iABx:
     printf("%d",a);
@@ -343,7 +318,7 @@ static void PrintCode(const Proto* f)
     printf("%d",MYK(ax));
     break;
   }
-  switch (o)
+  switch (grp)
   {
    case OP_LOADK:
     printf("\t; "); PrintConstant(f,bx);
@@ -354,16 +329,16 @@ static void PrintCode(const Proto* f)
     break;
    case OP_GETTABUP:
     printf("\t; %s",UPVALNAME(b));
-    if (ISKC(i)) { printf(" "); PrintConstant(f,c); }
+    if (opck(o)) { printf(" "); PrintConstant(f,c); }
     break;
    case OP_SETTABUP:
     printf("\t; %s",UPVALNAME(a));
-    if (ISKB(i)) { printf(" "); PrintConstant(f,b); }
-    if (ISKC(i)) { printf(" "); PrintConstant(f,c); }
+    if (opbk(o)) { printf(" "); PrintConstant(f,b); }
+    if (opck(o)) { printf(" "); PrintConstant(f,c); }
     break;
    case OP_GETTABLE:
    case OP_SELF:
-    if (ISKC(i)) { printf("\t; "); PrintConstant(f,c); }
+    if (opck(o)) { printf("\t; "); PrintConstant(f,c); }
     break;
    case OP_SETTABLE:
    case OP_ADD:
@@ -374,12 +349,12 @@ static void PrintCode(const Proto* f)
    case OP_EQ:
    case OP_LT:
    case OP_LE:
-    if (ISKB(i) || ISKC(i))
+    if (opbk(o) || opck(o))
     {
      printf("\t; ");
-     if (ISKB(i)) PrintConstant(f,b); else printf("-");
+     if (opbk(o)) PrintConstant(f,b); else printf("-");
      printf(" ");
-     if (ISKC(i)) PrintConstant(f,c); else printf("-");
+     if (opck(o)) PrintConstant(f,c); else printf("-");
     }
     break;
    case OP_JMP:

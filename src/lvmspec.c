@@ -15,7 +15,7 @@
 
 
 
-#define DEBUG_PRINT
+ // #define DEBUG_PRINT
 
 
 
@@ -37,33 +37,41 @@ static RegInfo *findreginfo (Proto *p, int reg, int pc, int use) {
 }
 
 
-#define store_possible use_possible(reginfo, pc, REGINFO_USE_STORE)
-#define load_possible  use_possible(reginfo, pc, REGINFO_USE_LOAD)
-
-#define ISK_B(i) (GET_OPSPEC_BK(i) == OPSPEC_kst)
-#define ISK_C(i) (GET_OPSPEC_CK(i) == OPSPEC_kst)
+#define store_possible (use_possible(reginfo, pc, REGINFO_USE_STORE))
+#define load_possible  (use_possible(reginfo, pc, REGINFO_USE_LOAD))
 
 
 void despecialize (Proto *p, int reg, RegInfo *reginfo) {
   int pc;
   for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
     Instruction *i = &(p->code[pc]);
-    switch (GET_OPCODE(*i)) {
+    OpCode op = GET_OPCODE(*i);
+    #ifdef DEBUG_PRINT
+    printf("\t[%i] ", pc);
+    printop(op);
+    #endif
+    switch (luaP_opcode2group[op]) {
       case OP_MOVE:
       case OP_LOADK:
       case OP_LOADKX:
       case OP_LOADBOOL:
       case OP_GETUPVAL:
       case OP_NEWTABLE:
-      case OP_SELF:
+      case OP_NOT:
       case OP_CONCAT:
       case OP_TESTSET:
       case OP_CLOSURE:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPSPEC(*i, 0);
+          SET_OPCODE(*i, set_out(op, OpType_raw));
           p->exptypes[pc].t = LUA_TNONE;
         }
         break;
+      case OP_SELF:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPCODE(*i, set_out_self(op, OpType_raw));
+          p->exptypes[pc].t = LUA_TNONE;
+        }
+        break;      
       case OP_LOADNIL: {
         int a = GETARG_A(*i);
         int b = GETARG_B(*i);
@@ -73,7 +81,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           int j;
           for (j = 0; j < b; j++) {
             if (exptypes[j] != LUA_TNONE) {
-              SET_OPSPEC(*i, 0);
+              SET_OPCODE(*i, set_out(op, OpType_raw));
               break;
             }
           }
@@ -82,46 +90,55 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
       }
       case OP_GETTABLE: case OP_GETTABUP:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
+          SET_OPCODE(*i, set_out_gettab(op, OpType_raw));
           p->exptypes[pc].t = LUA_TNONE;
         }
-        if (!ISK_C(*i) && GETARG_C(*i) == reg && load_possible) {
-          SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);          
+        if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
+          SET_OPCODE(*i, set_in_gettab(op, OpType_raw));
         }
         break;
       case OP_SETTABLE: case OP_SETTABUP:
-        if (!ISK_B(*i) && GETARG_B(*i) == reg && load_possible) {
-          SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);
+        if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
+          SET_OPCODE(*i, set_in_settab(op, OpType_raw));
         }
         break;
       case OP_ADD: case OP_SUB: case OP_MUL:
       case OP_DIV: case OP_MOD: case OP_POW:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
+          SET_OPCODE(*i, set_out_arith(op, OpType_raw));
           p->exptypes[pc].t = LUA_TNONE;
         }
-        if (!ISK_B(*i) && GETARG_B(*i) == reg && load_possible) {
-          SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
+          SET_OPCODE(*i, set_in_arith(op, OpType_raw));
         }
-        if (!ISK_C(*i) && GETARG_C(*i) == reg && load_possible) {
-          SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
+          SET_OPCODE(*i, set_in_arith(op, OpType_raw));
         }
         break;
-      case OP_UNM: case OP_LEN:
+      case OP_UNM: 
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPSPEC_OUT(*i, OPSPEC_OUT_raw);
+          SET_OPCODE(*i, set_out_unm(op, OpType_raw));
           p->exptypes[pc].t = LUA_TNONE;
         }
-        if (!ISK_B(*i) && GETARG_B(*i) == reg && load_possible) {
-          SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+        if (GETARG_B(*i) == reg && load_possible) {
+          SET_OPCODE(*i, set_in_unm(op, OpType_raw));
+        }
+        break;
+      case OP_LEN:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPCODE(*i, set_out_len(op, OpType_raw));
+          p->exptypes[pc].t = LUA_TNONE;
+        }
+        if (GETARG_B(*i) == reg && load_possible) {
+          SET_OPCODE(*i, set_in_len(op, OpType_raw));
         }
         break;
       case OP_LE: case OP_LT:
-        if (!ISK_B(*i) && GETARG_B(*i) == reg && load_possible) {
-          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
+        if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
+          SET_OPCODE(*i, set_in_less(op, OpType_raw));
         }
-        if (!ISK_C(*i) && GETARG_C(*i) == reg && load_possible) {
-          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
+        if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
+          SET_OPCODE(*i, set_in_less(op, OpType_raw));
         }
         break;
       case OP_CALL: {
@@ -134,7 +151,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           int j;
           for (j = 0; j < nresults; j++) {
             if (exptypes[j] != LUA_TNONE) {
-              SET_OPSPEC(*i, 0);
+              SET_OPCODE(*i, set_out(op, OpType_raw));
               break;
             }
           }
@@ -151,7 +168,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           int j;
           for (j = 0; j < nresults; j++) {
             if (exptypes[j] != LUA_TNONE) {
-              SET_OPSPEC(*i, 0);
+              SET_OPCODE(*i, set_out(op, OpType_raw));
               break;
             }
           }
@@ -168,7 +185,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           int j;
           for (j = 0; j < b; j++) {
             if (exptypes[j] != LUA_TNONE) {
-              SET_OPSPEC(*i, 0);
+              SET_OPCODE(*i, set_out(op, OpType_raw));
               break;
             }
           }
@@ -176,12 +193,23 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
         break;        
       }
       default:
+      #ifdef DEBUG_PRINT
+      printf("\n"); continue;
+      #endif
         break;
     }
+    #ifdef DEBUG_PRINT
+    op = GET_OPCODE(*i);
+    printf(" --> "); printop(op); printf("\n");
+    #endif
   }
 }
 
 void luaVS_despecialize (lua_State *L, int reg) {
+  #ifdef DEBUG_PRINT
+  printf("%s %i\n",__func__,reg);
+  #endif
+
   Proto *p = clLvalue(L->ci->func)->p;
   int pc = pcRel(L->ci->u.l.savedpc, p);
   RegInfo *reginfo = findreginfo(p, reg, pc, REGINFO_USE_STORE);
@@ -190,6 +218,10 @@ void luaVS_despecialize (lua_State *L, int reg) {
 }
 
 void luaVS_despecialize_param (Proto *p, int reg) {
+  #ifdef DEBUG_PRINT
+  printf("%s %i\n",__func__,reg);
+  #endif
+
   lua_assert(reg < p->numparams);
   RegInfo *reginfo = &p->reginfos[reg];
   if (reginfo->state == REGINFO_STATE_UNUSED) return;
@@ -198,10 +230,18 @@ void luaVS_despecialize_param (Proto *p, int reg) {
 
 /* add type guards to all stores of the register within the given scope */
 void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {  
+  #ifdef DEBUG_PRINT
+  printf("\t%s %i %i\n",__func__,reg,type);
+  #endif
   int pc;
   for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
     Instruction *i = &(p->code[pc]);
-    switch (GET_OPCODE(*i)) {
+    OpCode op = GET_OPCODE(*i);
+    #ifdef DEBUG_PRINT
+    printf("\t\t[%i] ", pc);
+    printop(op);
+    #endif
+    switch (luaP_opcode2group[op]) {
       case OP_MOVE:
       case OP_LOADK:
       case OP_LOADKX:
@@ -213,17 +253,40 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
       case OP_TESTSET:
       case OP_CLOSURE:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPSPEC(*i, 1);
+          SET_OPCODE(*i, set_out(op, OpType_chk));
           p->exptypes[pc].t = type;
         }
         break;
-      case OP_GETTABLE: case OP_GETTABUP:
-      case OP_SELF:
-      case OP_ADD: case OP_SUB: case OP_MUL: 
-      case OP_DIV: case OP_MOD: case OP_POW:
-      case OP_UNM: case OP_LEN:
+      case OP_GETTABLE: case OP_GETTABUP: {
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPSPEC_OUT(*i, OPSPEC_OUT_chk);
+          SET_OPCODE(*i, set_out_gettab(op, OpType_chk));
+          p->exptypes[pc].t = type;
+        }
+        break;
+      }      
+      case OP_ADD: case OP_SUB: case OP_MUL: 
+      case OP_DIV: case OP_MOD: case OP_POW: {
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPCODE(*i, set_out_arith(op, OpType_chk));
+          p->exptypes[pc].t = type;
+        }
+        break;
+      }
+      case OP_UNM:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPCODE(*i, set_out_unm(op, OpType_chk));
+          p->exptypes[pc].t = type;
+        }
+        break;
+      case OP_SELF:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPCODE(*i, set_out_self(op, OpType_chk));
+          p->exptypes[pc].t = type;
+        }
+        break;
+      case OP_LEN:
+        if (GETARG_A(*i) == reg && store_possible) {
+          SET_OPCODE(*i, set_out_len(op, OpType_chk));
           p->exptypes[pc].t = type;
         }
         break;
@@ -231,7 +294,7 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
         int a = GETARG_A(*i);
         int b = GETARG_B(*i);
         if (a <= reg && reg <= a+b && store_possible) {
-          SET_OPSPEC(*i, 1);
+          SET_OPCODE(*i, set_out(op, OpType_chk));
           p->exptypes[pc].ts[reg-a] = type;
         }
         break;      
@@ -241,7 +304,7 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
         int nresults = GETARG_C(*i) - 1;
         if (nresults < 1) break; /* also handles LUA_MULTRET */
         if (a <= reg && reg <= a+nresults && store_possible) {
-          SET_OPSPEC(*i, 1);
+          SET_OPCODE(*i, set_out(op, OpType_chk));
           p->exptypes[pc].ts[reg-a] = type;
         }
         break;
@@ -251,7 +314,7 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
         int nresults = GETARG_C(*i);
         int cb = a + 3; /* call base */
         if (cb <= reg && reg <= cb+nresults-1 && store_possible) {
-          SET_OPSPEC(*i, 1);
+          SET_OPCODE(*i, set_out(op, OpType_chk));
           p->exptypes[pc].ts[reg-cb] = type;
         }
         break;
@@ -261,14 +324,21 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
         int b = GETARG_B(*i) - 1;
         if (b == -1) break; /* direct input to a call */
         if (a <= reg && reg <= a+b && store_possible) {
-          SET_OPSPEC(*i, 1);
+          SET_OPCODE(*i, set_out(op, OpType_chk));
           p->exptypes[pc].ts[reg-a] = type;
         }
         break;
       }
       default:
+      #ifdef DEBUG_PRINT
+      printf("\n"); continue;
+      #endif
         break;
     }
+
+    #ifdef DEBUG_PRINT
+    printf(" --> "); printop(GET_OPCODE(*i)); printf("\n");
+    #endif
   }
 }
 
@@ -277,8 +347,6 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
 #define RC(i) (base+GETARG_C(i))
 #define KB(i) (k+GETARG_B(i))
 #define KC(i) (k+GETARG_C(i))
-#define RKB(i) (ISK_B(i) ? KB(i) : RB(i))
-#define RKC(i) (ISK_C(i) ? KC(i) : RC(i))
 
 
 #define _add_guards(r,t) { int _r = r; \
@@ -287,84 +355,105 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
     add_guards(p, _r, _reginfo, t); } \
 
 void luaVS_specialize (lua_State *L) {
+  #ifdef DEBUG_PRINT
+  printf("%s\n",__func__);
+  #endif
+
   Proto *p = clLvalue(L->ci->func)->p;
   int pc = pcRel(L->ci->u.l.savedpc, p);
   StkId base = L->ci->u.l.base;
   TValue *k = p->k;  
   Instruction *i = &(p->code[pc]);
-  switch (GET_OPCODE(*i)) {
-    case OP_GETTABLE: case OP_GETTABUP: {
-      TValue *rc = RKC(*i);
-      if (ttisstring(rc))   SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_str);
-      else if (ttisint(rc)) SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_int);
-      else if (ttisnil(rc)) SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);
-      else                  SET_OPSPEC_GETTAB_KEY(*i, OPSPEC_TAB_KEY_obj);
-      if (!ISK_C(*i)) _add_guards(GETARG_C(*i), rttype(rc));
+  OpCode op = GET_OPCODE(*i);
+  #ifdef DEBUG_PRINT
+  printf("\t[%i] ", pc);
+  printop(op);
+  printf("\n");
+  #endif
+  switch (luaP_opcode2group[op]) {
+    case OP_GETTABLE: 
+    case OP_GETTABUP: {
+      TValue *rc = opck(op) ? KC(*i) : RC(*i);
+      if (ttisstring(rc))   op = set_in_gettab(op, OpType_str);
+      else if (ttisint(rc)) op = set_in_gettab(op, OpType_int);
+      else if (ttisnil(rc)) op = set_in_gettab(op, OpType_raw);
+      else                  op = set_in_gettab(op, OpType_obj);
+      SET_OPCODE(*i, op);
+      if (!opck(op)) _add_guards(GETARG_C(*i), rttype(rc));
       break;
     }
-    case OP_SETTABLE: case OP_SETTABUP: {
-      TValue *rb = RKB(*i);
-      if (ttisstring(rb))   SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_str);
-      else if (ttisint(rb)) SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_int);
-      else if (ttisnil(rb)) SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_raw);
-      else                  SET_OPSPEC_SETTAB_KEY(*i, OPSPEC_TAB_KEY_obj);
-      if (!ISK_B(*i)) _add_guards(GETARG_B(*i), rttype(rb));
+    case OP_SETTABLE: 
+    case OP_SETTABUP: {
+      TValue *rb = opbk(op) ? KB(*i) : RB(*i);
+      if (ttisstring(rb))   op = set_in_settab(op, OpType_str);
+      else if (ttisint(rb)) op = set_in_settab(op, OpType_int);
+      else if (ttisnil(rb)) op = set_in_settab(op, OpType_raw);
+      else                  op = set_in_settab(op, OpType_obj);
+      SET_OPCODE(*i, op);
+      if (!opbk(op)) _add_guards(GETARG_B(*i), rttype(rb));
       break;
     }
     case OP_ADD: case OP_SUB: case OP_MUL:
     case OP_DIV: case OP_MOD: case OP_POW: {
-      TValue *rb = RKB(*i);
-      TValue *rc = RKC(*i);
-      if (ttisnumber(rb)) {
-        if (ttisnumber(rc))       SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);
-        else if (ttisstring(rc))  SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-        else                      SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+      TValue *rb = opbk(op) ? KB(*i) : RB(*i);
+      TValue *rc = opck(op) ? KC(*i) : RC(*i);
+      if (ttisnumber(rb)) {        
+        if (ttisnumber(rc))       op = set_in_arith(op, OpType_num);
+        else if (ttisstring(rc))  op = set_in_arith(op, OpType_raw);
+        else                      op = set_in_arith(op, OpType_obj);
       }
       else if (ttisstring(rb)) {
-        if (ttisnumber(rc))       SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-        else if (ttisstring(rc))  SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
-        else                      SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
+        if (ttisnumber(rc))       op = set_in_arith(op, OpType_raw);
+        else if (ttisstring(rc))  op = set_in_arith(op, OpType_raw);
+        else                      op = set_in_arith(op, OpType_obj);
       }
-      else                        SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_obj);
-      if (!ISK_B(*i)) _add_guards(GETARG_B(*i), rttype(rb));
-      if (!ISK_C(*i)) _add_guards(GETARG_C(*i), rttype(rc));
+      else                        op = set_in_arith(op, OpType_obj);
+      SET_OPCODE(*i, op);
+      if (!opbk(op)) _add_guards(GETARG_B(*i), rttype(rb));
+      if (!opck(op)) _add_guards(GETARG_C(*i), rttype(rc));      
       break;
     }
     case OP_UNM: {
       TValue *rb = RB(*i);
-      if (ttisnumber(rb)) SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_num);
-      else                SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+      if (ttisnumber(rb)) op = set_in_unm(op, OpType_num);
+      else                op = set_in_unm(op, OpType_raw);
+      SET_OPCODE(*i, op);
       _add_guards(GETARG_B(*i), rttype(rb));
       break;
     }
     case OP_LEN: {
       TValue *rb = RB(*i);
-      if (ttisstring(rb))     SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_str);
-      else if (ttistable(rb)) SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_tab);
-      else                    SET_OPSPEC_ARITH_IN(*i, OPSPEC_ARITH_IN_raw);
+      if (ttisstring(rb))     op = set_in_len(op, OpType_str);
+      else if (ttistable(rb)) op = set_in_len(op, OpType_tab);
+      else                    op = set_in_len(op, OpType_raw);
+      SET_OPCODE(*i, op);
       _add_guards(GETARG_B(*i), rttype(rb));
       break;
     }
     case OP_LT: case OP_LE: {
-      TValue *rb = RKB(*i);
-      TValue *rc = RKC(*i);
+      TValue *rb = opbk(op) ? KB(*i) : RB(*i);
+      TValue *rc = opck(op) ? KC(*i) : RC(*i);
       if (ttisequal(rb, rc)) {
-        if (ttisnumber(rb))       
-          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_num);
-        else if (ttisstring(rb))  
-          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_str);
-        else                      
-          SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
-      } else 
-        SET_OPSPEC_LESS_TYPE(*i, OPSPEC_LESS_TYPE_raw);
-      if (!ISK_B(*i)) _add_guards(GETARG_B(*i), rttype(rb));
-      if (!ISK_C(*i)) _add_guards(GETARG_C(*i), rttype(rc));
+        if (ttisnumber(rb))       op = set_in_less(op, OpType_num);
+        else if (ttisstring(rb))  op = set_in_less(op, OpType_str);
+        else                      op = set_in_less(op, OpType_raw);
+      } else                      op = set_in_less(op, OpType_raw);
+      SET_OPCODE(*i, op);
+      if (!opbk(op)) _add_guards(GETARG_B(*i), rttype(rb));
+      if (!opck(op)) _add_guards(GETARG_C(*i), rttype(rc));
       break;
     }
     default:
       lua_assert(0);
       break;
   }
+  #ifdef DEBUG_PRINT
+  op = GET_OPCODE(*i);
+  printf("\t-->");
+  printop(op);
+  printf("\n");
+  #endif
+
 }
 
 

@@ -517,7 +517,8 @@ static void codeclosure (LexState *ls, Proto *clp, expdesc *v) {
   }
   f->p[fs->np++] = clp;
   luaC_objbarrier(ls->L, f, clp);
-  init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE, 0, 0, fs->np-1));
+  OpCode op = create_op_out(OP_CLOSURE, OpType_raw);
+  init_exp(v, VRELOCABLE, luaK_codeABx(fs, op, 0, fs->np-1));
   luaK_exp2nextreg(fs, v);  /* fix it at stack top (for GC) */
 }
 
@@ -684,33 +685,27 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   rkkey = luaK_exp2RK(fs, &key);
   expr(ls, &val);
   int rkval = luaK_exp2RK(fs, &val);
-
-  int sp;  
-  int ck;
-  if (val.k == VK) { 
-    ck = OPSPEC_kst;
-  } else {
+  int bk = 1, ck = 1;
+  if (val.k != VK) {
     addregload(fs, rkval);
-    ck = OPSPEC_reg;
+    ck = 0;
   }
+  OpType in;
   if (key.k == VK) {
     TValue *k = fs->f->k + rkkey;
-    if (ttisstring(k))
-      sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_str, OPSPEC_kst, ck);
-    else if (ttisint(k))
-      sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_int, OPSPEC_kst, ck);
-    else if (ttisnil(k))
-      sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_raw, OPSPEC_kst, ck);
-    else
-      sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_obj, OPSPEC_kst, ck);
+    if (ttisstring(k))    in = OpType_str;
+    else if (ttisint(k))  in = OpType_int;
+    else if (ttisnil(k))  in = OpType_raw;
+    else                  in = OpType_obj;
   } 
   else {
     addregload(fs, rkkey);
-    sp = CREATE_OPSPEC_SETTAB(OPSPEC_TAB_KEY_chk, OPSPEC_reg, ck);
+    bk = 0;
+    in = OpType_chk;
   }
   addregload(fs, cc->t->u.info);
-
-  luaK_codeABC(fs, OP_SETTABLE, sp, cc->t->u.info, rkkey, rkval);
+  OpCode op = create_op_settab(OP_SETTABLE, in, bk, ck);
+  luaK_codeABC(fs, op, cc->t->u.info, rkkey, rkval);
   fs->freereg = reg;  /* free registers */
 }
 
@@ -777,7 +772,7 @@ static void constructor (LexState *ls, expdesc *t) {
      sep -> ',' | ';' */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  int pc = luaK_codeABC(fs, OP_NEWTABLE, 0, 0, 0, 0);
+  int pc = luaK_codeABC(fs, create_op_out(OP_NEWTABLE, OpType_raw), 0, 0, 0);
   struct ConsControl cc;
   cc.na = cc.nh = cc.tostore = 0;
   cc.t = t;
@@ -911,7 +906,8 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
   for (ra = base; ra <= base+nparams; ra++)
     addregload(fs, ra);
   addregstore(fs, base); // TODO: not quite sure here
-  init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, 0, base, nparams+1, 2));  
+  OpCode op = create_op_out(OP_CALL, OpType_raw);
+  init_exp(f, VCALL, luaK_codeABC(fs, op, base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
                             (unless changed) one result */  
@@ -1018,7 +1014,8 @@ static void simpleexp (LexState *ls, expdesc *v) {
       FuncState *fs = ls->fs;
       check_condition(ls, fs->f->is_vararg,
                       "cannot use " LUA_QL("...") " outside a vararg function");
-      init_exp(v, VVARARG, luaK_codeABC(fs, OP_VARARG, 0, 0, 1, 0));
+      OpCode op = create_op_out(OP_VARARG, OpType_raw);
+      init_exp(v, VVARARG, luaK_codeABC(fs, op, 0, 1, 0));
       fs->f->exptypes[fs->pc-1].ts = luaM_newvector(ls->L, 0, int);
       break;
     }
@@ -1182,9 +1179,10 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
   }
   if (conflict) {
     /* copy upvalue/local value to a temporary (in position 'extra') */
-    OpCode op = (v->k == VLOCAL) ? OP_MOVE : OP_GETUPVAL;
+    OpCode op = create_op_out((v->k == VLOCAL) ? OP_MOVE : OP_GETUPVAL,
+                              OpType_raw);
     addregstore(fs, extra);
-    luaK_codeABC(fs, op, 0, extra, v->u.info, 0);
+    luaK_codeABC(fs, op, extra, v->u.info, 0);
     luaK_reserveregs(fs, 1);
   }
 }
@@ -1347,7 +1345,7 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
     addregstore(fs, base+2);    
     addregstore(fs, base);
     addregstore(fs, base+3);
-    prep = luaK_codeAsBx(fs, OP_FORPREP, 0, base, NO_JUMP);
+    prep = luaK_codeAsBx(fs, sOP(FORPREP), base, NO_JUMP);
   } else {
     addregstore(fs, base);
     addregstore(fs, base+1);
@@ -1379,14 +1377,15 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   leaveblock(fs);  /* end of scope for declared variables */
   luaK_patchtohere(fs, prep);
   if (isnum) {  /* numeric for? */
-    endfor = luaK_codeAsBx(fs, OP_FORLOOP, 0, base, NO_JUMP);
+    endfor = luaK_codeAsBx(fs, sOP(FORLOOP), base, NO_JUMP);
   }
   else {  /* generic for */
-    luaK_codeABC(fs, OP_TFORCALL, 0, base, 0, nvars);
+    int op = create_op_out(OP_TFORCALL, OpType_raw);
+    luaK_codeABC(fs, op, base, 0, nvars);
     fs->f->exptypes[fs->pc-1].ts = luaM_newvector(fs->ls->L, nvars, int);
     while (--nvars >= 0) fs->f->exptypes[fs->pc-1].ts[nvars] = LUA_TNONE;
     luaK_fixline(fs, line);
-    endfor = luaK_codeAsBx(fs, OP_TFORLOOP, 0, base + 2, NO_JUMP);
+    endfor = luaK_codeAsBx(fs, sOP(TFORLOOP), base + 2, NO_JUMP);
   }
   luaK_patchlist(fs, endfor, prep + 1);
   luaK_fixline(fs, line);
@@ -1595,7 +1594,7 @@ static void retstat (LexState *ls) {
     if (hasmultret(e.k)) {
       luaK_setmultret(fs, &e);
       if (e.k == VCALL && nret == 1) {  /* tail call? */
-        SET_OPCODE(getcode(fs,&e), OP_TAILCALL);
+        SET_OPCODE(getcode(fs,&e), sOP(TAILCALL));
         lua_assert(GETARG_A(getcode(fs,&e)) == fs->nactvar);
       }
       first = fs->nactvar;
