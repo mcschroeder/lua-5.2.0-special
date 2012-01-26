@@ -378,23 +378,25 @@ void luaVS_specialize (lua_State *L) {
     case OP_GETTABLE: 
     case OP_GETTABUP: {
       TValue *rc = opck(op) ? KC(*i) : RC(*i);
-      if (ttisstring(rc))   op = set_in_gettab(op, OpType_str);
-      else if (ttisint(rc)) op = set_in_gettab(op, OpType_int);
+      int type = rttype(rc);      
+      if (ttisint(rc)) {op = set_in_gettab(op, OpType_int); type = LUA_TINT;}
+      else if (ttisstring(rc))   op = set_in_gettab(op, OpType_str);
       else if (ttisnil(rc)) op = set_in_gettab(op, OpType_raw);
       else                  op = set_in_gettab(op, OpType_obj);
       SET_OPCODE(*i, op);
-      if (!opck(op)) _add_guards(GETARG_C(*i), rttype(rc));
+      if (!opck(op)) _add_guards(GETARG_C(*i), type);
       break;
     }
     case OP_SETTABLE: 
     case OP_SETTABUP: {
       TValue *rb = opbk(op) ? KB(*i) : RB(*i);
-      if (ttisstring(rb))   op = set_in_settab(op, OpType_str);
-      else if (ttisint(rb)) op = set_in_settab(op, OpType_int);
+      int type = rttype(rb);      
+      if (ttisint(rb)) {op = set_in_settab(op, OpType_int); type = LUA_TINT;}
+      else if (ttisstring(rb))   op = set_in_settab(op, OpType_str);
       else if (ttisnil(rb)) op = set_in_settab(op, OpType_raw);
       else                  op = set_in_settab(op, OpType_obj);
       SET_OPCODE(*i, op);
-      if (!opbk(op)) _add_guards(GETARG_B(*i), rttype(rb));
+      if (!opbk(op)) _add_guards(GETARG_B(*i), type);
       break;
     }
     case OP_ADD: case OP_SUB: case OP_MUL:

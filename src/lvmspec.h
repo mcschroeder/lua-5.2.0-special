@@ -15,4 +15,7 @@ LUAI_FUNC void luaVS_specialize (lua_State *L);
 /* used in p->paramtypes to indicate polymorphic parameter */
 #define LUA_TNOSPEC (-2)
 
+/* used in exptypes and paramtypes to indicate integer */
+#define LUA_TINT (-3)
+
 #endif

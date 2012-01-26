@@ -568,16 +568,28 @@ void luaV_finishOp (lua_State *L) {
 
 
 
-#define TypeGuard \
-  if (rttype(ra) != cl->p->exptypes[pcRel(ci->u.l.savedpc, cl->p)].t) { \
-    luaVS_despecialize(L, GETARG_A(i)); }
+// #define TypeGuard \
+//   if (rttype(ra) != cl->p->exptypes[pcRel(ci->u.l.savedpc, cl->p)].t) { \
+//     luaVS_despecialize(L, GETARG_A(i)); }
+
+#define TypeGuard type_guard(L, cl->p, ci, GETARG_A(i), ra);
+
+static void type_guard(lua_State *L, Proto *p, CallInfo *ci, int reg, StkId ra) {
+  int pc = pcRel(ci->u.l.savedpc, p);
+  int t = p->exptypes[pc].t;
+  if (t != rttype(ra) || (t == LUA_TINT && !ttisint(ra))) {
+    luaVS_despecialize(L, reg);
+  }
+}
 
 
 static void remember_param_types(Proto *p, StkId base) {
   int arg;  
   for (arg=0; arg < p->numparams; arg++) {
     if (p->paramtypes[arg] == LUA_TNOSPEC) continue;
-    p->paramtypes[arg] = rttype(base+arg); 
+    int t = rttype(base+arg);
+    if (t == LUA_TNUMBER && ttisint(base+arg)) t = LUA_TINT;
+    p->paramtypes[arg] = rttype(base+arg);
   }
 }
 
@@ -607,7 +619,8 @@ newframe_param_guard: { /* guard against polymorphic parameters */
   #endif
   for (reg = 0; reg < p->numparams; reg++) {
     int t = p->paramtypes[reg];
-    if (t >= 0 && t != rttype(ci->u.l.base+reg)) {
+    if ((t >= 0 && t != rttype(ci->u.l.base+reg)) ||
+        (t == LUA_TINT && !ttisint(ci->u.l.base+reg))) {
       #ifdef DEBUG_PRINT
       printf("reg %i was:%i is:%i\n",reg,t,rttype(ci->u.l.base+reg));
       #endif
