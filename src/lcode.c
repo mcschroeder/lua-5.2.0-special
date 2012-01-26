@@ -1095,8 +1095,10 @@ static void growreginfos (FuncState *fs, int reg) {
   int newsize = reg+1;
   luaM_reallocvector(fs->ls->L, fs->f->reginfos, oldsize, newsize, RegInfo);
   fs->f->sizereginfos = newsize;
-  while (oldsize < newsize)
+  while (oldsize < newsize) {
+    fs->f->reginfos[oldsize].next = NULL;
     fs->f->reginfos[oldsize++].state = REGINFO_STATE_UNUSED;
+  }
 }
 
 
@@ -1137,7 +1139,7 @@ void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use) {
       // reginfo->nspec = 0;
       reginfo->firstuse = use;
       reginfo->lastuse = use;
-      reginfo->next = NULL;      
+      reginfo->next = NULL;
       break;
     case REGINFO_STATE_LOCAL_UNUSED:
       reginfo->startpc = pc;
@@ -1146,13 +1148,13 @@ void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use) {
       // reginfo->nspec = 0;
       reginfo->firstuse = use;
       reginfo->lastuse = use;
-      reginfo->next = NULL;      
+      reginfo->next = NULL;
       break;      
   }
 }
 
 
-void reginfo_adjustlocal(FuncState *fs, int reg) {
+void reginfo_adjustlocal (FuncState *fs, int reg) {
   growreginfos(fs, reg);
   RegInfo *reginfo = lastreginfo(fs, reg);
   
@@ -1195,7 +1197,7 @@ void reginfo_adjustlocal(FuncState *fs, int reg) {
   reginfo->state = REGINFO_STATE_LOCAL_OPEN;
 }
 
-void reginfo_removelocal(FuncState *fs, int reg) {
+void reginfo_removelocal (FuncState *fs, int reg) {
   RegInfo *reginfo = lastreginfo(fs, reg);
   if (reginfo->state == REGINFO_STATE_LOCAL_UNUSED) {
     reginfo->state = REGINFO_STATE_UNUSED;
@@ -1206,3 +1208,4 @@ void reginfo_removelocal(FuncState *fs, int reg) {
   lua_assert(reginfo->state == REGINFO_STATE_LOCAL_OPEN);
   reginfo->state = REGINFO_STATE_LOCAL_CLOSED;
 }
+

@@ -450,8 +450,10 @@ typedef union Udata {
 */
 typedef struct Upvaldesc {
   TString *name;  /* upvalue name (for debug information) */
+  int expected_type; // TODO: naming
   lu_byte instack;  /* whether it is in stack */
-  lu_byte idx;  /* index of upvalue (in stack or in outer function's list) */
+  lu_byte idx;  /* index of upvalue (in stack or in outer function's list) */  
+  lu_byte reginfo_idx; /* if in stack, idx in reginfo scope chain */
 } Upvaldesc;
 
 
@@ -466,7 +468,6 @@ typedef struct LocVar {
 } LocVar;
 
 
-// TODO: DON'T FORGET TO KEEP dump/undump UP-TO-DATE!!
 typedef struct RegInfo {  
   int startpc;
   int endpc;
@@ -501,6 +502,7 @@ typedef struct Proto {
   TValue *k;  /* constants used by the function */
   Instruction *code;
   struct Proto **p;  /* functions defined inside the function */
+  struct Proto *encp; /* enclosing function */
   int *lineinfo;  /* map from opcodes to source lines (debug information) */
   LocVar *locvars;  /* information about local variables (debug information) */
   RegInfo *reginfos; /* information about registers */

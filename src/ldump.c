@@ -114,6 +114,8 @@ static void DumpUpvalues(const Proto* f, DumpState* D)
  {
   DumpChar(f->upvalues[i].instack,D);
   DumpChar(f->upvalues[i].idx,D);
+  DumpChar(f->upvalues[i].reginfo_idx,D);
+  DumpNumber(f->upvalues[i].expected_type,D);
  }
 }
 

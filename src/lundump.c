@@ -92,7 +92,7 @@ static void LoadCode(LoadState* S, Proto* f)
  LoadVector(S,f->code,n,sizeof(Instruction));
 }
 
-static Proto* LoadFunction(LoadState* S);
+static Proto* LoadFunction(LoadState* S, Proto *encp);
 
 static void LoadConstants(LoadState* S, Proto* f)
 {
@@ -125,7 +125,7 @@ static void LoadConstants(LoadState* S, Proto* f)
  f->p=luaM_newvector(S->L,n,Proto*);
  f->sizep=n;
  for (i=0; i<n; i++) f->p[i]=NULL;
- for (i=0; i<n; i++) f->p[i]=LoadFunction(S);
+ for (i=0; i<n; i++) f->p[i]=LoadFunction(S, f);
 }
 
 static void LoadUpvalues(LoadState* S, Proto* f)
@@ -139,6 +139,8 @@ static void LoadUpvalues(LoadState* S, Proto* f)
  {
   f->upvalues[i].instack=LoadByte(S);
   f->upvalues[i].idx=LoadByte(S);
+  f->upvalues[i].reginfo_idx=LoadByte(S);
+  f->upvalues[i].expected_type=LoadNumber(S);
  }
 }
 
@@ -219,9 +221,10 @@ static void LoadExptypes(LoadState *S, Proto *f)
   }
 }
 
-static Proto* LoadFunction(LoadState* S)
+static Proto* LoadFunction(LoadState* S, Proto *encp)
 {
  Proto* f=luaF_newproto(S->L);
+ f->encp = encp;
  setptvalue2s(S->L,S->L->top,f); incr_top(S->L);
  f->linedefined=LoadInt(S);
  f->lastlinedefined=LoadInt(S);
@@ -276,7 +279,7 @@ Proto* luaU_undump (lua_State* L, ZIO* Z, Mbuffer* buff, const char* name)
  S.Z=Z;
  S.b=buff;
  LoadHeader(&S);
- return luai_verifycode(L,buff,LoadFunction(&S));
+ return luai_verifycode(L,buff,LoadFunction(&S,NULL));
 }
 
 #define MYINT(s)	(s[0]-'0')

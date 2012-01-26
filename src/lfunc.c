@@ -136,6 +136,7 @@ Proto *luaF_newproto (lua_State *L) {
   f->paramtypes = NULL;
   f->sizereginfos = 0;
   f->exptypes = NULL;
+  f->encp = NULL;
   return f;
 }
 

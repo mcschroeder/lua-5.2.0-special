@@ -88,8 +88,9 @@ LUAI_FUNC void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use);
 #define addregstore(fs,reg) \
         luaK_extendreginfo((fs), (reg), (fs)->pc, REGINFO_USE_STORE)
 
-LUAI_FUNC void reginfo_adjustlocal(FuncState *fs, int reg);
-LUAI_FUNC void reginfo_removelocal(FuncState *fs, int reg);
-
+LUAI_FUNC void reginfo_adjustlocal (FuncState *fs, int reg);
+LUAI_FUNC void reginfo_removelocal (FuncState *fs, int reg);
+LUAI_FUNC void reginfo_addupval (FuncState *fs, int reg, 
+                                 FuncState *use, int idx);
 
 #endif

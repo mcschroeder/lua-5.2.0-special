@@ -798,9 +798,16 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_settab(SETTABUP, cl->upvals[GETARG_A(i)]->v)
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(SETUPVAL),
-        UpVal *uv = cl->upvals[GETARG_B(i)];
+        int idx = GETARG_B(i);
+        UpVal *uv = cl->upvals[idx];
         setobj(L, uv->v, ra);
         luaC_barrier(L, uv, ra);
+
+        int t = cl->p->upvalues[idx].expected_type;
+        if (t != LUA_TNONE && 
+            (t != rttype(ra) || (t == LUA_TINT && !ttisint(ra)))) {
+          luaVS_despecialize_upval(cl->p, idx);
+        }
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_newtable(ret,guard)                            \

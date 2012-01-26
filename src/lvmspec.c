@@ -232,11 +232,54 @@ void luaVS_despecialize_param (Proto *p, int reg) {
   despecialize(p, reg, reginfo);
 }
 
+void luaVS_despecialize_upval (Proto *p, int idx) {
+  #ifdef DEBUG_PRINT
+  printf("%s %p %i\n", __func__, p, idx);
+  #endif
+  /* find the function that has the local that is the origin of the upvalue */
+  int chaini = 0;
+  Upvaldesc desc = p->upvalues[idx];
+  for (;;) {
+    p = p->encp;
+    if (desc.instack) { chaini = desc.reginfo_idx; break; } 
+    else desc = p->upvalues[desc.idx];
+  }
+  /* find the right reginfo for the local */
+  RegInfo *reginfo = &p->reginfos[desc.idx];
+  while (chaini-- > 0) reginfo = reginfo->next;
+  lua_assert(reginfo->state == REGINFO_STATE_LOCAL_CLOSED);
+  despecialize(p, desc.idx, reginfo);
+}
+
+
+void _add_upvalue_guards (Proto *p, int idx, int instack, int type) {
+  #ifdef DEBUG_PRINT
+  printf("%s %p %i %i %i\n", __func__, p, idx, instack, type);
+  #endif
+  int i ;
+  for (i = 0; i < p->sizeupvalues; i++) {
+    Upvaldesc *desc = &p->upvalues[i];
+    if (desc->idx == idx && desc->instack == instack) {
+      desc->expected_type = type;
+      int n = p->sizep;
+      while (n > 0)
+        _add_upvalue_guards(p->p[--n], i, 0, type);
+      break;
+    }
+  }
+}
+
+
 /* add type guards to all stores of the register within the given scope */
-void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {  
+void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
   #ifdef DEBUG_PRINT
   printf("\t%s %i %i\n",__func__,reg,type);
   #endif
+
+  int n = p->sizep;
+  while (n > 0)
+    _add_upvalue_guards(p->p[--n], reg, 1, type);
+
   int pc;
   for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
     Instruction *i = &(p->code[pc]);

@@ -236,6 +236,17 @@ static int searchupvalue (FuncState *fs, TString *name) {
 }
 
 
+static void getupvalorigin (FuncState **fs, int *idx) {
+  Upvaldesc desc = (*fs)->f->upvalues[*idx];
+  for (;;) {    
+    *fs = (*fs)->prev;
+    if (*fs == NULL || desc.instack) break;
+    else desc = (*fs)->f->upvalues[desc.idx];
+  }
+  *idx = desc.idx;
+}
+
+
 static int newupvalue (FuncState *fs, TString *name, expdesc *v) {
   Proto *f = fs->f;
   int oldsize = f->sizeupvalues;
@@ -246,7 +257,19 @@ static int newupvalue (FuncState *fs, TString *name, expdesc *v) {
   f->upvalues[fs->nups].instack = (v->k == VLOCAL);
   f->upvalues[fs->nups].idx = cast_byte(v->u.info);
   f->upvalues[fs->nups].name = name;
+  f->upvalues[fs->nups].expected_type = LUA_TNONE;
+  f->upvalues[fs->nups].reginfo_idx = 0;
   luaC_objbarrier(fs->ls->L, f, name);
+
+  FuncState *ofs = fs;
+  int idx = fs->nups;
+  getupvalorigin(&ofs, &idx);
+  if (ofs) {    
+    RegInfo *r = &ofs->f->reginfos[idx];
+    while ((r = r->next) != NULL)
+      f->upvalues[fs->nups].reginfo_idx++;
+  }
+
   return fs->nups++;
 }
 
@@ -295,7 +318,7 @@ static int singlevaraux (FuncState *fs, TString *n, expdesc *var, int base) {
         /* else was LOCAL or UPVAL */
         idx  = newupvalue(fs, n, var);  /* will be a new upvalue */
       }
-      init_exp(var, VUPVAL, idx);
+      init_exp(var, VUPVAL, idx);      
       return VUPVAL;
     }
   }
@@ -516,6 +539,7 @@ static void codeclosure (LexState *ls, Proto *clp, expdesc *v) {
     while (oldsize < f->sizep) f->p[oldsize++] = NULL;
   }
   f->p[fs->np++] = clp;
+  clp->encp = f;
   luaC_objbarrier(ls->L, f, clp);
   OpCode op = create_op_out(OP_CLOSURE, OpType_raw);
   init_exp(v, VRELOCABLE, luaK_codeABx(fs, op, 0, fs->np-1));
@@ -572,7 +596,7 @@ static void close_func (LexState *ls) {
   f->sizep = fs->np;
   luaM_reallocvector(L, f->locvars, f->sizelocvars, fs->nlocvars, LocVar);
   f->sizelocvars = fs->nlocvars;
-  luaM_reallocvector(L, f->upvalues, f->sizeupvalues, fs->nups, Upvaldesc);
+  luaM_reallocvector(L, f->upvalues, f->sizeupvalues, fs->nups, Upvaldesc);  
   f->sizeupvalues = fs->nups;
   luaM_reallocvector(L, f->exptypes, fs->sizeexptypes, fs->pc, ExpType);
   lua_assert(fs->bl == NULL);

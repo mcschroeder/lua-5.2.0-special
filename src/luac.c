@@ -395,15 +395,24 @@ static void PrintHeader(const Proto* f)
   s="(bstring)";
  else
   s="(string)";
- printf("\n%s <%s:%d,%d> (%d instruction%s at %p)\n",
+ printf("\n%s <%s:%d,%d> (%d instruction%s at %p) (enclosed in %p)\n",
   (f->linedefined==0)?"main":"function",s,
   f->linedefined,f->lastlinedefined,
-  S(f->sizecode),VOID(f));
+  S(f->sizecode),VOID(f),VOID(f->encp));
  printf("%d%s param%s, %d slot%s, %d upvalue%s, ",
   (int)(f->numparams),f->is_vararg?"+":"",SS(f->numparams),
   S(f->maxstacksize),S(f->sizeupvalues));
  printf("%d local%s, %d constant%s, %d function%s\n",
   S(f->sizelocvars),S(f->sizek),S(f->sizep));
+}
+
+static void PrintRegInfo(RegInfo *r) {
+  printf("(%d,%d)\t%s\t%s%s",
+          r->startpc,
+          r->endpc,
+          reginfostates[r->state],
+          r->firstuse ? "S" : "L",
+          r->lastuse ? "S" : "L");  
 }
 
 static void PrintDebug(const Proto* f)
@@ -440,19 +449,11 @@ static void PrintDebug(const Proto* f)
     printf("\t%d\tunused\n", i);
     continue;
   }
-  printf("\t%d\t(%d,%d)\t%s\t%s%s", i, 
-          reginfo->startpc,
-          reginfo->endpc,
-          reginfostates[reginfo->state],
-          reginfo->firstuse ? "S" : "L", 
-          reginfo->lastuse ? "S" : "L");
+  printf("\t%d\t", i);
+  PrintRegInfo(reginfo);
   for (reginfo = reginfo->next; reginfo; reginfo = reginfo->next) {
-  printf("\n\t\t(%d,%d)\t%s\t%s%s", 
-          reginfo->startpc,
-          reginfo->endpc,
-          reginfostates[reginfo->state],
-          reginfo->firstuse ? "S" : "L", 
-          reginfo->lastuse ? "S" : "L");
+    printf("\n\t\t");
+    PrintRegInfo(reginfo);
   }    
   printf("\n");
  }
