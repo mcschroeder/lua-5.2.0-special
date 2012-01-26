@@ -42,6 +42,10 @@ static RegInfo *findreginfo (Proto *p, int reg, int pc, int use) {
 
 
 void despecialize (Proto *p, int reg, RegInfo *reginfo) {
+  if (reg < p->numparams && &(p->reginfos[reg]) == reginfo) {
+    p->paramtypes[reg] = LUA_TNOSPEC;
+  }
+
   int pc;
   for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
     Instruction *i = &(p->code[pc]);

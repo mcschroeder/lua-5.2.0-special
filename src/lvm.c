@@ -572,11 +572,14 @@ void luaV_finishOp (lua_State *L) {
   if (rttype(ra) != cl->p->exptypes[pcRel(ci->u.l.savedpc, cl->p)].t) { \
     luaVS_despecialize(L, GETARG_A(i)); }
 
-#define remember_param_types(ci) { \
-        Proto *p = clLvalue((ci)->func)->p; \
-        int arg; \
-        for (arg=0; arg < p->numparams; arg++) { \
-          p->paramtypes[arg] = rttype(base+arg); } }
+
+static void remember_param_types(Proto *p, StkId base) {
+  int arg;  
+  for (arg=0; arg < p->numparams; arg++) {
+    if (p->paramtypes[arg] == LUA_TNOSPEC) continue;
+    p->paramtypes[arg] = rttype(base+arg); 
+  }
+}
 
 
 
@@ -604,7 +607,7 @@ newframe_param_guard: { /* guard against polymorphic parameters */
   #endif
   for (reg = 0; reg < p->numparams; reg++) {
     int t = p->paramtypes[reg];
-    if (t != LUA_TNONE && t != rttype(ci->u.l.base+reg)) {
+    if (t >= 0 && t != rttype(ci->u.l.base+reg)) {
       #ifdef DEBUG_PRINT
       printf("reg %i was:%i is:%i\n",reg,t,rttype(ci->u.l.base+reg));
       #endif
@@ -1122,7 +1125,7 @@ newframe:  /* reentry point when frame changes (call/return) */
         if (luaD_precall(L, ra, LUA_MULTRET))  /* C function? */
           base = ci->u.l.base;
         else {
-          remember_param_types(ci);
+          remember_param_types(cl->p, base);
           /* tail call: put called frame (n) in place of caller one (o) */
           CallInfo *nci = L->ci;  /* called frame */
           CallInfo *oci = nci->previous;  /* caller frame */
@@ -1148,7 +1151,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 /* ------------------------------------------------------------------------ */
       vmcasenb(sOP(RETURN),
-        remember_param_types(ci);
+        remember_param_types(cl->p, base);
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b-1;
         if (cl->p->sizep > 0) luaF_close(L, base);
