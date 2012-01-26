@@ -245,16 +245,21 @@ OP_EXTRAARG/* Ax  extra (larger) argument for previous opcode */
 
 /* op out in bk ck */
 #define OPDEF(_) \
-_(MOVE, raw, ___, ___, ___) \
-_(MOVE, chk, ___, ___, ___) \
-_(LOADK, raw, ___, ___, ___) \
-_(LOADK, chk, ___, ___, ___) \
-_(LOADKX, raw, ___, ___, ___) \
-_(LOADKX, chk, ___, ___, ___) \
+_(MOVE,     raw, ___, ___, ___) \
+_(MOVE,     chk, ___, ___, ___) \
+\
+_(LOADK,    raw, ___, ___, ___) \
+_(LOADK,    chk, ___, ___, ___) \
+\
+_(LOADKX,   raw, ___, ___, ___) \
+_(LOADKX,   chk, ___, ___, ___) \
+\
 _(LOADBOOL, raw, ___, ___, ___) \
 _(LOADBOOL, chk, ___, ___, ___) \
-_(LOADNIL, raw, ___, ___, ___) \
-_(LOADNIL, chk, ___, ___, ___) \
+\
+_(LOADNIL,  raw, ___, ___, ___) \
+_(LOADNIL,  chk, ___, ___, ___) \
+\
 _(GETUPVAL, raw, ___, ___, ___) \
 _(GETUPVAL, chk, ___, ___, ___) \
 \
@@ -276,6 +281,7 @@ _(GETTABLE, chk, str, ___, kst) \
 _(GETTABLE, chk, obj, ___, reg) \
 _(GETTABLE, chk, obj, ___, kst) \
 _(GETTABLE, chk, chk, ___, reg) \
+\
 _(GETTABUP, raw, raw, ___, reg) \
 _(GETTABUP, raw, raw, ___, kst) \
 _(GETTABUP, raw, int, ___, reg) \
@@ -313,6 +319,7 @@ _(SETTABLE, ___, obj, kst, reg) \
 _(SETTABLE, ___, obj, kst, kst) \
 _(SETTABLE, ___, chk, reg, reg) \
 _(SETTABLE, ___, chk, reg, kst) \
+\
 _(SETTABUP, ___, raw, reg, reg) \
 _(SETTABUP, ___, raw, reg, kst) \
 _(SETTABUP, ___, raw, kst, reg) \
@@ -565,32 +572,32 @@ _(LE, ___, chk, reg, reg) \
 _(LE, ___, chk, reg, kst) \
 _(LE, ___, chk, kst, reg) \
 \
-_(TEST, ___, ___, ___, ___) \
-_(TESTSET, raw, ___, ___, ___) \
-_(TESTSET, chk, ___, ___, ___) \
-_(CALL, raw, ___, ___, ___) \
-_(CALL, chk, ___, ___, ___) \
+_(TEST,     ___, ___, ___, ___) \
+_(TESTSET,  raw, ___, ___, ___) \
+_(TESTSET,  chk, ___, ___, ___) \
+_(CALL,     raw, ___, ___, ___) \
+_(CALL,     chk, ___, ___, ___) \
 _(TAILCALL, ___, ___, ___, ___) \
-_(RETURN, ___, ___, ___, ___) \
-_(FORLOOP, ___, ___, ___, ___) \
-_(FORPREP, ___, ___, ___, ___) \
+_(RETURN,   ___, ___, ___, ___) \
+_(FORLOOP,  ___, ___, ___, ___) \
+_(FORPREP,  ___, ___, ___, ___) \
 _(TFORCALL, raw, ___, ___, ___) \
 _(TFORCALL, chk, ___, ___, ___) \
 _(TFORLOOP, ___, ___, ___, ___) \
-_(SETLIST, ___, ___, ___, ___) \
-_(CLOSURE, raw, ___, ___, ___) \
-_(CLOSURE, chk, ___, ___, ___) \
-_(VARARG, raw, ___, ___, ___) \
-_(VARARG, chk, ___, ___, ___) \
+_(SETLIST,  ___, ___, ___, ___) \
+_(CLOSURE,  raw, ___, ___, ___) \
+_(CLOSURE,  chk, ___, ___, ___) \
+_(VARARG,   raw, ___, ___, ___) \
+_(VARARG,   chk, ___, ___, ___) \
 _(EXTRAARG, ___, ___, ___, ___)
 
 
-#define OP(op,ret,spec,bk,ck) OP_##op##_##ret##_##spec##_##bk##_##ck
+#define OP(op,out,in,bk,ck) OP_##op##_##out##_##in##_##bk##_##ck
 
 #define sOP(op) OP(op,___,___,___,___)
 
 typedef enum {
-#define OPENUM(op,ret,spec,bk,ck) OP(op,ret,spec,bk,ck),
+#define OPENUM(op,out,in,bk,ck) OP(op,out,in,bk,ck),
   OPDEF(OPENUM)
 #undef OPENUM
   NUM_OPCODES

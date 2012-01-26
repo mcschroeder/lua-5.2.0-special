@@ -101,30 +101,30 @@ static void callTM (lua_State *L, const TValue *f, const TValue *p1,
   }
 }
 
-#define _luaV_gettable_def(name, getfunc, keyfunc) \
-void name (lua_State *L, const TValue *t, TValue *key, StkId val) { \
-  int loop; \
-  for (loop = 0; loop < MAXTAGLOOP; loop++) { \
-    const TValue *tm; \
-    if (ttistable(t)) {  /* `t' is a table? */ \
-      Table *h = hvalue(t); \
-      const TValue *res = getfunc(h, keyfunc(key)); \
-      if (!ttisnil(res) ||  /* result is not nil? */ \
-          (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { /* no TM? */ \
-        setobj2s(L, val, res); \
-        return; \
-      } \
-      /* else will try the tag method */ \
-    } \
-    else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_INDEX))) \
-      luaG_typeerror(L, t, "index"); \
-    if (ttisfunction(tm)) { \
-      callTM(L, tm, t, key, val, 1); \
-      return; \
-    } \
-    t = tm;  /* else repeat with 'tm' */ \
-  } \
-  luaG_runerror(L, "loop in gettable"); \
+#define _luaV_gettable_def(name, getfunc, keyfunc)                          \
+void name (lua_State *L, const TValue *t, TValue *key, StkId val) {         \
+  int loop;                                                                 \
+  for (loop = 0; loop < MAXTAGLOOP; loop++) {                               \
+    const TValue *tm;                                                       \
+    if (ttistable(t)) {  /* `t' is a table? */                              \
+      Table *h = hvalue(t);                                                 \
+      const TValue *res = getfunc(h, keyfunc(key));                         \
+      if (!ttisnil(res) ||  /* result is not nil? */                        \
+          (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { /* no TM? */  \
+        setobj2s(L, val, res);                                              \
+        return;                                                             \
+      }                                                                     \
+      /* else will try the tag method */                                    \
+    }                                                                       \
+    else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_INDEX)))                 \
+      luaG_typeerror(L, t, "index");                                        \
+    if (ttisfunction(tm)) {                                                 \
+      callTM(L, tm, t, key, val, 1);                                        \
+      return;                                                               \
+    }                                                                       \
+    t = tm;  /* else repeat with 'tm' */                                    \
+  }                                                                         \
+  luaG_runerror(L, "loop in gettable");                                     \
 }
 
 _luaV_gettable_def(luaV_gettable, luaH_get,);
@@ -135,43 +135,43 @@ _luaV_gettable_def(luaV_gettable_obj, luaH_getobj,);
 #define luaV_gettable_raw(L,t,key,val) luaV_gettable(L,t,key,val)
 
 
-#define _luaV_settable_def(name, getfunc, keyfunc) \
-void name (lua_State *L, const TValue *t, TValue *key, StkId val) { \
-  int loop; \
-  for (loop = 0; loop < MAXTAGLOOP; loop++) { \
-    const TValue *tm; \
-    if (ttistable(t)) {  /* `t' is a table? */ \
-      Table *h = hvalue(t); \
-      TValue *oldval = cast(TValue *, getfunc(h, keyfunc(key))); \
+#define _luaV_settable_def(name, getfunc, keyfunc)                        \
+void name (lua_State *L, const TValue *t, TValue *key, StkId val) {       \
+  int loop;                                                               \
+  for (loop = 0; loop < MAXTAGLOOP; loop++) {                             \
+    const TValue *tm;                                                     \
+    if (ttistable(t)) {  /* `t' is a table? */                            \
+      Table *h = hvalue(t);                                               \
+      TValue *oldval = cast(TValue *, getfunc(h, keyfunc(key)));          \
       /* if previous value is not nil, there must be a previous entry
-         in the table; moreover, a metamethod has no relevance */ \
-      if (!ttisnil(oldval) || \
-         /* previous value is nil; must check the metamethod */ \
-         ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL && \
-         /* no metamethod; is there a previous entry in the table? */ \
-         (oldval != luaO_nilobject || \
+         in the table; moreover, a metamethod has no relevance */         \
+      if (!ttisnil(oldval) ||                                             \
+         /* previous value is nil; must check the metamethod */           \
+         ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL &&          \
+         /* no metamethod; is there a previous entry in the table? */     \
+         (oldval != luaO_nilobject ||                                     \
          /* no previous entry; must create one. (The next test is
-            always true; we only need the assignment.) */ \
-         (oldval = luaH_newkey(L, h, key), 1)))) { \
-        /* no metamethod and (now) there is an entry with given key */ \
-        setobj2t(L, oldval, val);  /* assign new value to that entry */ \
-        invalidateTMcache(h); \
-        luaC_barrierback(L, obj2gco(h), val); \
-        return; \
-      } \
-      /* else will try the metamethod */ \
-    } \
-    else  /* not a table; check metamethod */ \
-      if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_NEWINDEX))) \
-        luaG_typeerror(L, t, "index"); \
-    /* there is a metamethod */ \
-    if (ttisfunction(tm)) { \
-      callTM(L, tm, t, key, val, 0); \
-      return; \
-    } \
-    t = tm;  /* else repeat with 'tm' */ \
-  } \
-  luaG_runerror(L, "loop in settable"); \
+            always true; we only need the assignment.) */                 \
+         (oldval = luaH_newkey(L, h, key), 1)))) {                        \
+        /* no metamethod and (now) there is an entry with given key */    \
+        setobj2t(L, oldval, val);  /* assign new value to that entry */   \
+        invalidateTMcache(h);                                             \
+        luaC_barrierback(L, obj2gco(h), val);                             \
+        return;                                                           \
+      }                                                                   \
+      /* else will try the metamethod */                                  \
+    }                                                                     \
+    else  /* not a table; check metamethod */                             \
+      if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_NEWINDEX)))               \
+        luaG_typeerror(L, t, "index");                                    \
+    /* there is a metamethod */                                           \
+    if (ttisfunction(tm)) {                                               \
+      callTM(L, tm, t, key, val, 0);                                      \
+      return;                                                             \
+    }                                                                     \
+    t = tm;  /* else repeat with 'tm' */                                  \
+  }                                                                       \
+  luaG_runerror(L, "loop in settable");                                   \
 }
 
 _luaV_settable_def(luaV_settable, luaH_get,);
@@ -516,12 +516,11 @@ void luaV_finishOp (lua_State *L) {
 
 #define RA(i)	(base+GETARG_A(i))
 /* to be used after possible stack reallocation */
-/*
-#define RB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgR, base+GETARG_B(i))
-#define RC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgR, base+GETARG_C(i))
-#define KB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgK, k+GETARG_B(i))
-#define KC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgK, k+GETARG_C(i))
-*/
+// #define RB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgR, base+GETARG_B(i))
+// #define RC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgR, base+GETARG_C(i))
+// #define KB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgK, k+GETARG_B(i))
+// #define KC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgK, k+GETARG_C(i))
+
 /*
 #define KBx(i)  \
   (k + (GETARG_Bx(i) != 0 ? GETARG_Bx(i) - 1 : GETARG_Ax(*ci->u.l.savedpc++)))
