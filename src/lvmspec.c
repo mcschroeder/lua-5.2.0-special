@@ -50,6 +50,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
   for (pc = reginfo->startpc; pc <= reginfo->endpc; pc++) {
     Instruction *i = &(p->code[pc]);
     OpCode op = GET_OPCODE(*i);
+    OpCode oldop = op;
     #ifdef DEBUG_PRINT
     printf("\t[%i] ", pc);
     printop(op);
@@ -66,13 +67,13 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
       case OP_TESTSET:
       case OP_CLOSURE:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPCODE(*i, set_out(op, OpType_raw));
+          op = set_out(op, OpType_raw);
           p->exptypes[pc].t = LUA_TNONE;
         }
         break;
       case OP_SELF:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPCODE(*i, set_out_self(op, OpType_raw));
+          op = set_out_self(op, OpType_raw);
           p->exptypes[pc].t = LUA_TNONE;
         }
         break;      
@@ -85,7 +86,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           int j;
           for (j = 0; j < b; j++) {
             if (exptypes[j] != LUA_TNONE) {
-              SET_OPCODE(*i, set_out(op, OpType_raw));
+              op = set_out(op, OpType_raw);
               break;
             }
           }
@@ -94,55 +95,55 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
       }
       case OP_GETTABLE: case OP_GETTABUP:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPCODE(*i, set_out_gettab(op, OpType_raw));
+          op = set_out_gettab(op, OpType_raw);
           p->exptypes[pc].t = LUA_TNONE;
         }
         if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
-          SET_OPCODE(*i, set_in_gettab(op, OpType_raw));
+          op = set_in_gettab(op, OpType_raw);
         }
         break;
       case OP_SETTABLE: case OP_SETTABUP:
         if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
-          SET_OPCODE(*i, set_in_settab(op, OpType_raw));
+          op = set_in_settab(op, OpType_raw);
         }
         break;
       case OP_ADD: case OP_SUB: case OP_MUL:
       case OP_DIV: case OP_MOD: case OP_POW:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPCODE(*i, set_out_arith(op, OpType_raw));
+          op = set_out_arith(op, OpType_raw);
           p->exptypes[pc].t = LUA_TNONE;
         }
         if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
-          SET_OPCODE(*i, set_in_arith(op, OpType_raw));
+          op = set_in_arith(op, OpType_raw);
         }
         if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
-          SET_OPCODE(*i, set_in_arith(op, OpType_raw));
+          op = set_in_arith(op, OpType_raw);
         }
         break;
       case OP_UNM: 
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPCODE(*i, set_out_unm(op, OpType_raw));
+          op = set_out_unm(op, OpType_raw);
           p->exptypes[pc].t = LUA_TNONE;
         }
         if (GETARG_B(*i) == reg && load_possible) {
-          SET_OPCODE(*i, set_in_unm(op, OpType_raw));
+          op = set_in_unm(op, OpType_raw);
         }
         break;
       case OP_LEN:
         if (GETARG_A(*i) == reg && store_possible) {
-          SET_OPCODE(*i, set_out_len(op, OpType_raw));
+          op = set_out_len(op, OpType_raw);
           p->exptypes[pc].t = LUA_TNONE;
         }
         if (GETARG_B(*i) == reg && load_possible) {
-          SET_OPCODE(*i, set_in_len(op, OpType_raw));
+          op = set_in_len(op, OpType_raw);
         }
         break;
       case OP_LE: case OP_LT:
         if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
-          SET_OPCODE(*i, set_in_less(op, OpType_raw));
+          op = set_in_less(op, OpType_raw);
         }
         if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
-          SET_OPCODE(*i, set_in_less(op, OpType_raw));
+          op = set_in_less(op, OpType_raw);
         }
         break;
       case OP_CALL: {
@@ -155,7 +156,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           int j;
           for (j = 0; j < nresults; j++) {
             if (exptypes[j] != LUA_TNONE) {
-              SET_OPCODE(*i, set_out(op, OpType_raw));
+              op = set_out(op, OpType_raw);
               break;
             }
           }
@@ -172,7 +173,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           int j;
           for (j = 0; j < nresults; j++) {
             if (exptypes[j] != LUA_TNONE) {
-              SET_OPCODE(*i, set_out(op, OpType_raw));
+              op = set_out(op, OpType_raw);
               break;
             }
           }
@@ -189,7 +190,7 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           int j;
           for (j = 0; j < b; j++) {
             if (exptypes[j] != LUA_TNONE) {
-              SET_OPCODE(*i, set_out(op, OpType_raw));
+              op = set_out(op, OpType_raw);
               break;
             }
           }
@@ -198,10 +199,15 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
       }
       default:
       #ifdef DEBUG_PRINT
-      printf("\n"); continue;
+      printf("\n");
       #endif
-        break;
+        continue;
     }
+
+    if (op != oldop) {
+      SET_OPCODE(*i, op);
+    }
+
     #ifdef DEBUG_PRINT
     op = GET_OPCODE(*i);
     printf(" --> "); printop(op); printf("\n");
