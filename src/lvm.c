@@ -576,7 +576,8 @@ void luaV_finishOp (lua_State *L) {
 static void type_guard(lua_State *L, Proto *p, CallInfo *ci, int reg, StkId ra) {
   int pc = pcRel(ci->u.l.savedpc, p);
   int t = p->exptypes[pc].t;
-  if (t != rttype(ra) || (t == LUA_TINT && !ttisint(ra))) {
+  if (t == LUA_TINT && ttisint(ra)) return;
+  if (t != rttype(ra)) {
     luaVS_despecialize(L, reg);
   }
 }
@@ -805,7 +806,8 @@ newframe:  /* reentry point when frame changes (call/return) */
 
         int t = cl->p->upvalues[idx].expected_type;
         if (t != LUA_TNONE && 
-            (t != rttype(ra) || (t == LUA_TINT && !ttisint(ra)))) {
+            ((t > 0 && t != rttype(ra)) || 
+             (t == LUA_TINT && !ttisint(ra)))) {
           luaVS_despecialize_upval(cl->p, idx);
         }
       )
