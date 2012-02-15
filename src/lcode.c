@@ -687,7 +687,7 @@ void luaK_self (FuncState *fs, expdesc *e, expdesc *key) {
   if (!ISK(rkkey)) addregload(fs, rkkey);
   addregstore(fs, e->u.info);
   addregstore(fs, e->u.info+1);
-  luaK_codeABC(fs, create_op_self(OpType_raw), e->u.info, ereg, rkkey);
+  luaK_codeABC(fs, sOP(SELF), e->u.info, ereg, rkkey);
   freeexp(fs, key);
 }
 

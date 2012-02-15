@@ -100,8 +100,6 @@ typedef struct CallInfo {
 #define CIST_YPCALL	(1<<4)	/* call is a yieldable protected call */
 #define CIST_STAT	(1<<5)	/* call has an error status (pcall) */
 #define CIST_TAIL	(1<<6)	/* call was tail called */
-#define CIST_SPECRES (1<<7) /* call wants result registers specialized */
-// TODO: rename CIST_SPECRES to CIST_GUARDRET
 
 
 #define isLua(ci)	((ci)->callstatus & CIST_LUA)

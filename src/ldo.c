@@ -373,21 +373,6 @@ int luaD_poscall (lua_State *L, StkId firstResult) {
       setobjs2s(L, res++, firstResult++);
   while (i-- > 0)
       setnilvalue(res++);
-  /* return type guard */
-  if (ci->callstatus & CIST_SPECRES) {
-    lua_assert(wanted != LUA_MULTRET);
-    int pc = pcRel(ci->u.l.savedpc, clLvalue(ci->func)->p);
-    int *exptypes = clLvalue(ci->func)->p->exptypes[pc].ts;
-    res = ci->next->func;
-    int reg = res - ci->u.l.base;
-    int j;
-    for (j = 0; j < wanted; j++) {
-      if (exptypes[j] != rttype(res++))
-        luaVS_despecialize(L, reg);
-      reg++;
-    }
-    ci->callstatus &= ~CIST_SPECRES; // TODO: this maybe isn't necessary?
-  }
   L->top = res;
   return (wanted - LUA_MULTRET);  /* 0 iff wanted == LUA_MULTRET */
 }

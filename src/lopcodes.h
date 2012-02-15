@@ -251,175 +251,294 @@ OP_EXTRAARG/* Ax  extra (larger) argument for previous opcode */
 
 
 
-/* op out in bk ck */
+/* (expected output type, input type)*/
+
 #define OPDEF(_) \
-_(MOVE,     raw, ___) \
-_(MOVE,     chk, ___) \
+_(MOVE, ___, ___) /* vanilla */ \
+_(MOVE, num, ___) /* type check (number) */ \
+_(MOVE, int, ___) /* type check (integer) */ \
+_(MOVE, str, ___) /* type check (string) */ \
+_(MOVE, obj, ___) /* type check (object) */ \
+_(MOVE, ___, num) /* move number */ \
+_(MOVE, ___, int) /* move integer */ \
+_(MOVE, ___, str) /* move string */ \
+_(MOVE, ___, obj) /* move object */ \
+_(MOVE, ___, chk) /* specialize */ \
+_(MOVE, num, chk) /* specialize + keep type check (number) */ \
+_(MOVE, int, chk) /* specialize + keep type check (integer) */ \
+_(MOVE, str, chk) /* specialize + keep type check (string) */ \
+_(MOVE, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(LOADK,    raw, ___) \
-_(LOADK,    chk, ___) \
+_(LOADK, ___, num) /* load number */ \
+_(LOADK, ___, int) /* load integer */ \
+_(LOADK, ___, str) /* load string */ \
 \
-_(LOADKX,   raw, ___) \
-_(LOADKX,   chk, ___) \
+_(LOADKX, ___, num) /* load number */ \
+_(LOADKX, ___, int) /* load integer */ \
+_(LOADKX, ___, str) /* load string */ \
 \
-_(LOADBOOL, raw, ___) \
-_(LOADBOOL, chk, ___) \
+_(LOADBOOL, ___, ___) \
 \
-_(LOADNIL,  raw, ___) \
-_(LOADNIL,  chk, ___) \
+_(LOADNIL, ___, ___) \
 \
-_(GETUPVAL, raw, ___) \
-_(GETUPVAL, chk, ___) \
+_(GETUPVAL, ___, ___) /* vanilla */ \
+_(GETUPVAL, num, ___) /* type check (number) */ \
+_(GETUPVAL, int, ___) /* type check (integer) */ \
+_(GETUPVAL, str, ___) /* type check (string) */ \
+_(GETUPVAL, obj, ___) /* type check (object) */ \
 \
-_(GETTABLE, raw, raw) \
-_(GETTABLE, raw, int) \
-_(GETTABLE, raw, str) \
-_(GETTABLE, raw, obj) \
-_(GETTABLE, raw, chk) \
-_(GETTABLE, chk, raw) \
-_(GETTABLE, chk, int) \
-_(GETTABLE, chk, str) \
-_(GETTABLE, chk, obj) \
-_(GETTABLE, chk, chk) \
+_(GETTABUP, ___, ___) /* vanilla */ \
+_(GETTABUP, num, ___) /* type check (number) */ \
+_(GETTABUP, int, ___) /* type check (integer) */ \
+_(GETTABUP, str, ___) /* type check (string) */ \
+_(GETTABUP, obj, ___) /* type check (object) */ \
+_(GETTABUP, ___, int) /* fast integer key */ \
+_(GETTABUP, num, int) /* fast integer key + type check (number) */ \
+_(GETTABUP, int, int) /* fast integer key + type check (integer) */ \
+_(GETTABUP, str, int) /* fast integer key + type check (string) */ \
+_(GETTABUP, obj, int) /* fast integer key + type check (object) */ \
+_(GETTABUP, ___, str) /* fast string key */ \
+_(GETTABUP, num, str) /* fast string key + type check (number) */ \
+_(GETTABUP, int, str) /* fast string key + type check (integer) */ \
+_(GETTABUP, str, str) /* fast string key + type check (string) */ \
+_(GETTABUP, obj, str) /* fast string key + type check (object) */ \
+_(GETTABUP, ___, obj) /* fast object key */ \
+_(GETTABUP, num, obj) /* fast object key + type check (number) */ \
+_(GETTABUP, int, obj) /* fast object key + type check (integer) */ \
+_(GETTABUP, str, obj) /* fast object key + type check (string) */ \
+_(GETTABUP, obj, obj) /* fast object key + type check (object) */ \
+_(GETTABUP, ___, chk) /* specialize */ \
+_(GETTABUP, num, chk) /* specialize + keep type check (number) */ \
+_(GETTABUP, int, chk) /* specialize + keep type check (integer) */ \
+_(GETTABUP, str, chk) /* specialize + keep type check (string) */ \
+_(GETTABUP, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(GETTABUP, raw, raw) \
-_(GETTABUP, raw, int) \
-_(GETTABUP, raw, str) \
-_(GETTABUP, raw, obj) \
-_(GETTABUP, raw, chk) \
-_(GETTABUP, chk, raw) \
-_(GETTABUP, chk, int) \
-_(GETTABUP, chk, str) \
-_(GETTABUP, chk, obj) \
-_(GETTABUP, chk, chk) \
+_(GETTABLE, ___, ___) /* vanilla */ \
+_(GETTABLE, num, ___) /* type check (number) */ \
+_(GETTABLE, int, ___) /* type check (integer) */ \
+_(GETTABLE, str, ___) /* type check (string) */ \
+_(GETTABLE, obj, ___) /* type check (object) */ \
+_(GETTABLE, ___, int) /* fast integer key */ \
+_(GETTABLE, num, int) /* fast integer key + type check (number) */ \
+_(GETTABLE, int, int) /* fast integer key + type check (integer) */ \
+_(GETTABLE, str, int) /* fast integer key + type check (string) */ \
+_(GETTABLE, obj, int) /* fast integer key + type check (object) */ \
+_(GETTABLE, ___, str) /* fast string key */ \
+_(GETTABLE, num, str) /* fast string key + type check (number) */ \
+_(GETTABLE, int, str) /* fast string key + type check (integer) */ \
+_(GETTABLE, str, str) /* fast string key + type check (string) */ \
+_(GETTABLE, obj, str) /* fast string key + type check (object) */ \
+_(GETTABLE, ___, obj) /* fast object key */ \
+_(GETTABLE, num, obj) /* fast object key + type check (number) */ \
+_(GETTABLE, int, obj) /* fast object key + type check (integer) */ \
+_(GETTABLE, str, obj) /* fast object key + type check (string) */ \
+_(GETTABLE, obj, obj) /* fast object key + type check (object) */ \
+_(GETTABLE, ___, chk) /* specialize */ \
+_(GETTABLE, num, chk) /* specialize + keep type check (number) */ \
+_(GETTABLE, int, chk) /* specialize + keep type check (integer) */ \
+_(GETTABLE, str, chk) /* specialize + keep type check (string) */ \
+_(GETTABLE, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(SETTABLE, ___, raw) \
-_(SETTABLE, ___, int) \
-_(SETTABLE, ___, str) \
-_(SETTABLE, ___, obj) \
-_(SETTABLE, ___, chk) \
-\
-_(SETTABUP, ___, raw) \
-_(SETTABUP, ___, int) \
-_(SETTABUP, ___, str) \
-_(SETTABUP, ___, obj) \
-_(SETTABUP, ___, chk) \
+_(SETTABUP, ___, ___) /* vanilla */ \
+_(SETTABUP, ___, int) /* fast integer key */ \
+_(SETTABUP, ___, str) /* fast string key */ \
+_(SETTABUP, ___, obj) /* fast object key */ \
+_(SETTABUP, ___, chk) /* specialize */ \
 \
 _(SETUPVAL, ___, ___) \
 \
-_(NEWTABLE, raw, ___) \
-_(NEWTABLE, chk, ___) \
+_(SETTABLE, ___, ___) /* vanilla */ \
+_(SETTABLE, ___, int) /* fast integer key */ \
+_(SETTABLE, ___, str) /* fast string key */ \
+_(SETTABLE, ___, obj) /* fast object key */ \
+_(SETTABLE, ___, chk) /* specialize */ \
 \
-_(SELF, raw, ___) \
-_(SELF, chk, ___) \
+_(NEWTABLE, ___, ___) \
 \
-_(ADD, raw, raw) \
-_(ADD, raw, num) \
-_(ADD, raw, obj) \
-_(ADD, raw, chk) \
-_(ADD, chk, raw) \
-_(ADD, chk, num) \
-_(ADD, chk, obj) \
-_(ADD, chk, chk) \
+_(SELF, ___, ___) \
 \
-_(SUB, raw, raw) \
-_(SUB, raw, num) \
-_(SUB, raw, obj) \
-_(SUB, raw, chk) \
-_(SUB, chk, raw) \
-_(SUB, chk, num) \
-_(SUB, chk, obj) \
-_(SUB, chk, chk) \
+_(ADD, ___, ___) /* vanilla */ \
+_(ADD, num, ___) /* type check (number) */ \
+_(ADD, int, ___) /* type check (integer) */ \
+_(ADD, str, ___) /* type check (string) */ \
+_(ADD, obj, ___) /* type check (object) */ \
+_(ADD, ___, num) /* fast number operation */ \
+_(ADD, int, num) /* fast number operation + type check (integer) */ \
+_(ADD, ___, obj) /* fast metamethod */ \
+_(ADD, num, obj) /* fast metamethod + type check (number) */ \
+_(ADD, int, obj) /* fast metamethod + type check (integer) */ \
+_(ADD, str, obj) /* fast metamethod + type check (string) */ \
+_(ADD, obj, obj) /* fast metamethod + type check (object) */ \
+_(ADD, ___, chk) /* specialize */ \
+_(ADD, num, chk) /* specialize + keep type check (number) */ \
+_(ADD, int, chk) /* specialize + keep type check (integer) */ \
+_(ADD, str, chk) /* specialize + keep type check (string) */ \
+_(ADD, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(MUL, raw, raw) \
-_(MUL, raw, num) \
-_(MUL, raw, obj) \
-_(MUL, raw, chk) \
-_(MUL, chk, raw) \
-_(MUL, chk, num) \
-_(MUL, chk, obj) \
-_(MUL, chk, chk) \
+_(SUB, ___, ___) /* vanilla */ \
+_(SUB, num, ___) /* type check (number) */ \
+_(SUB, int, ___) /* type check (integer) */ \
+_(SUB, str, ___) /* type check (string) */ \
+_(SUB, obj, ___) /* type check (object) */ \
+_(SUB, ___, num) /* fast number operation */ \
+_(SUB, int, num) /* fast number operation + type check (integer) */ \
+_(SUB, ___, obj) /* fast metamethod */ \
+_(SUB, num, obj) /* fast metamethod + type check (number) */ \
+_(SUB, int, obj) /* fast metamethod + type check (integer) */ \
+_(SUB, str, obj) /* fast metamethod + type check (string) */ \
+_(SUB, obj, obj) /* fast metamethod + type check (object) */ \
+_(SUB, ___, chk) /* specialize */ \
+_(SUB, num, chk) /* specialize + keep type check (number) */ \
+_(SUB, int, chk) /* specialize + keep type check (integer) */ \
+_(SUB, str, chk) /* specialize + keep type check (string) */ \
+_(SUB, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(DIV, raw, raw) \
-_(DIV, raw, num) \
-_(DIV, raw, obj) \
-_(DIV, raw, chk) \
-_(DIV, chk, raw) \
-_(DIV, chk, num) \
-_(DIV, chk, obj) \
-_(DIV, chk, chk) \
+_(MUL, ___, ___) /* vanilla */ \
+_(MUL, num, ___) /* type check (number) */ \
+_(MUL, int, ___) /* type check (integer) */ \
+_(MUL, str, ___) /* type check (string) */ \
+_(MUL, obj, ___) /* type check (object) */ \
+_(MUL, ___, num) /* fast number operation */ \
+_(MUL, int, num) /* fast number operation + type check (integer) */ \
+_(MUL, ___, obj) /* fast metamethod */ \
+_(MUL, num, obj) /* fast metamethod + type check (number) */ \
+_(MUL, int, obj) /* fast metamethod + type check (integer) */ \
+_(MUL, str, obj) /* fast metamethod + type check (string) */ \
+_(MUL, obj, obj) /* fast metamethod + type check (object) */ \
+_(MUL, ___, chk) /* specialize */ \
+_(MUL, num, chk) /* specialize + keep type check (number) */ \
+_(MUL, int, chk) /* specialize + keep type check (integer) */ \
+_(MUL, str, chk) /* specialize + keep type check (string) */ \
+_(MUL, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(MOD, raw, raw) \
-_(MOD, raw, num) \
-_(MOD, raw, obj) \
-_(MOD, raw, chk) \
-_(MOD, chk, raw) \
-_(MOD, chk, num) \
-_(MOD, chk, obj) \
-_(MOD, chk, chk) \
+_(DIV, ___, ___) /* vanilla */ \
+_(DIV, num, ___) /* type check (number) */ \
+_(DIV, int, ___) /* type check (integer) */ \
+_(DIV, str, ___) /* type check (string) */ \
+_(DIV, obj, ___) /* type check (object) */ \
+_(DIV, ___, num) /* fast number operation */ \
+_(DIV, int, num) /* fast number operation + type check (integer) */ \
+_(DIV, ___, obj) /* fast metamethod */ \
+_(DIV, num, obj) /* fast metamethod + type check (number) */ \
+_(DIV, int, obj) /* fast metamethod + type check (integer) */ \
+_(DIV, str, obj) /* fast metamethod + type check (string) */ \
+_(DIV, obj, obj) /* fast metamethod + type check (object) */ \
+_(DIV, ___, chk) /* specialize */ \
+_(DIV, num, chk) /* specialize + keep type check (number) */ \
+_(DIV, int, chk) /* specialize + keep type check (integer) */ \
+_(DIV, str, chk) /* specialize + keep type check (string) */ \
+_(DIV, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(POW, raw, raw) \
-_(POW, raw, num) \
-_(POW, raw, obj) \
-_(POW, raw, chk) \
-_(POW, chk, raw) \
-_(POW, chk, num) \
-_(POW, chk, obj) \
-_(POW, chk, chk) \
+_(MOD, ___, ___) /* vanilla */ \
+_(MOD, num, ___) /* type check (number) */ \
+_(MOD, int, ___) /* type check (integer) */ \
+_(MOD, str, ___) /* type check (string) */ \
+_(MOD, obj, ___) /* type check (object) */ \
+_(MOD, ___, num) /* fast number operation */ \
+_(MOD, int, num) /* fast number operation + type check (integer) */ \
+_(MOD, ___, obj) /* fast metamethod */ \
+_(MOD, num, obj) /* fast metamethod + type check (number) */ \
+_(MOD, int, obj) /* fast metamethod + type check (integer) */ \
+_(MOD, str, obj) /* fast metamethod + type check (string) */ \
+_(MOD, obj, obj) /* fast metamethod + type check (object) */ \
+_(MOD, ___, chk) /* specialize */ \
+_(MOD, num, chk) /* specialize + keep type check (number) */ \
+_(MOD, int, chk) /* specialize + keep type check (integer) */ \
+_(MOD, str, chk) /* specialize + keep type check (string) */ \
+_(MOD, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(UNM, raw, raw) \
-_(UNM, raw, num) \
-_(UNM, raw, chk) \
-_(UNM, chk, raw) \
-_(UNM, chk, num) \
-_(UNM, chk, chk) \
+_(POW, ___, ___) /* vanilla */ \
+_(POW, num, ___) /* type check (number) */ \
+_(POW, int, ___) /* type check (integer) */ \
+_(POW, str, ___) /* type check (string) */ \
+_(POW, obj, ___) /* type check (object) */ \
+_(POW, ___, num) /* fast number operation */ \
+_(POW, int, num) /* fast number operation + type check (integer) */ \
+_(POW, ___, obj) /* fast metamethod */ \
+_(POW, num, obj) /* fast metamethod + type check (number) */ \
+_(POW, int, obj) /* fast metamethod + type check (integer) */ \
+_(POW, str, obj) /* fast metamethod + type check (string) */ \
+_(POW, obj, obj) /* fast metamethod + type check (object) */ \
+_(POW, ___, chk) /* specialize */ \
+_(POW, num, chk) /* specialize + keep type check (number) */ \
+_(POW, int, chk) /* specialize + keep type check (integer) */ \
+_(POW, str, chk) /* specialize + keep type check (string) */ \
+_(POW, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(NOT, raw, ___) \
-_(NOT, chk, ___) \
+_(UNM, ___, ___) /* vanilla */ \
+_(UNM, num, ___) /* type check (number) */ \
+_(UNM, int, ___) /* type check (integer) */ \
+_(UNM, str, ___) /* type check (string) */ \
+_(UNM, obj, ___) /* type check (object) */ \
+_(UNM, ___, num) /* fast number operation */ \
+_(UNM, int, num) /* fast number operation + type check (integer) */ \
+_(UNM, ___, chk) /* specialize */ \
+_(UNM, num, chk) /* specialize + keep type check (number) */ \
+_(UNM, int, chk) /* specialize + keep type check (integer) */ \
+_(UNM, str, chk) /* specialize + keep type check (string) */ \
+_(UNM, obj, chk) /* specialize + keep type check (object) */ \
 \
-_(LEN, raw, raw) \
-_(LEN, raw, str) \
-_(LEN, raw, tab) \
-_(LEN, raw, chk) \
-_(LEN, chk, raw) \
-_(LEN, chk, str) \
-_(LEN, chk, tab) \
-_(LEN, chk, chk) \
+_(NOT, ___, ___) \
 \
-_(CONCAT, raw, ___) \
-_(CONCAT, chk, ___) \
+_(LEN, ___, ___) /* vanilla */ \
+_(LEN, num, ___) /* type check (number) */ \
+_(LEN, int, ___) /* type check (integer) */ \
+_(LEN, str, ___) /* type check (string) */ \
+_(LEN, obj, ___) /* type check (object) */ \
+_(LEN, ___, str) /* fast string length */ \
+_(LEN, int, str) /* fast string length + type check (integer) */ \
+_(LEN, ___, chk) /* specialize */ \
+_(LEN, num, chk) /* specialize + keep type check (number) */ \
+_(LEN, int, chk) /* specialize + keep type check (integer) */ \
+_(LEN, str, chk) /* specialize + keep type check (string) */ \
+_(LEN, obj, chk) /* specialize + keep type check (object) */ \
+\
+_(CONCAT, ___, ___) /* vanilla */ \
+_(CONCAT, num, ___) /* type check (number) */ \
+_(CONCAT, int, ___) /* type check (integer) */ \
+_(CONCAT, str, ___) /* type check (string) */ \
+_(CONCAT, obj, ___) /* type check (object) */ \
 \
 _(JMP, ___, ___) \
 \
 _(EQ, ___, ___) \
 \
-_(LT, ___, raw) \
-_(LT, ___, num) \
-_(LT, ___, str) \
-_(LT, ___, chk) \
+_(LT, ___, ___) /* vanilla */ \
+_(LT, ___, num) /* fast number comparison */ \
+_(LT, ___, str) /* fast string comparison */ \
+_(LT, ___, chk) /* specialize */ \
 \
-_(LE, ___, raw) \
-_(LE, ___, num) \
-_(LE, ___, str) \
-_(LE, ___, chk) \
+_(LE, ___, ___) /* vanilla */ \
+_(LE, ___, num) /* fast number comparison */ \
+_(LE, ___, str) /* fast string comparison */ \
+_(LE, ___, chk) /* specialize */ \
 \
-_(TEST,     ___, ___) \
-_(TESTSET,  raw, ___) \
-_(TESTSET,  chk, ___) \
-_(CALL,     raw, ___) \
-_(CALL,     chk, ___) \
+_(TEST, ___, ___) \
+\
+_(TESTSET,  ___, ___) /* vanilla */ \
+_(TESTSET,  num, ___) /* type check (number) */ \
+_(TESTSET,  int, ___) /* type check (integer) */ \
+_(TESTSET,  str, ___) /* type check (string) */ \
+_(TESTSET,  obj, ___) /* type check (object) */ \
+\
+_(CALL, ___, ___) /* vanilla (skip CHKTYPE instructions on return) */ \
+_(CALL, chk, ___) /* do type checks on return */ \
+\
 _(TAILCALL, ___, ___) \
-_(RETURN,   ___, ___) \
-_(FORLOOP,  ___, ___) \
-_(FORPREP,  ___, ___) \
-_(TFORCALL, raw, ___) \
-_(TFORCALL, chk, ___) \
+_(RETURN, ___, ___) \
+_(FORLOOP, ___, ___) \
+_(FORPREP, ___, ___) \
+\
+_(TFORCALL, ___, ___) /* vanilla (skip CHKTYPE instructions on return) */ \
+_(TFORCALL, chk, ___) /* do type checks on return */ \
+\
 _(TFORLOOP, ___, ___) \
-_(SETLIST,  ___, ___) \
-_(CLOSURE,  raw, ___) \
-_(CLOSURE,  chk, ___) \
-_(VARARG,   raw, ___) \
-_(VARARG,   chk, ___) \
+_(SETLIST, ___, ___) \
+_(CLOSURE, ___, ___) \
+\
+_(VARARG, ___, ___) /* vanilla (skip CHKTYPE instructions) */ \
+_(VARARG, chk, ___) /* do type checks */ \
+\
 _(EXTRAARG, ___, ___)
 
 
@@ -447,11 +566,11 @@ typedef enum {
   OpType_num,
   OpType_int,  
   OpType_str,
-  OpType_tab,
   OpType_obj,
-  OpType_chk,  
-  OpType_none
+  OpType_chk
 } OpType;
+
+#define OpType____ OpType_raw
 
 LUAI_DDEC OpType luaP_opout[NUM_OPCODES];
 LUAI_DDEC OpType luaP_opin[NUM_OPCODES];
@@ -460,6 +579,7 @@ LUAI_DDEC OpType luaP_opin[NUM_OPCODES];
 #define opin(op) luaP_opin[op]
 
 
+LUAI_FUNC OpCode create_op_move (OpType in, OpType out);
 LUAI_FUNC OpCode create_op_settab (OpGroup grp, OpType in);
 LUAI_FUNC OpCode create_op_gettab (OpGroup grp, OpType out, OpType in);
 LUAI_FUNC OpCode create_op_self (OpType out);
@@ -467,24 +587,28 @@ LUAI_FUNC OpCode create_op_arith (OpGroup grp, OpType in, OpType out);
 LUAI_FUNC OpCode create_op_unm (OpType out, OpType in);
 LUAI_FUNC OpCode create_op_len (OpType out, OpType in);
 LUAI_FUNC OpCode create_op_less (OpGroup grp, OpType in);
+LUAI_FUNC OpCode create_op_multret (OpGroup grp, OpType out);
 LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
 
+
+#define set_out_move(op,out) create_op_move(opin(op),out)
 #define set_out_gettab(op,out) \
   create_op_gettab(op2grp(op),out,opin(op))
-#define set_out_self(op,out) create_op_self(out)
 #define set_out_arith(op,out) \
   create_op_arith(op2grp(op),out,opin(op))
-#define set_out_unm(op,out) create_op_unm(opin(op),out)
-#define set_out_len(op,out) create_op_len(opin(op),out)
+#define set_out_unm(op,out) create_op_unm(out,opin(op))
+#define set_out_len(op,out) create_op_len(out,opin(op))
+#define set_out_multret(op,out) create_op_multret(op2grp(op),out)
 #define set_out(op,out) create_op_out(op2grp(op),out)
 
+#define set_in_move(op,in) create_op_move(in,opout(op))
 #define set_in_settab(op,in) create_op_settab(op2grp(op),in)
 #define set_in_gettab(op,in) \
   create_op_gettab(op2grp(op),opout(op),in)
 #define set_in_arith(op,in) \
   create_op_arith(op2grp(op),opout(op),in)
-#define set_in_unm(op,in) create_op_unm(in,opout(op))
-#define set_in_len(op,in) create_op_len(in,opout(op))
+#define set_in_unm(op,in) create_op_unm(opout(op),in)
+#define set_in_len(op,in) create_op_len(opout(op),in)
 #define set_in_less(op,in) create_op_less(op2grp(op),in)
 
 
@@ -510,11 +634,11 @@ enum OpArgMask {
 
 LUAI_DDEC const lu_byte luaP_opmodes[NUM_OPGROUPS];
 
-#define getOpMode(m)  (cast(enum OpMode, luaP_opmodes[luaP_opcode2group[m]] & 3))
-#define getBMode(m) (cast(enum OpArgMask, (luaP_opmodes[luaP_opcode2group[m]] >> 4) & 3))
-#define getCMode(m) (cast(enum OpArgMask, (luaP_opmodes[luaP_opcode2group[m]] >> 2) & 3))
-#define testAMode(m)  (luaP_opmodes[luaP_opcode2group[m]] & (1 << 6))
-#define testTMode(m)  (luaP_opmodes[luaP_opcode2group[m]] & (1 << 7))
+#define getOpMode(m)  (cast(enum OpMode, luaP_opmodes[op2grp(m)] & 3))
+#define getBMode(m) (cast(enum OpArgMask, (luaP_opmodes[op2grp(m)] >> 4) & 3))
+#define getCMode(m) (cast(enum OpArgMask, (luaP_opmodes[op2grp(m)] >> 2) & 3))
+#define testAMode(m)  (luaP_opmodes[op2grp(m)] & (1 << 6))
+#define testTMode(m)  (luaP_opmodes[op2grp(m)] & (1 << 7))
 
 
 LUAI_DDEC const char *const luaP_opnames[NUM_OPGROUPS+1];  /* opcode names */
