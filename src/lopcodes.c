@@ -11,137 +11,115 @@
 #include "lopcodes.h"
 
 LUAI_DDEF OpGroup luaP_opcode2group[NUM_OPCODES] = {
-#define OPENUM(op,out,in,bk,ck) OP_##op,
+#define OPENUM(op,out,in) OP_##op,
   OPDEF(OPENUM)
 #undef OPENUM
 };
 
 LUAI_DDEF OpCode luaP_opgroup2code[NUM_OPGROUPS] = {
-  OP(MOVE,raw,___,___,___),
-  OP(LOADK,raw,___,___,___),
-  OP(LOADKX,raw,___,___,___),
-  OP(LOADBOOL,raw,___,___,___),
-  OP(LOADNIL,raw,___,___,___),
-  OP(GETUPVAL,raw,___,___,___),
-  OP(GETTABUP,raw,raw,___,reg),
-  OP(GETTABLE,raw,raw,___,reg),
-  OP(SETTABUP,___,raw,reg,reg),
-  OP(SETUPVAL,___,___,___,___),
-  OP(SETTABLE,___,raw,reg,reg),  
-  OP(NEWTABLE,raw,___,___,___),
-  OP(SELF,raw,___,___,reg),
-  OP(ADD,raw,raw,reg,reg),
-  OP(SUB,raw,raw,reg,reg),
-  OP(MUL,raw,raw,reg,reg),
-  OP(DIV,raw,raw,reg,reg),
-  OP(MOD,raw,raw,reg,reg),
-  OP(POW,raw,raw,reg,reg),
-  OP(UNM,raw,raw,___,___),
-  OP(NOT,raw,___,___,___),
-  OP(LEN,raw,raw,___,___),
-  OP(CONCAT,raw,___,___,___),
-  OP(JMP,___,___,___,___),
-  OP(EQ,___,___,reg,reg),
-  OP(LT,___,raw,reg,reg),
-  OP(LE,___,raw,reg,reg),
-  OP(TEST,___,___,___,___),
-  OP(TESTSET,raw,___,___,___),
-  OP(CALL,raw,___,___,___),
-  OP(TAILCALL,___,___,___,___),
-  OP(RETURN,___,___,___,___),
-  OP(FORLOOP,___,___,___,___),
-  OP(FORPREP,___,___,___,___),
-  OP(TFORCALL,raw,___,___,___),
-  OP(TFORLOOP,___,___,___,___),
-  OP(SETLIST,___,___,___,___),
-  OP(CLOSURE,raw,___,___,___),
-  OP(VARARG,raw,___,___,___),
-  OP(EXTRAARG,___,___,___,___)
+  OP(MOVE,raw,___),
+  OP(LOADK,raw,___),
+  OP(LOADKX,raw,___),
+  OP(LOADBOOL,raw,___),
+  OP(LOADNIL,raw,___),
+  OP(GETUPVAL,raw,___),
+  OP(GETTABUP,raw,raw),
+  OP(GETTABLE,raw,raw),
+  OP(SETTABUP,___,raw),
+  OP(SETUPVAL,___,___),
+  OP(SETTABLE,___,raw),
+  OP(NEWTABLE,raw,___),
+  OP(SELF,raw,___),
+  OP(ADD,raw,raw),
+  OP(SUB,raw,raw),
+  OP(MUL,raw,raw),
+  OP(DIV,raw,raw),
+  OP(MOD,raw,raw),
+  OP(POW,raw,raw),
+  OP(UNM,raw,raw),
+  OP(NOT,raw,___),
+  OP(LEN,raw,raw),
+  OP(CONCAT,raw,___),
+  OP(JMP,___,___),
+  OP(EQ,___,___),
+  OP(LT,___,raw),
+  OP(LE,___,raw),
+  OP(TEST,___,___),
+  OP(TESTSET,raw,___),
+  OP(CALL,raw,___),
+  OP(TAILCALL,___,___),
+  OP(RETURN,___,___),
+  OP(FORLOOP,___,___),
+  OP(FORPREP,___,___),
+  OP(TFORCALL,raw,___),
+  OP(TFORLOOP,___,___),
+  OP(SETLIST,___,___),
+  OP(CLOSURE,raw,___),
+  OP(VARARG,raw,___),
+  OP(EXTRAARG,___,___)
 };
 
 
 #define OpType____ OpType_none
 LUAI_DDEF OpType luaP_opout[NUM_OPCODES] = {
-#define OPENUM(op,out,in,bk,ck) OpType_##out,
+#define OPENUM(op,out,in) OpType_##out,
   OPDEF(OPENUM)
 #undef OPENUM  
 };
 LUAI_DDEF OpType luaP_opin[NUM_OPCODES] = {
-#define OPENUM(op,out,in,bk,ck) OpType_##in,
+#define OPENUM(op,out,in) OpType_##in,
   OPDEF(OPENUM)
 #undef OPENUM  
 };
 #undef OpType____
-#define reg 0
-#define kst 1
-#define ___ -1
-LUAI_DDEF int luaP_opbk[NUM_OPCODES] = {
-#define OPENUM(op,out,in,bk,ck) bk,
-  OPDEF(OPENUM)
-#undef OPENUM
-};
-LUAI_DDEF int luaP_opck[NUM_OPCODES] = {
-#define OPENUM(op,out,in,bk,ck) ck,
-  OPDEF(OPENUM)
-#undef OPENUM
-};
-#undef reg
-#undef kst
-#undef ___
 
 
-OpCode create_op_settab (OpGroup grp, OpType in, int bk, int ck) {
+OpCode create_op_settab (OpGroup grp, OpType in) {
   lua_assert(grp == OP_SETTABLE || grp == OP_SETTABUP);
   OpCode op = grp2op(grp);
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_int: op += 4; break;
-    case OpType_str: op += 8; break;
-    case OpType_obj: op += 12; break;
-    case OpType_chk: op += 16; lua_assert(!bk); break;
+    case OpType_int: op += 1; break;
+    case OpType_str: op += 2; break;
+    case OpType_obj: op += 3; break;
+    case OpType_chk: op += 4; break;
     default: lua_assert(0); break;
   }
-  op += bk ? 2 : 0;
-  op += ck ? 1 : 0;
   return op;
 }
 
-OpCode create_op_gettab (OpGroup grp, OpType out, OpType in, int ck) {
+OpCode create_op_gettab (OpGroup grp, OpType out, OpType in) {
   lua_assert(grp == OP_GETTABLE || grp == OP_GETTABUP);
   OpCode op = grp2op(grp);
-  if (out == OpType_chk) op += 9;
+  if (out == OpType_chk) op += 5;
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_int: op += 2; break;
-    case OpType_str: op += 4; break;
-    case OpType_obj: op += 6; break;
-    case OpType_chk: op += 8; lua_assert(!ck); break;
+    case OpType_int: op += 1; break;
+    case OpType_str: op += 2; break;
+    case OpType_obj: op += 3; break;
+    case OpType_chk: op += 4; break;
     default: lua_assert(0); break;
   }
-  op += ck ? 1 : 0;
   return op;
 }
 
-OpCode create_op_self (OpType out, int ck) {
+OpCode create_op_self (OpType out) {
   OpCode op = grp2op(OP_SELF);
-  if (out == OpType_chk) op += 2;
-  if (ck) op += 1;
+  if (out == OpType_chk) op += 1;
   return op;
 }
 
-OpCode create_op_arith (OpGroup grp, OpType out, OpType in, int bk, int ck) {
+OpCode create_op_arith (OpGroup grp, OpType out, OpType in) {
   lua_assert(grp >= OP_ADD && grp <= OP_POW);
   OpCode op = grp2op(grp);  
-  if (out == OpType_chk) op += 13;
+  if (out == OpType_chk) op += 4;
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; lua_assert(!(bk&&ck)); break;
-    case OpType_obj: op += 7; lua_assert(!(bk&&ck)); break;
-    case OpType_chk: op += 10; lua_assert(!(bk&&ck)); break;
+    case OpType_num: op += 1; break;
+    case OpType_obj: op += 2; break;
+    case OpType_chk: op += 3; break;
     default: lua_assert(0); break;
   }
-  op += bk ? 2 : 0;
-  op += ck ? 1 : 0;
   return op;
 }
 
@@ -170,25 +148,16 @@ OpCode create_op_len (OpType out, OpType in) {
   return op;
 }
 
-OpCode create_op_eq (int bk, int ck) {
-  OpCode op = grp2op(OP_EQ);
-  if (bk) op += 2;
-  if (ck) op += 1;
-  return op;
-}
-
-OpCode create_op_less (OpGroup grp, OpType in, int bk, int ck) {
+OpCode create_op_less (OpGroup grp, OpType in) {
   lua_assert(grp == OP_LT || grp == OP_LE);
   OpCode op = grp2op(grp);
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_str: op += 8; break;
-    case OpType_chk: op += 12; lua_assert(!(bk&&ck)); break;
+    case OpType_num: op += 1; break;
+    case OpType_str: op += 2; break;
+    case OpType_chk: op += 3; break;
     default: lua_assert(0); break;
   }
-  if (bk) op += 2;
-  if (ck) op += 1;
   return op;
 }
 
@@ -205,20 +174,13 @@ OpCode create_op_out (OpGroup grp, OpType out) {
 const char * const optypenames[7] = {
   "raw","num","int","str","tab","obj","chk"
 };
-const char * const opknames[2] = {
-  "reg","kst"
-};
 void printop(OpCode op) {  
   OpGroup grp = op2grp(op);
   OpType out = opout(op);
   OpType in = opin(op);
-  int bk = opbk(op);
-  int ck = opck(op);
   printf("%-9s", luaP_opnames[grp]);
   if (out != OpType_none) printf(" %s",optypenames[out]);
   if (in != OpType_none) printf(" %s",optypenames[in]);
-  if (bk != -1) printf(" %s",opknames[bk]);
-  if (ck != -1) printf(" %s",opknames[ck]);
 }
 
 

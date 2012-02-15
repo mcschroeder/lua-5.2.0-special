@@ -709,26 +709,22 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   rkkey = luaK_exp2RK(fs, &key);
   expr(ls, &val);
   int rkval = luaK_exp2RK(fs, &val);
-  int bk = 1, ck = 1;
-  if (val.k != VK) {
+  if (!ISK(rkval)) {
     addregload(fs, rkval);
-    ck = 0;
   }
   OpType in;
-  if (key.k == VK) {
-    TValue *k = fs->f->k + rkkey;
+  if (!ISK(rkkey)) {
+    addregload(fs, rkkey);
+    in = OpType_chk;
+  } else {
+    TValue *k = fs->f->k + INDEXK(rkkey);
     if (ttisstring(k))    in = OpType_str;
     else if (ttisint(k))  in = OpType_int;
     else if (ttisnil(k))  in = OpType_raw;
     else                  in = OpType_obj;
   } 
-  else {
-    addregload(fs, rkkey);
-    bk = 0;
-    in = OpType_chk;
-  }
   addregload(fs, cc->t->u.info);
-  OpCode op = create_op_settab(OP_SETTABLE, in, bk, ck);
+  OpCode op = create_op_settab(OP_SETTABLE, in);
   luaK_codeABC(fs, op, cc->t->u.info, rkkey, rkval);
   fs->freereg = reg;  /* free registers */
 }

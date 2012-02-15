@@ -98,12 +98,12 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           op = set_out_gettab(op, OpType_raw);
           p->exptypes[pc].t = LUA_TNONE;
         }
-        if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
+        if (!ISK(GETARG_C(*i)) && GETARG_C(*i) == reg && load_possible) {
           op = set_in_gettab(op, OpType_raw);
         }
         break;
       case OP_SETTABLE: case OP_SETTABUP:
-        if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
+        if (!ISK(GETARG_B(*i)) && GETARG_B(*i) == reg && load_possible) {
           op = set_in_settab(op, OpType_raw);
         }
         break;
@@ -113,10 +113,10 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
           op = set_out_arith(op, OpType_raw);
           p->exptypes[pc].t = LUA_TNONE;
         }
-        if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
+        if (!ISK(GETARG_B(*i)) && GETARG_B(*i) == reg && load_possible) {
           op = set_in_arith(op, OpType_raw);
         }
-        if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
+        if (!ISK(GETARG_C(*i)) && GETARG_C(*i) == reg && load_possible) {
           op = set_in_arith(op, OpType_raw);
         }
         break;
@@ -139,10 +139,10 @@ void despecialize (Proto *p, int reg, RegInfo *reginfo) {
         }
         break;
       case OP_LE: case OP_LT:
-        if (!opbk(op) && GETARG_B(*i) == reg && load_possible) {
+        if (!ISK(GETARG_B(*i)) && GETARG_B(*i) == reg && load_possible) {
           op = set_in_less(op, OpType_raw);
         }
-        if (!opck(op) && GETARG_C(*i) == reg && load_possible) {
+        if (!ISK(GETARG_C(*i)) && GETARG_C(*i) == reg && load_possible) {
           op = set_in_less(op, OpType_raw);
         }
         break;
@@ -396,10 +396,12 @@ void add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
 }
 
 
-#define RB(i) (base+GETARG_B(i))
-#define RC(i) (base+GETARG_C(i))
-#define KB(i) (k+GETARG_B(i))
-#define KC(i) (k+GETARG_C(i))
+#define RB(i) check_exp(getBMode(GET_OPCODE(i)) == OpArgR, base+GETARG_B(i))
+#define RC(i) check_exp(getCMode(GET_OPCODE(i)) == OpArgR, base+GETARG_C(i))
+#define RKB(i)  check_exp(getBMode(GET_OPCODE(i)) == OpArgK, \
+  ISK(GETARG_B(i)) ? k+INDEXK(GETARG_B(i)) : base+GETARG_B(i))
+#define RKC(i)  check_exp(getCMode(GET_OPCODE(i)) == OpArgK, \
+  ISK(GETARG_C(i)) ? k+INDEXK(GETARG_C(i)) : base+GETARG_C(i))
 
 
 #define _add_guards(r,t) { int _r = r; \
@@ -426,32 +428,32 @@ void luaVS_specialize (lua_State *L) {
   switch (luaP_opcode2group[op]) {
     case OP_GETTABLE: 
     case OP_GETTABUP: {
-      TValue *rc = opck(op) ? KC(*i) : RC(*i);
+      TValue *rc = RKC(*i);
       int type = rttype(rc);      
       if (ttisint(rc)) {op = set_in_gettab(op, OpType_int); type = LUA_TINT;}
       else if (ttisstring(rc))   op = set_in_gettab(op, OpType_str);
       else if (ttisnil(rc)) op = set_in_gettab(op, OpType_raw);
       else                  op = set_in_gettab(op, OpType_obj);
       SET_OPCODE(*i, op);
-      if (!opck(op)) _add_guards(GETARG_C(*i), type);
+      if (!ISK(GETARG_C(*i))) _add_guards(GETARG_C(*i), type);
       break;
     }
     case OP_SETTABLE: 
     case OP_SETTABUP: {
-      TValue *rb = opbk(op) ? KB(*i) : RB(*i);
+      TValue *rb = RKB(*i);
       int type = rttype(rb);      
       if (ttisint(rb)) {op = set_in_settab(op, OpType_int); type = LUA_TINT;}
       else if (ttisstring(rb))   op = set_in_settab(op, OpType_str);
       else if (ttisnil(rb)) op = set_in_settab(op, OpType_raw);
       else                  op = set_in_settab(op, OpType_obj);
       SET_OPCODE(*i, op);
-      if (!opbk(op)) _add_guards(GETARG_B(*i), type);
+      if (!ISK(GETARG_B(*i))) _add_guards(GETARG_B(*i), type);
       break;
     }
     case OP_ADD: case OP_SUB: case OP_MUL:
     case OP_DIV: case OP_MOD: case OP_POW: {
-      TValue *rb = opbk(op) ? KB(*i) : RB(*i);
-      TValue *rc = opck(op) ? KC(*i) : RC(*i);
+      TValue *rb = RKB(*i);
+      TValue *rc = RKC(*i);
       if (ttisnumber(rb)) {        
         if (ttisnumber(rc))       op = set_in_arith(op, OpType_num);
         else if (ttisstring(rc))  op = set_in_arith(op, OpType_raw);
@@ -464,8 +466,8 @@ void luaVS_specialize (lua_State *L) {
       }
       else                        op = set_in_arith(op, OpType_obj);
       SET_OPCODE(*i, op);
-      if (!opbk(op)) _add_guards(GETARG_B(*i), rttype(rb));
-      if (!opck(op)) _add_guards(GETARG_C(*i), rttype(rc));      
+      if (!ISK(GETARG_B(*i))) _add_guards(GETARG_B(*i), rttype(rb));
+      if (!ISK(GETARG_C(*i))) _add_guards(GETARG_C(*i), rttype(rc));      
       break;
     }
     case OP_UNM: {
@@ -486,16 +488,16 @@ void luaVS_specialize (lua_State *L) {
       break;
     }
     case OP_LT: case OP_LE: {
-      TValue *rb = opbk(op) ? KB(*i) : RB(*i);
-      TValue *rc = opck(op) ? KC(*i) : RC(*i);
+      TValue *rb = RKB(*i);
+      TValue *rc = RKC(*i);
       if (ttisequal(rb, rc)) {
         if (ttisnumber(rb))       op = set_in_less(op, OpType_num);
         else if (ttisstring(rb))  op = set_in_less(op, OpType_str);
         else                      op = set_in_less(op, OpType_raw);
       } else                      op = set_in_less(op, OpType_raw);
       SET_OPCODE(*i, op);
-      if (!opbk(op)) _add_guards(GETARG_B(*i), rttype(rb));
-      if (!opck(op)) _add_guards(GETARG_C(*i), rttype(rc));
+      if (!ISK(GETARG_B(*i))) _add_guards(GETARG_B(*i), rttype(rb));
+      if (!ISK(GETARG_C(*i))) _add_guards(GETARG_C(*i), rttype(rc));
       break;
     }
     default:

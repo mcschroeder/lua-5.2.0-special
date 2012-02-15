@@ -302,29 +302,27 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
 
 
 /*
-** find a "name" for the constant value 'c'
+** find a "name" for the RK value 'c'
 */
-static void kname (Proto *p, int pc, int c, const char **name) {  
-  TValue *kvalue = &p->k[c];
-  if (ttisstring(kvalue)) {  /* literal constant? */
-    *name = svalue(kvalue);  /* it is its own name */
-    return;
+static void kname (Proto *p, int pc, int c, const char **name) {
+  if (ISK(c)) {  /* is 'c' a constant? */
+    TValue *kvalue = &p->k[INDEXK(c)];
+    if (ttisstring(kvalue)) {  /* literal constant? */
+      *name = svalue(kvalue);  /* it is its own name */
+      return;
+    }
+    /* else no reasonable name found */
   }
-  /* else no reasonable name found */
+  else {  /* 'c' is a register */
+    const char *what = getobjname(p, pc, c, name); /* search for 'c' */
+    if (what && *what == 'c') {  /* found a constant name? */
+      return;  /* 'name' already filled */
+    }
+    /* else no reasonable name found */
+  }
   *name = "?";  /* no reasonable name found */
 }
 
-/*
-** find a name for the register value 'c'
-*/
-static void rname (Proto *p, int pc, int c, const char **name) {
-  const char *what = getobjname(p, pc, c, name); /* search for 'c' */
-  if (what && *what == 'c') {  /* found a constant name? */
-    return;  /* 'name' already filled */
-  }
-  /* else no reasonable name found */
-  *name = "?";
-}
 
 /*
 ** try to find last instruction before 'lastpc' that modified register 'reg'
@@ -383,7 +381,6 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
   pc = findsetreg(p, lastpc, reg);
   if (pc != -1) {  /* could find instruction? */
     Instruction i = p->code[pc];
-    OpCode op = GET_OPCODE(i);
     OpGroup grp = GET_OPGROUP(i);
     switch (grp) {
       case OP_MOVE: {
@@ -399,10 +396,7 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
         const char *vn = (grp == OP_GETTABLE)  /* name of indexed variable */
                          ? luaF_getlocalname(p, t + 1, pc)
                          : upvalname(p, t);
-        if (opck(op))
-          kname(p, pc, k, name);
-        else 
-          rname(p, pc, k, name);
+        kname(p, pc, k, name);
         return (vn && strcmp(vn, LUA_ENV) == 0) ? "global" : "field";
         break;
       }
@@ -422,10 +416,7 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
       }
       case OP_SELF: {
         int k = GETARG_C(i);  /* key index */
-        if (opck(op))
-          kname(p, pc, k, name);
-        else
-          rname(p, pc, k, name);
+        kname(p, pc, k, name);
         return "method";
       }
       default: break;  /* go through to return NULL */

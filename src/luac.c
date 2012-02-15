@@ -300,11 +300,8 @@ static void PrintCode(const Proto* f)
   {
    case iABC:
     printf("%d",a);
-    if (grp == OP_GETTABLE || grp == OP_GETTABUP)
-      printf(" %d", b);
-    else if (getBMode(o)!=OpArgN) 
-      printf(" %d",opbk(o) ? (MYK(b)) : b);
-    if (getCMode(o)!=OpArgN) printf(" %d",opck(o) ? (MYK(c)) : c);
+    if (getBMode(o)!=OpArgN) printf(" %d",ISK(b) ? (MYK(INDEXK(b))) : b);
+    if (getCMode(o)!=OpArgN) printf(" %d",ISK(c) ? (MYK(INDEXK(c))) : c);
     break;
    case iABx:
     printf("%d",a);
@@ -329,16 +326,16 @@ static void PrintCode(const Proto* f)
     break;
    case OP_GETTABUP:
     printf("\t; %s",UPVALNAME(b));
-    if (opck(o)) { printf(" "); PrintConstant(f,c); }
+    if (ISK(c)) { printf(" "); PrintConstant(f,INDEXK(c)); }
     break;
    case OP_SETTABUP:
     printf("\t; %s",UPVALNAME(a));
-    if (opbk(o)) { printf(" "); PrintConstant(f,b); }
-    if (opck(o)) { printf(" "); PrintConstant(f,c); }
+    if (ISK(b)) { printf(" "); PrintConstant(f,INDEXK(b)); }
+    if (ISK(c)) { printf(" "); PrintConstant(f,INDEXK(c)); }
     break;
    case OP_GETTABLE:
    case OP_SELF:
-    if (opck(o)) { printf("\t; "); PrintConstant(f,c); }
+    if (ISK(c)) { printf("\t; "); PrintConstant(f,INDEXK(c)); }
     break;
    case OP_SETTABLE:
    case OP_ADD:
@@ -349,12 +346,12 @@ static void PrintCode(const Proto* f)
    case OP_EQ:
    case OP_LT:
    case OP_LE:
-    if (opbk(o) || opck(o))
+    if (ISK(b) || ISK(c))
     {
      printf("\t; ");
-     if (opbk(o)) PrintConstant(f,b); else printf("-");
+     if (ISK(b)) PrintConstant(f,INDEXK(b)); else printf("-");
      printf(" ");
-     if (opck(o)) PrintConstant(f,c); else printf("-");
+     if (ISK(c)) PrintConstant(f,INDEXK(c)); else printf("-");
     }
     break;
    case OP_JMP:

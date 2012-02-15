@@ -457,7 +457,7 @@ void luaV_finishOp (lua_State *L) {
       int res = !l_isfalse(L->top - 1);
       L->top--;
       /* metamethod should not be called when operand is K */
-      lua_assert(!opbk(op));
+      lua_assert(!ISK(GETARG_B(inst)));
       if (op2grp(op) == OP_LE &&  /* "<=" using "<" instead? */
           ttisnil(luaT_gettmbyobj(L, base + GETARG_B(inst), TM_LE)))
         res = !res;  /* invert result */
@@ -514,25 +514,16 @@ void luaV_finishOp (lua_State *L) {
 #endif
 
 
-#define RA(i)	(base+GETARG_A(i))
+#define RA(i) (base+GETARG_A(i))
 /* to be used after possible stack reallocation */
-// #define RB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgR, base+GETARG_B(i))
-// #define RC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgR, base+GETARG_C(i))
-// #define KB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgK, k+GETARG_B(i))
-// #define KC(i)	check_exp(getCMode(GET_OPCODE(i)) == OpArgK, k+GETARG_C(i))
-
-/*
+#define RB(i) check_exp(getBMode(GET_OPCODE(i)) == OpArgR, base+GETARG_B(i))
+#define RC(i) check_exp(getCMode(GET_OPCODE(i)) == OpArgR, base+GETARG_C(i))
+#define RKB(i)  check_exp(getBMode(GET_OPCODE(i)) == OpArgK, \
+  ISK(GETARG_B(i)) ? k+INDEXK(GETARG_B(i)) : base+GETARG_B(i))
+#define RKC(i)  check_exp(getCMode(GET_OPCODE(i)) == OpArgK, \
+  ISK(GETARG_C(i)) ? k+INDEXK(GETARG_C(i)) : base+GETARG_C(i))
 #define KBx(i)  \
   (k + (GETARG_Bx(i) != 0 ? GETARG_Bx(i) - 1 : GETARG_Ax(*ci->u.l.savedpc++)))
-*/
-// TODO: the reasons for this not working are a little unclear...
-#define KBx(i) (k+GETARG_Bx(i))
-
-// TODO: the modes checking is now a little trickier...
-#define RB(i) (base+GETARG_B(i))
-#define RC(i) (base+GETARG_C(i))
-#define KB(i) (k+GETARG_B(i))
-#define KC(i) (k+GETARG_C(i))
 
 
 /* execute a jump instruction */
@@ -661,7 +652,7 @@ newframe:  /* reentry point when frame changes (call/return) */
     vmdispatch (GET_OPCODE(i)) {
 /* ------------------------------------------------------------------------ */
 #define vmcase_move(ret,guard)          \
-      vmcase(OP(MOVE,ret,___,___,___),  \
+      vmcase(OP(MOVE,ret,___),  \
         setobjs2s(L, ra, RB(i));        \
         {guard;}                        \
       )
@@ -670,8 +661,8 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_move(chk, TypeGuard)
 /* ------------------------------------------------------------------------ */
 #define vmcase_loadk(ret,guard)         \
-      vmcase(OP(LOADK,ret,___,___,___), \
-        setobj2s(L, ra, KBx(i));        \
+      vmcase(OP(LOADK,ret,___), \
+        setobj2s(L, ra, k + GETARG_Bx(i));        \
         {guard;}                        \
       )
 
@@ -679,7 +670,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_loadk(chk, TypeGuard)
 /* ------------------------------------------------------------------------ */
 #define vmcase_loadkx(ret,guard)                                    \
-      vmcase(OP(LOADKX,ret,___,___,___),                            \
+      vmcase(OP(LOADKX,ret,___), \
         TValue *rb;                                                 \
         lua_assert(GET_OPCODE(*ci->u.l.savedpc) == sOP(EXTRAARG));  \
         rb = k + GETARG_Ax(*ci->u.l.savedpc++);                     \
@@ -691,7 +682,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_loadkx(chk, TypeGuard)
 /* ------------------------------------------------------------------------ */
 #define vmcase_loadbool(ret,guard)          \
-      vmcase(OP(LOADBOOL,ret,___,___,___),  \
+      vmcase(OP(LOADBOOL,ret,___), \
         setbvalue(ra, GETARG_B(i));         \
         {guard;}                            \
         /* skip next instruction (if C) */  \
@@ -702,7 +693,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_loadbool(chk, TypeGuard)
 /* ------------------------------------------------------------------------ */
 #define vmcase_loadnil(ret,guard)         \
-      vmcase(OP(LOADNIL,ret,___,___,___), \
+      vmcase(OP(LOADNIL,ret,___), \
         int b = GETARG_B(i);              \
         do {                              \
           setnilvalue(ra++);              \
@@ -725,7 +716,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_getupval(ret,guard)                    \
-      vmcase(OP(GETUPVAL,ret,___,___,___),            \
+      vmcase(OP(GETUPVAL,ret,___), \
         setobj2s(L, ra, cl->upvals[GETARG_B(i)]->v);  \
         {guard;}                                      \
       )
@@ -733,67 +724,46 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_getupval(raw, )
       vmcase_getupval(chk, TypeGuard)
 /* ------------------------------------------------------------------------ */
-#define vmcase_gettab_spec(op,ret,spec,ck,b,c,guard)  \
-    vmcase(OP(op,ret,spec,___,ck),                    \
-      Protect(luaV_gettable_##spec(L, b, c, ra));     \
+#define vmcase_gettab_spec(op,ret,spec,b,guard)  \
+    vmcase(OP(op,ret,spec), \
+      Protect(luaV_gettable_##spec(L, b, RKC(i), ra));     \
       {guard;}                                        \
     )
 #define vmcase_gettab_chk(op,ret)   \
-    vmcase(OP(op,ret,chk,___,reg),  \
+    vmcase(OP(op,ret,chk), \
       luaVS_specialize(L);          \
       dispatch_again                \
     )
 #define vmcase_gettab(op,b)                                     \
-    vmcase_gettab_spec(op, raw, raw, reg, b, RC(i), )           \
-    vmcase_gettab_spec(op, raw, raw, kst, b, KC(i), )           \
-    vmcase_gettab_spec(op, raw, int, reg, b, RC(i), )           \
-    vmcase_gettab_spec(op, raw, int, kst, b, KC(i), )           \
-    vmcase_gettab_spec(op, raw, str, reg, b, RC(i), )           \
-    vmcase_gettab_spec(op, raw, str, kst, b, KC(i), )           \
-    vmcase_gettab_spec(op, raw, obj, reg, b, RC(i), )           \
-    vmcase_gettab_spec(op, raw, obj, kst, b, KC(i), )           \
+    vmcase_gettab_spec(op, raw, raw, b, )           \
+    vmcase_gettab_spec(op, raw, int, b, )           \
+    vmcase_gettab_spec(op, raw, str, b, )           \
+    vmcase_gettab_spec(op, raw, obj, b, )           \
     vmcase_gettab_chk(op, raw)                                  \
-    vmcase_gettab_spec(op, chk, raw, reg, b, RC(i), TypeGuard)  \
-    vmcase_gettab_spec(op, chk, raw, kst, b, KC(i), TypeGuard)  \
-    vmcase_gettab_spec(op, chk, int, reg, b, RC(i), TypeGuard)  \
-    vmcase_gettab_spec(op, chk, int, kst, b, KC(i), TypeGuard)  \
-    vmcase_gettab_spec(op, chk, str, reg, b, RC(i), TypeGuard)  \
-    vmcase_gettab_spec(op, chk, str, kst, b, KC(i), TypeGuard)  \
-    vmcase_gettab_spec(op, chk, obj, reg, b, RC(i), TypeGuard)  \
-    vmcase_gettab_spec(op, chk, obj, kst, b, KC(i), TypeGuard)  \
+    vmcase_gettab_spec(op, chk, raw, b, TypeGuard)  \
+    vmcase_gettab_spec(op, chk, int, b, TypeGuard)  \
+    vmcase_gettab_spec(op, chk, str, b, TypeGuard)  \
+    vmcase_gettab_spec(op, chk, obj, b, TypeGuard)  \
     vmcase_gettab_chk(op, chk)
 
     vmcase_gettab(GETTABLE, RB(i))
     vmcase_gettab(GETTABUP, cl->upvals[GETARG_B(i)]->v)
 /* ------------------------------------------------------------------------ */
-#define vmcase_settab_spec(op,spec,bk,ck,b,c,a)     \
-      vmcase(OP(op,___,spec,bk,ck),                 \
-        Protect(luaV_settable_##spec(L, a, b, c));  \
+#define vmcase_settab_spec(op,spec,a)     \
+      vmcase(OP(op,___,spec),                 \
+        Protect(luaV_settable_##spec(L, a, RKB(i), RKC(i)));  \
       )
-#define vmcase_settab_chk(op,bk,ck) \
-      vmcase(OP(op,___,chk,bk,ck),  \
+#define vmcase_settab_chk(op) \
+      vmcase(OP(op,___,chk),  \
         luaVS_specialize(L);        \
         dispatch_again              \
       )      
 #define vmcase_settab(op,a)                                   \
-      vmcase_settab_spec(op, raw, reg, reg, RB(i), RC(i), a)  \
-      vmcase_settab_spec(op, raw, reg, kst, RB(i), KC(i), a)  \
-      vmcase_settab_spec(op, raw, kst, reg, KB(i), RC(i), a)  \
-      vmcase_settab_spec(op, raw, kst, kst, KB(i), KC(i), a)  \
-      vmcase_settab_spec(op, int, reg, reg, RB(i), RC(i), a)  \
-      vmcase_settab_spec(op, int, reg, kst, RB(i), KC(i), a)  \
-      vmcase_settab_spec(op, int, kst, reg, KB(i), RC(i), a)  \
-      vmcase_settab_spec(op, int, kst, kst, KB(i), KC(i), a)  \
-      vmcase_settab_spec(op, str, reg, reg, RB(i), RC(i), a)  \
-      vmcase_settab_spec(op, str, reg, kst, RB(i), KC(i), a)  \
-      vmcase_settab_spec(op, str, kst, reg, KB(i), RC(i), a)  \
-      vmcase_settab_spec(op, str, kst, kst, KB(i), KC(i), a)  \
-      vmcase_settab_spec(op, obj, reg, reg, RB(i), RC(i), a)  \
-      vmcase_settab_spec(op, obj, reg, kst, RB(i), KC(i), a)  \
-      vmcase_settab_spec(op, obj, kst, reg, KB(i), RC(i), a)  \
-      vmcase_settab_spec(op, obj, kst, kst, KB(i), KC(i), a)  \
-      vmcase_settab_chk(op, reg, reg)                         \
-      vmcase_settab_chk(op, reg, kst)
+      vmcase_settab_spec(op, raw, a)  \
+      vmcase_settab_spec(op, int, a)  \
+      vmcase_settab_spec(op, str, a)  \
+      vmcase_settab_spec(op, obj, a)  \
+      vmcase_settab_chk(op) \
 
       vmcase_settab(SETTABLE, ra)
       vmcase_settab(SETTABUP, cl->upvals[GETARG_A(i)]->v)
@@ -813,7 +783,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_newtable(ret,guard)                            \
-      vmcase(OP(NEWTABLE,ret,___,___,___),                    \
+      vmcase(OP(NEWTABLE,ret,___), \
         int b = GETARG_B(i);                                  \
         int c = GETARG_C(i);                                  \
         Table *t = luaH_new(L);                               \
@@ -831,23 +801,21 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_newtable(raw, )
       vmcase_newtable(chk, TypeGuard)
 /* ------------------------------------------------------------------------ */
-#define vmcase_self(ret,ck,c,guard)               \
-      vmcase(OP(SELF,ret,___,___,ck),             \
+#define vmcase_self(ret,guard)               \
+      vmcase(OP(SELF,ret,___), \
         StkId rb = RB(i);                         \
         setobjs2s(L, ra+1, rb);                   \
-        Protect(luaV_gettable_str(L, rb, c, ra)); \
+        Protect(luaV_gettable_str(L, rb, RKC(i), ra)); \
         {guard;}                                  \
       )
 
-      vmcase_self(raw, reg, RC(i), )
-      vmcase_self(raw, kst, KC(i), )
-      vmcase_self(chk, reg, RC(i), TypeGuard)
-      vmcase_self(chk, kst, KC(i), TypeGuard)
+      vmcase_self(raw, )
+      vmcase_self(chk, TypeGuard)
 /* ------------------------------------------------------------------------ */
-#define _vmcase_arith_raw(op,ret,bk,ck,b,c,func,tm,guard) \
-      vmcase(OP(op,ret,raw,bk,ck),                        \
-        TValue *rb = b;                                   \
-        TValue *rc = c;                                   \
+#define _vmcase_arith_raw(op,ret,func,tm,guard) \
+      vmcase(OP(op,ret,raw), \
+        TValue *rb = RKB(i);                                   \
+        TValue *rc = RKC(i);                                   \
         if (ttisnumber(rb) && ttisnumber(rc)) {           \
           lua_Number nb = nvalue(rb);                     \
           lua_Number nc = nvalue(rc);                     \
@@ -857,57 +825,39 @@ newframe:  /* reentry point when frame changes (call/return) */
         {guard;}                                          \
       )
 #define vmcase_arith_raw(op,func,tm)                                          \
-      _vmcase_arith_raw(op, raw, reg, reg, RB(i), RC(i), func, tm, )          \
-      _vmcase_arith_raw(op, raw, reg, kst, RB(i), KC(i), func, tm, )          \
-      _vmcase_arith_raw(op, raw, kst, reg, KB(i), RC(i), func, tm, )          \
-      _vmcase_arith_raw(op, raw, kst, kst, KB(i), KC(i), func, tm, )          \
-      _vmcase_arith_raw(op, chk, reg, reg, RB(i), RC(i), func, tm, TypeGuard) \
-      _vmcase_arith_raw(op, chk, reg, kst, RB(i), KC(i), func, tm, TypeGuard) \
-      _vmcase_arith_raw(op, chk, kst, reg, KB(i), RC(i), func, tm, TypeGuard) \
-      _vmcase_arith_raw(op, chk, kst, kst, KB(i), KC(i), func, tm, TypeGuard)
+      _vmcase_arith_raw(op, raw, func, tm, )          \
+      _vmcase_arith_raw(op, chk, func, tm, TypeGuard) \
 
-#define _vmcase_arith_num(op,ret,bk,ck,b,c,func,guard)  \
-      vmcase(OP(op,ret,num,bk,ck),                      \
-        setnvalue(ra, func(L, nvalue(b), nvalue(c)));   \
+#define _vmcase_arith_num(op,ret,func,guard)  \
+      vmcase(OP(op,ret,num), \
+        setnvalue(ra, func(L, nvalue(RKB(i)), nvalue(RKC(i))));   \
         {guard;}                                        \
       )
 #define vmcase_arith_num(op,func)                                         \
-      _vmcase_arith_num(op, raw, reg, reg, RB(i), RC(i), func, )          \
-      _vmcase_arith_num(op, raw, reg, kst, RB(i), KC(i), func, )          \
-      _vmcase_arith_num(op, raw, kst, reg, KB(i), RC(i), func, )          \
-      _vmcase_arith_num(op, chk, reg, reg, RB(i), RC(i), func, TypeGuard) \
-      _vmcase_arith_num(op, chk, reg, kst, RB(i), KC(i), func, TypeGuard) \
-      _vmcase_arith_num(op, chk, kst, reg, KB(i), RC(i), func, TypeGuard)
+      _vmcase_arith_num(op, raw, func, )          \
+      _vmcase_arith_num(op, chk, func, TypeGuard) \
 
-#define _vmcase_arith_obj(op,ret,bk,ck,b,c,tm,guard)  \
-      vmcase(OP(op,ret,obj,bk,ck),                    \
+#define _vmcase_arith_obj(op,ret,tm,guard)  \
+      vmcase(OP(op,ret,obj),                    \
         Protect(                                      \
-          if (!call_binTM(L, b, c, ra, tm))           \
-            luaG_aritherror(L, b, c);                 \
+          if (!call_binTM(L, RKB(i), RKC(i), ra, tm))           \
+            luaG_aritherror(L, RKB(i), RKC(i));                 \
         )                                             \
         {guard;}                                      \
       )
 #define vmcase_arith_obj(op,tm)                                         \
-      _vmcase_arith_obj(op, raw, reg, reg, RB(i), RC(i), tm, )          \
-      _vmcase_arith_obj(op, raw, reg, kst, RB(i), KC(i), tm, )          \
-      _vmcase_arith_obj(op, raw, kst, reg, KB(i), RC(i), tm, )          \
-      _vmcase_arith_obj(op, chk, reg, reg, RB(i), RC(i), tm, TypeGuard) \
-      _vmcase_arith_obj(op, chk, reg, kst, RB(i), KC(i), tm, TypeGuard) \
-      _vmcase_arith_obj(op, chk, kst, reg, KB(i), RC(i), tm, TypeGuard)
+      _vmcase_arith_obj(op, raw, tm, )          \
+      _vmcase_arith_obj(op, chk, tm, TypeGuard) \
 
 
-#define _vmcase_arith_chk(op,ret,bk,ck) \
-      vmcase(OP(op,ret,chk,bk,ck),      \
+#define _vmcase_arith_chk(op,ret) \
+      vmcase(OP(op,ret,chk),      \
         luaVS_specialize(L);            \
         dispatch_again                  \
       )
 #define vmcase_arith_chk(op)                \
-      _vmcase_arith_chk(op, raw, reg, reg)  \
-      _vmcase_arith_chk(op, raw, reg, kst)  \
-      _vmcase_arith_chk(op, raw, kst, reg)  \
-      _vmcase_arith_chk(op, chk, reg, reg)  \
-      _vmcase_arith_chk(op, chk, reg, kst)  \
-      _vmcase_arith_chk(op, chk, kst, reg)
+      _vmcase_arith_chk(op, raw)  \
+      _vmcase_arith_chk(op, chk)  \
 
 #define vmcase_arith(op,func,tm)      \
       vmcase_arith_raw(op, func, tm)  \
@@ -923,19 +873,19 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_arith(POW, luai_numpow, TM_POW)
 /* ------------------------------------------------------------------------ */
 #define vmcase_unm_raw(ret,guard)                   \
-      vmcase(OP(UNM,ret,raw,___,___),               \
+      vmcase(OP(UNM,ret,raw),               \
         TValue *rb = RB(i);                         \
         Protect(luaV_arith(L, ra, rb, rb, TM_UNM)); \
         {guard;}                                    \
       )
 #define vmcase_unm_num(ret,guard)                   \
-      vmcase(OP(UNM,ret,num,___,___),               \
+      vmcase(OP(UNM,ret,num),               \
         TValue *rb = RB(i);                         \
         setnvalue(ra, luai_numunm(L, nvalue(rb)));  \
         {guard;}                                    \
       )
 #define vmcase_unm_chk(ret)           \
-      vmcase(OP(UNM,ret,chk,___,___), \
+      vmcase(OP(UNM,ret,chk), \
         luaVS_specialize(L);          \
         dispatch_again                \
       )
@@ -948,7 +898,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_unm_chk(chk)
 /* ------------------------------------------------------------------------ */
 #define vmcase_not(ret,guard)             \
-      vmcase(OP(NOT,ret,___,___,___),     \
+      vmcase(OP(NOT,ret,___), \
         setbvalue(ra, l_isfalse(RB(i)));  \
         {guard;}                          \
       )
@@ -957,17 +907,17 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_not(chk, TypeGuard)      
 /* ------------------------------------------------------------------------ */
 #define vmcase_len_raw(ret,guard)           \
-      vmcase(OP(LEN,ret,raw,___,___),       \
+      vmcase(OP(LEN,ret,raw), \
         Protect(luaV_objlen(L, ra, RB(i))); \
         {guard;}                            \
       )
 #define vmcase_len_str(ret,guard)                     \
-      vmcase(OP(LEN,ret,str,___,___),                 \
+      vmcase(OP(LEN,ret,str), \
         setnvalue(ra, cast_num(tsvalue(RB(i))->len))  \
         {guard;}                                      \
       )
 #define vmcase_len_tab(ret,guard)                           \
-      vmcase(OP(LEN,ret,tab,___,___),                       \
+      vmcase(OP(LEN,ret,tab), \
         TValue *rb = RB(i);                                 \
         Table *h = hvalue(rb);                              \
         const TValue *tm = fasttm(L, h->metatable, TM_LEN); \
@@ -976,7 +926,7 @@ newframe:  /* reentry point when frame changes (call/return) */
         {guard;}                                            \
       )
 #define vmcase_len_chk(ret)           \
-      vmcase(OP(LEN,ret,chk,___,___), \
+      vmcase(OP(LEN,ret,chk), \
         luaVS_specialize(L);          \
         dispatch_again                \
       )
@@ -991,7 +941,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_len_chk(chk)    
 /* ------------------------------------------------------------------------ */
 #define vmcase_concat(ret,guard)                                            \
-      vmcase(OP(CONCAT,ret,___,___,___),                                    \
+      vmcase(OP(CONCAT,ret,___), \
         int b = GETARG_B(i);                                                \
         int c = GETARG_C(i);                                                \
         StkId rb;                                                           \
@@ -1015,76 +965,51 @@ newframe:  /* reentry point when frame changes (call/return) */
         dojump(ci, i, 0);
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_eq(bk,ck,b,c)                              \
-      vmcase(OP(EQ,___,___,bk,ck),                        \
-        Protect(                                          \
-          if (cast_int(equalobj(L, b, c)) != GETARG_A(i)) \
-            ci->u.l.savedpc++;                            \
-          else                                            \
-            donextjump(ci);                               \
-        )                                                 \
+      vmcase(sOP(EQ),
+        Protect(
+          if (cast_int(equalobj(L, RKB(i), RKC(i))) != GETARG_A(i))
+            ci->u.l.savedpc++;
+          else
+            donextjump(ci);
+        )
       )
-
-      vmcase_eq(reg, reg, RB(i), RC(i))
-      vmcase_eq(reg, kst, RB(i), KC(i))
-      vmcase_eq(kst, reg, KB(i), RC(i))
-      vmcase_eq(kst, kst, KB(i), KC(i))
 /* ------------------------------------------------------------------------ */
-#define _vmcase_less_raw(op,bk,ck,b,c,func) \
-      vmcase(OP(op,___,raw,bk,ck),          \
+#define vmcase_less_raw(op,func) \
+      vmcase(OP(op,___,raw),          \
         Protect(                            \
-          if (func(L, b, c) != GETARG_A(i)) \
+          if (func(L, RKB(i), RKC(i)) != GETARG_A(i)) \
             ci->u.l.savedpc++;              \
           else                              \
             donextjump(ci);                 \
         )                                   \
       )
-#define vmcase_less_raw(op,func)                          \
-      _vmcase_less_raw(op, reg, reg, RB(i), RC(i), func)  \
-      _vmcase_less_raw(op, reg, kst, RB(i), KC(i), func)  \
-      _vmcase_less_raw(op, kst, reg, KB(i), RC(i), func)  \
-      _vmcase_less_raw(op, kst, kst, KB(i), KC(i), func)
 
-#define _vmcase_less_num(op,bk,ck,b,c,numfunc)                  \
-      vmcase(OP(op,___,num,bk,ck),                              \
+#define vmcase_less_num(op,numfunc)                  \
+      vmcase(OP(op,___,num),                              \
         Protect(                                                \
-          if (numfunc(L, nvalue(b), nvalue(c)) != GETARG_A(i))  \
+          if (numfunc(L, nvalue(RKB(i)), nvalue(RKC(i))) != GETARG_A(i))  \
             ci->u.l.savedpc++;                                  \
           else                                                  \
             donextjump(ci);                                     \
         )                                                       \
       )
-#define vmcase_less_num(op,numfunc)                         \
-      _vmcase_less_num(op, reg, reg, RB(i), RC(i), numfunc) \
-      _vmcase_less_num(op, reg, kst, RB(i), KC(i), numfunc) \
-      _vmcase_less_num(op, kst, reg, KB(i), RC(i), numfunc) \
-      _vmcase_less_num(op, kst, kst, KB(i), KC(i), numfunc)
 
-#define _vmcase_less_str(op,bk,ck,b,c,cmpop)                        \
-      vmcase(OP(op,___,str,bk,ck),                                  \
+#define vmcase_less_str(op,cmpop)                        \
+      vmcase(OP(op,___,str),                                  \
         Protect(                                                    \
-          int res = l_strcmp(rawtsvalue(b), rawtsvalue(c)) cmpop 0; \
+          int res = l_strcmp(rawtsvalue(RKB(i)), rawtsvalue(RKC(i))) cmpop 0; \
           if (res != GETARG_A(i))                                   \
             ci->u.l.savedpc++;                                      \
           else                                                      \
             donextjump(ci);                                         \
         )                                                           \
       )
-#define vmcase_less_str(op,cmpop)                         \
-      _vmcase_less_str(op, reg, reg, RB(i), RC(i), cmpop) \
-      _vmcase_less_str(op, reg, kst, RB(i), KC(i), cmpop) \
-      _vmcase_less_str(op, kst, reg, KB(i), RC(i), cmpop) \
-      _vmcase_less_str(op, kst, kst, KB(i), KC(i), cmpop)
 
-#define _vmcase_less_chk(op,bk,ck)  \
-      vmcase(OP(op,___,chk,bk,ck),  \
+#define vmcase_less_chk(op)  \
+      vmcase(OP(op,___,chk),  \
         luaVS_specialize(L);        \
         dispatch_again              \
       )
-#define vmcase_less_chk(op)           \
-      _vmcase_less_chk(op, reg, reg)  \
-      _vmcase_less_chk(op, reg, kst)  \
-      _vmcase_less_chk(op, kst, reg)
 
 #define vmcase_less(op, func, numfunc, cmpop) \
       vmcase_less_raw(op, func)               \
@@ -1103,7 +1028,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_testset(ret,guard)                         \
-      vmcase(OP(TESTSET,ret,___,___,___),                 \
+      vmcase(OP(TESTSET,ret,___),                 \
         TValue *rb = RB(i);                               \
         if (GETARG_C(i) ? l_isfalse(rb) : !l_isfalse(rb)) \
           ci->u.l.savedpc++;                              \
@@ -1119,11 +1044,11 @@ newframe:  /* reentry point when frame changes (call/return) */
 /* ------------------------------------------------------------------------ */
 // TODO: it would maybe pay off to have separate 0-return and 1-return CALL
 //        variations (to avoid the exptypes.ts stuff...)
-      vmcasenb(OP(CALL,chk,___,___,___),
+      vmcasenb(OP(CALL,chk,___),
         ci->callstatus |= CIST_SPECRES;
         /* fall through */
       )
-      vmcase(OP(CALL,raw,___,___,___),
+      vmcase(OP(CALL,raw,___),
         int b = GETARG_B(i);
         int nresults = GETARG_C(i) - 1;
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
@@ -1217,7 +1142,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_tforcall(ret,guard)                                \
-      vmcase(OP(TFORCALL,ret,___,___,___),                        \
+      vmcase(OP(TFORCALL,ret,___),                        \
         StkId cb = ra + 3;  /* call base */                       \
         setobjs2s(L, cb+2, ra+2);                                 \
         setobjs2s(L, cb+1, ra+1);                                 \
@@ -1278,7 +1203,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_closure(ret,guard)                                             \
-      vmcase(OP(CLOSURE,ret,___,___,___),                                     \
+      vmcase(OP(CLOSURE,ret,___),                                     \
         Proto *p = cl->p->p[GETARG_Bx(i)];                                    \
         Closure *ncl = getcached(p, cl->upvals, base);  /* cached closure */  \
         if (ncl == NULL)  /* no match? */                                     \
@@ -1297,7 +1222,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_closure(chk, TypeGuard)
 /* ------------------------------------------------------------------------ */
 #define vmcase_vararg(ret,guard)                                  \
-      vmcase(OP(VARARG,ret,___,___,___),                          \
+      vmcase(OP(VARARG,ret,___),                          \
         int b = GETARG_B(i) - 1;                                  \
         int j;                                                    \
         int n = cast_int(base - ci->func) - cl->p->numparams - 1; \
