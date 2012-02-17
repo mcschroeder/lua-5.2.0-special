@@ -28,7 +28,7 @@
 #include "lvmspec.h"
 
 
-// #define DEBUG_PRINT
+#define DEBUG_PRINT
 
 
 /* limit for table tag-method chains (to avoid loops) */
@@ -503,21 +503,10 @@ void luaV_finishOp (lua_State *L) {
       break;
     }
     case OP_TFORCALL: {
-      if (opout(op) == OpType_raw) {
-        // TODO
-        // ci->u.l.savedpc += GETARG_C(i); /* skip CHKTYPE instructions */        
-        lua_assert(GET_OPCODE(*ci->u.l.savedpc) == sOP(TFORLOOP));
-      }
       L->top = ci->top;  /* correct top */
       break;
     }
     case OP_CALL: {
-      if (opout(op) == OpType_raw) {
-        int nresults = GETARG_C(i) - 1;
-        lua_assert(nresults != LUA_MULTRET);
-        // TODO
-        // ci->u.l.savedpc += nresults; /* skip CHKTYPE instructions */
-      }
       if (GETARG_C(i) - 1 >= 0)  /* nresults >= 0? */
         L->top = ci->top;  /* adjust results */
       break;
@@ -1100,7 +1089,6 @@ newframe:  /* reentry point when frame changes (call/return) */
         }
       )
 /* ------------------------------------------------------------------------ */
-// TODO: specialize external index / variables
       vmcase(sOP(FORLOOP),
         lua_Number step = nvalue(ra+2);
         lua_Number idx = luai_numadd(L, nvalue(ra), step); /* increment index */
@@ -1136,15 +1124,15 @@ newframe:  /* reentry point when frame changes (call/return) */
         int nresults = GETARG_C(i);
         Protect(luaD_call(L, cb, nresults, 1));
         L->top = ci->top;
-        i = *(ci->u.l.savedpc++);  /* go to next instruction */
-        ra = RA(i);
-        lua_assert(GET_OPCODE(i) == sOP(TFORLOOP));
-        goto l_tforloop;
-        // TODO: this fallthrough construct makes CHKTYPE trickier
+        // TODO: cannot use this optimization due to CHKTYPE
+        // i = *(ci->u.l.savedpc++);  /* go to next instruction */
+        // ra = RA(i);
+        // lua_assert(GET_OPCODE(i) == sOP(TFORLOOP));
+        // goto l_tforloop;
       )
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(TFORLOOP),
-        l_tforloop:
+        // l_tforloop:
         if (!ttisnil(ra + 1)) {  /* continue loop? */
           setobjs2s(L, ra, ra + 1);  /* save control variable */
           ci->u.l.savedpc += GETARG_sBx(i);  /* jump back */

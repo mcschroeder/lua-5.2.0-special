@@ -927,8 +927,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
   for (ra = base+1; ra <= base+nparams; ra++)
     addregload(fs, ra); /* function args */
   addregload(fs, base); /* the closure */
-  OpCode op = create_op_out(OP_CALL, OpType_raw);
-  init_exp(f, VCALL, luaK_codeABC(fs, op, base, nparams+1, 2));  
+  init_exp(f, VCALL, luaK_codeABC(fs, sOP(CALL), base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
                             (unless changed) one result */
@@ -1348,70 +1347,6 @@ static int exp1 (LexState *ls) {
 }
 
 
-static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
-  // printf(">>>>>>>>> %s BEGIN\n", __func__);
-  /* forbody -> DO block */
-  BlockCnt bl;
-  FuncState *fs = ls->fs;
-  int prep, endfor;
-  adjustlocalvars(ls, 3);  /* control variables */
-  checknext(ls, TK_DO);
-  if (isnum) {
-    // TODO: this is an artifical store to establish
-    // the scope of these locals
-    addregstore(fs, base+1);
-    addregstore(fs, base+2);    
-    addregstore(fs, base);
-    addregstore(fs, base+3);
-    prep = luaK_codeAsBx(fs, sOP(FORPREP), base, NO_JUMP);
-  } else {
-    addregstore(fs, base);
-    addregstore(fs, base+1);
-    addregstore(fs, base+2);
-    int cb; /* call base */
-    for (cb = base+3; cb <= base+2+nvars; cb++)
-      addregstore(fs, cb);
-    prep = luaK_jump(fs);
-  }
-  enterblock(fs, &bl, 0);  /* scope for declared variables */
-  adjustlocalvars(ls, nvars);
-  luaK_reserveregs(fs, nvars);
-  block(ls);
-  if (isnum) { 
-    addregload(fs, base+1);
-    addregload(fs, base+2);
-    addregstore(fs, base);
-    addregstore(fs, base+3); /* ext. index */
-  } else {
-    addregload(fs, base);
-    addregload(fs, base+1);
-    addregload(fs, base+2);
-    int cb; /* call base */    
-    for (cb = base+3; cb <= base+2+nvars; cb++)
-      addregstore(fs, cb);
-    luaK_extendreginfo(fs, base+1, fs->pc+1, REGINFO_USE_LOAD);
-    luaK_extendreginfo(fs, base, fs->pc+1, REGINFO_USE_STORE);
-  }
-  leaveblock(fs);  /* end of scope for declared variables */
-  luaK_patchtohere(fs, prep);
-  if (isnum) {  /* numeric for? */
-    endfor = luaK_codeAsBx(fs, sOP(FORLOOP), base, NO_JUMP);
-  }
-  else {  /* generic for */
-    int op = create_op_out(OP_TFORCALL, OpType_raw);
-    luaK_codeABC(fs, op, base, 0, nvars);
-    // while (--nvars >= 0) {
-    //   luaK_codeABC(fs, OP(CHKTYPE,___,___), nvars, 0, 0);
-    // }
-    luaK_fixline(fs, line);
-    endfor = luaK_codeAsBx(fs, sOP(TFORLOOP), base + 2, NO_JUMP);
-  }
-  luaK_patchlist(fs, endfor, prep + 1);
-  luaK_fixline(fs, line);
-  // printf(">>>>>>>>> %s END\n", __func__);
-}
-
-
 static void fornum (LexState *ls, TString *varname, int line) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
   FuncState *fs = ls->fs;
@@ -1430,7 +1365,32 @@ static void fornum (LexState *ls, TString *varname, int line) {
     luaK_codek(fs, fs->freereg, luaK_numberK(fs, 1));
     luaK_reserveregs(fs, 1);
   }
-  forbody(ls, base, line, 1, 1);
+
+  /* numeric forbody */
+  BlockCnt bl;
+  int prep, endfor;
+  adjustlocalvars(ls, 3);  /* control variables */
+  checknext(ls, TK_DO);
+  addregload(fs, base); /* initial index */
+  addregload(fs, base+1); /* limit */
+  addregload(fs, base+2); /* step */
+  addregstore(fs, base); /* internal index */
+  addregload(fs, base+3); /* external index */
+  prep = luaK_codeAsBx(fs, sOP(FORPREP), base, NO_JUMP);
+  enterblock(fs, &bl, 0);  /* scope for declared variables */
+  adjustlocalvars(ls, 1);
+  luaK_reserveregs(fs, 1);
+  block(ls);
+  leaveblock(fs);  /* end of scope for declared variables */
+  luaK_patchtohere(fs, prep);
+  addregload(fs, base+2); /* step */
+  addregload(fs, base+1); /* limit */
+  addregstore(fs, base); /* internal index */
+  lastreginfo(fs, base+3)->endpc = fs->pc; /* external index */
+  lastreginfo(fs, base+3)->lastuse = REGINFO_USE_STORE;
+  endfor = luaK_codeAsBx(fs, sOP(FORLOOP), base, NO_JUMP);
+  luaK_patchlist(fs, endfor, prep + 1);
+  luaK_fixline(fs, line);
 }
 
 
@@ -1455,7 +1415,36 @@ static void forlist (LexState *ls, TString *indexname) {
   line = ls->linenumber;
   adjust_assign(ls, 3, explist(ls, &e), &e);
   luaK_checkstack(fs, 3);  /* extra space to call generator */
-  forbody(ls, base, line, nvars - 3, 0);
+
+  /* generic forbody */
+  BlockCnt bl;  
+  int prep, endfor, res;
+  adjustlocalvars(ls, 3);  /* control variables */
+  checknext(ls, TK_DO);
+  for (res = base+3; res < base+nvars; res++) 
+    addregstore(fs, res);  /* var_1, ..., var_n */
+  prep = luaK_jump(fs);
+  enterblock(fs, &bl, 0);  /* scope for declared variables */
+  adjustlocalvars(ls, nvars - 3);
+  luaK_reserveregs(fs, nvars - 3);
+  block(ls);
+  leaveblock(fs);  /* end of scope for declared variables */
+  luaK_patchtohere(fs, prep);
+  addregload(fs, base + 2);  /* control var */
+  addregload(fs, base + 1);  /* state */
+  addregload(fs, base);  /* func */
+  luaK_codeABC(fs, sOP(TFORCALL), base, 0, nvars - 3);
+  luaK_fixline(fs, line);
+  for (res = base+3; res < base+nvars; res++) {
+    lastreginfo(fs, res)->endpc = fs->pc;  /* var_1, ..., var_n */
+    luaK_codeABC(fs, OP(CHKTYPE,___,___), res, 0, 0);
+    luaK_fixline(fs, line);
+  }  
+  lastreginfo(fs, base + 3)->endpc = fs->pc;
+  addregstore(fs, base + 2);  /* control var */
+  endfor = luaK_codeAsBx(fs, sOP(TFORLOOP), base + 2, NO_JUMP);
+  luaK_patchlist(fs, endfor, prep + 1);
+  luaK_fixline(fs, line);
 }
 
 

@@ -29,9 +29,6 @@
 #define hasjumps(e)	((e)->t != (e)->f)
 
 
-static RegInfo *lastreginfo (FuncState *fs, int reg);
-
-
 static int isnumeral(expdesc *e) {
   return (e->k == VKNUM && e->t == NO_JUMP && e->f == NO_JUMP);
 }
@@ -1047,7 +1044,7 @@ static void growreginfos (FuncState *fs, int reg) {
 }
 
 
-static RegInfo *lastreginfo (FuncState *fs, int reg) {
+RegInfo *lastreginfo (FuncState *fs, int reg) {
   lua_assert(reg < fs->f->sizereginfos);
   RegInfo *reginfo = &(fs->f->reginfos[reg]);
   while (reginfo->state != REGINFO_STATE_UNUSED && 

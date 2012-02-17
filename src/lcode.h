@@ -92,5 +92,6 @@ LUAI_FUNC void reginfo_adjustlocal (FuncState *fs, int reg);
 LUAI_FUNC void reginfo_removelocal (FuncState *fs, int reg);
 LUAI_FUNC void reginfo_addupval (FuncState *fs, int reg, 
                                  FuncState *use, int idx);
+LUAI_FUNC RegInfo *lastreginfo (FuncState *fs, int reg);
 
 #endif
