@@ -28,7 +28,7 @@
 #include "lvmspec.h"
 
 
-#define DEBUG_PRINT
+// #define DEBUG_PRINT
 
 
 /* limit for table tag-method chains (to avoid loops) */
@@ -748,11 +748,13 @@ newframe:  /* reentry point when frame changes (call/return) */
         setobj(L, uv->v, ra);
         luaC_barrier(L, uv, ra);
 
-        int t = cl->p->upvalues[idx].expected_type;
-        if (t != LUA_TNONE && 
-            ((t > 0 && t != rttype(ra)) || 
-             (t == LUA_TINT && !ttisint(ra)))) {
-          luaVS_despecialize_upval(cl->p, idx);
+        switch (cl->p->upvalues[idx].expected_type) {
+          case OpType_num: if (ttisnumber(ra)) break;
+          case OpType_int: if (ttisint(ra)) break;
+          case OpType_str: if (ttisstring(ra)) break;
+          case OpType_obj: if (!ttisnumber(ra) && !ttisstring(ra)) break;
+            luaVS_despecialize_upval(cl->p, idx);
+          default: break;
         }
       )
 /* ------------------------------------------------------------------------ */
