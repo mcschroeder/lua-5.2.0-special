@@ -563,7 +563,6 @@ static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
   fs->nlocvars = 0;
   fs->nactvar = 0;  
   fs->firstlocal = ls->dyd->actvar.n;
-  fs->sizeexptypes = 0;
   fs->bl = NULL;
   f = luaF_newproto(L);
   fs->f = f;
@@ -598,7 +597,6 @@ static void close_func (LexState *ls) {
   f->sizelocvars = fs->nlocvars;
   luaM_reallocvector(L, f->upvalues, f->sizeupvalues, fs->nups, Upvaldesc);  
   f->sizeupvalues = fs->nups;
-  luaM_reallocvector(L, f->exptypes, fs->sizeexptypes, fs->pc, ExpType);
   lua_assert(fs->bl == NULL);
   ls->fs = fs->prev;
   /* last token read was anchored in defunct function; must re-anchor it */
@@ -926,16 +924,14 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
     nparams = fs->freereg - (base+1);
   }  
   int ra;
-  for (ra = base; ra <= base+nparams; ra++)
-    addregload(fs, ra);
-  addregstore(fs, base); // TODO: not quite sure here
+  for (ra = base+1; ra <= base+nparams; ra++)
+    addregload(fs, ra); /* function args */
+  addregload(fs, base); /* the closure */
   OpCode op = create_op_out(OP_CALL, OpType_raw);
   init_exp(f, VCALL, luaK_codeABC(fs, op, base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
-                            (unless changed) one result */  
-  fs->f->exptypes[fs->pc-1].ts = luaM_newvector(fs->ls->L, 1, int);
-  fs->f->exptypes[fs->pc-1].ts[0] = LUA_TNONE;
+                            (unless changed) one result */
 }
 
 
@@ -1038,8 +1034,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
       check_condition(ls, fs->f->is_vararg,
                       "cannot use " LUA_QL("...") " outside a vararg function");
       OpCode op = create_op_out(OP_VARARG, OpType_raw);
-      init_exp(v, VVARARG, luaK_codeABC(fs, op, 0, 1, 0));
-      fs->f->exptypes[fs->pc-1].ts = luaM_newvector(ls->L, 0, int);
+      init_exp(v, VVARARG, luaK_codeABC(fs, op, 0, 1, 0));      
       break;
     }
     case '{': {  /* constructor */
@@ -1405,8 +1400,9 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isnum) {
   else {  /* generic for */
     int op = create_op_out(OP_TFORCALL, OpType_raw);
     luaK_codeABC(fs, op, base, 0, nvars);
-    fs->f->exptypes[fs->pc-1].ts = luaM_newvector(fs->ls->L, nvars, int);
-    while (--nvars >= 0) fs->f->exptypes[fs->pc-1].ts[nvars] = LUA_TNONE;
+    // while (--nvars >= 0) {
+    //   luaK_codeABC(fs, OP(CHKTYPE,___,___), nvars, 0, 0);
+    // }
     luaK_fixline(fs, line);
     endfor = luaK_codeAsBx(fs, sOP(TFORLOOP), base + 2, NO_JUMP);
   }
@@ -1594,8 +1590,6 @@ static void exprstat (LexState *ls) {
   struct LHS_assign v;
   primaryexp(ls, &v.v);
   if (v.v.k == VCALL) { /* stat -> func */    
-    luaM_reallocvector(ls->L, fs->f->exptypes[(&v.v)->u.info].ts, 
-                       GETARG_C(getcode(fs, &v.v))-1, 0, int);
     SETARG_C(getcode(fs, &v.v), 1);  /* call statement uses no results */
   }
   else {  /* stat -> assignment */

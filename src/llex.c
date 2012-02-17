@@ -113,7 +113,6 @@ static void safe_funcs (LexState *ls) {
     if (fs->pc != f->sizecode) {
       luaM_reallocvector(ls->L, f->code, f->sizecode, fs->pc, Instruction);
       f->sizecode = fs->pc;
-      luaM_reallocvector(ls->L, f->exptypes, fs->sizeexptypes, fs->pc, ExpType);
     }
     fs = fs->prev;
   }

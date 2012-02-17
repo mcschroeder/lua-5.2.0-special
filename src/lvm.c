@@ -28,7 +28,7 @@
 #include "lvmspec.h"
 
 
-#define DEBUG_PRINT
+// #define DEBUG_PRINT
 
 
 /* limit for table tag-method chains (to avoid loops) */
@@ -1035,16 +1035,7 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_testset(str, str_check)
       vmcase_testset(obj, obj_check)
 /* ------------------------------------------------------------------------ */
-// TODO: it would maybe pay off to have separate 0-return and 1-return CALL
-//        variations (to avoid the exptypes.ts stuff...)
-      vmcasenb(OP(CALL,___,___),
-        int nresults = GETARG_C(i) - 1;
-        if (nresults == LUA_MULTRET); // TODO don't jump or something
-        // TODO
-        // ci->u.l.savedpc += nresults; /* skip CHKTYPE instructions */        
-        /* fall through */
-      )
-      vmcase(OP(CALL,chk,___),
+      vmcase(sOP(CALL),
         int b = GETARG_B(i);
         int nresults = GETARG_C(i) - 1;
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
@@ -1056,7 +1047,6 @@ newframe:  /* reentry point when frame changes (call/return) */
           ci = L->ci;
           ci->callstatus |= CIST_REENTRY;
           /* restart luaV_execute over new Lua function */
-          // goto newframe_param_guard;
           goto newframe;
         }
       )
@@ -1088,7 +1078,6 @@ newframe:  /* reentry point when frame changes (call/return) */
           ci = L->ci = oci;  /* remove new frame */
           lua_assert(L->top == oci->u.l.base + getproto(ofunc)->maxstacksize);
           /* restart luaV_execute over new Lua function */
-          // goto newframe_param_guard;
           goto newframe;
         }
       )
@@ -1138,32 +1127,20 @@ newframe:  /* reentry point when frame changes (call/return) */
         ci->u.l.savedpc += GETARG_sBx(i);
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_tforcall(out,postop)                               \
-      vmcase(OP(TFORCALL,out,___),                                \
-        StkId cb = ra + 3;  /* call base */                       \
-        setobjs2s(L, cb+2, ra+2);                                 \
-        setobjs2s(L, cb+1, ra+1);                                 \
-        setobjs2s(L, cb, ra);                                     \
-        L->top = cb + 3;  /* func. + 2 args (state and index) */  \
-        int nresults = GETARG_C(i);                               \
-        Protect(luaD_call(L, cb, nresults, 1));                   \
-        L->top = ci->top;                                         \
-        {postop;}                                                 \
-      )
-
-      vmcase_tforcall(___,
-        // TODO
-        // ci->u.l.savedpc += nresults; /* skip CHKTYPE instructions */
+      vmcase(sOP(TFORCALL),
+        StkId cb = ra + 3;  /* call base */
+        setobjs2s(L, cb+2, ra+2);
+        setobjs2s(L, cb+1, ra+1);
+        setobjs2s(L, cb, ra);
+        L->top = cb + 3;  /* func. + 2 args (state and index) */
+        int nresults = GETARG_C(i);
+        Protect(luaD_call(L, cb, nresults, 1));
+        L->top = ci->top;
         i = *(ci->u.l.savedpc++);  /* go to next instruction */
         ra = RA(i);
         lua_assert(GET_OPCODE(i) == sOP(TFORLOOP));
         goto l_tforloop;
-      )
-      vmcase_tforcall(chk,
-        /* begin dispatching the CHKTYPE instructions */
-        // lua_assert(GET_OPCODE(ci->u.l.savedpc) == sOP(CHKTYPE));
-        // IDEA: actually, couldn't we dispatch the CHKTYPE instructions
-        //       by fallthrough like with the l_tforloop stuff?
+        // TODO: this fallthrough construct makes CHKTYPE trickier
       )
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(TFORLOOP),
@@ -1211,11 +1188,7 @@ newframe:  /* reentry point when frame changes (call/return) */
         )
       )
 /* ------------------------------------------------------------------------ */
-      vmcasenb(OP(VARARG,___,___),
-        // TODO
-        // ci->u.l.savedpc += GETARG_B(i) - 1; /* skip CHKTYPE instructions */
-      )
-      vmcase(OP(VARARG,chk,___),
+      vmcase(sOP(VARARG),
         int b = GETARG_B(i) - 1;
         int j;
         int n = cast_int(base - ci->func) - cl->p->numparams - 1;

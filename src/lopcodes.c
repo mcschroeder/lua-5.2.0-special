@@ -235,13 +235,6 @@ OpCode create_op_out (OpGroup grp, OpType out) {
   return op;
 }
 
-OpCode create_op_multret (OpGroup grp, OpType out) {
-  OpCode op = grp2op(grp);
-  if (out == OpType_chk) op += 1;
-  else if (out != OpType_raw) lua_assert(0);
-  return op;
-}
-
 
 
 const char * const optypenames[7] = {

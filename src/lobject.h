@@ -488,11 +488,6 @@ typedef struct RegInfo {
 #define REGINFO_USE_STORE 1
 
 
-typedef union ExpType {
-  int t;
-  int *ts;
-} ExpType;
-
 
 /*
 ** Function Prototypes
@@ -506,8 +501,6 @@ typedef struct Proto {
   int *lineinfo;  /* map from opcodes to source lines (debug information) */
   LocVar *locvars;  /* information about local variables (debug information) */
   RegInfo *reginfos; /* information about registers */
-  int *paramtypes; /* types of parameters after last invocation */  
-  union ExpType *exptypes; /* type expected at corresponding instruction */
   Upvaldesc *upvalues;  /* upvalue information */
   union Closure *cache;  /* last created closure with this prototype */
   TString  *source;  /* used for debug information */  

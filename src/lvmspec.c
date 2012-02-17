@@ -15,7 +15,7 @@
 
 
 
- #define DEBUG_PRINT
+ // #define DEBUG_PRINT
 
 
 
@@ -67,27 +67,6 @@ static void remove_guard (Proto *p, int pc, int reg) {
     case OP_LEN:
       if (a == reg) SET_OPCODE(*i, set_out_len(op, OpType_raw));
       break;
-    case OP_CALL: {
-      int nresults = GETARG_C(*i) - 1;
-      if (nresults < 1) break; /* also handles LUA_MULTRET */
-      if (a <= reg && reg <= a+nresults)
-        SET_OPCODE(*i, set_out_multret(op, OpType_raw));
-      break;
-    }
-    case OP_TFORCALL: {
-      int nresults = GETARG_C(*i);
-      int cb = a + 3; /* call base */
-      if (cb <= reg && reg <= cb+nresults-1)
-        SET_OPCODE(*i, set_out_multret(op, OpType_raw));
-      break;
-    }
-    case OP_VARARG: {
-      int b = GETARG_B(*i) - 1;
-      if (b == -1) break; /* direct input to a call */
-      if (a <= reg && reg <= a+b)
-        SET_OPCODE(*i, set_out_multret(op, OpType_raw));
-      break;
-    }
     default:
 #ifdef DEBUG_PRINT
       printf("\n");
@@ -189,36 +168,6 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
         }
       }
       break;
-    case OP_CALL: {
-      int nresults = GETARG_C(*i) - 1;
-      if (nresults < 1) break; /* also handles LUA_MULTRET */
-      if (a <= reg && reg <= a+nresults) {
-        // TODO
-        SET_OPCODE(*i, set_out_multret(op, OpType_chk));
-        // activate CHKTYPE for reg and set expected type
-      }
-      break;
-    }
-    case OP_TFORCALL: {
-      int nresults = GETARG_C(*i);
-      int cb = a + 3; /* call base */
-      if (cb <= reg && reg <= cb+nresults-1) {
-        // TODO
-        SET_OPCODE(*i, set_out_multret(op, OpType_chk));
-        // activate CHKTYPE for reg and set expected type          
-      }
-      break;
-    }
-    case OP_VARARG: {
-      int b = GETARG_B(*i) - 1;
-      if (b == -1) break; /* direct input to a call */
-      if (a <= reg && reg <= a+b) {
-        // TODO
-        SET_OPCODE(*i, set_out_multret(op, OpType_chk));
-        // activate CHKTYPE for reg and set expected type
-      }
-      break;
-    }
     default:
 #ifdef DEBUG_PRINT
       printf("\n");

@@ -12,6 +12,9 @@ LUAI_FUNC void luaVS_despecialize (lua_State *L, int reg);
 LUAI_FUNC void luaVS_despecialize_upval (Proto *p, int idx);
 LUAI_FUNC void luaVS_specialize (lua_State *L);
 
+
+// TODO: these are also still used with the upvalues
+
 /* used in p->paramtypes to indicate polymorphic parameter */
 #define LUA_TNOSPEC (-2)
 

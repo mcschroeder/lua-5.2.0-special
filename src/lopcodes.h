@@ -523,23 +523,20 @@ _(TESTSET,  int, ___) /* type check (integer) */ \
 _(TESTSET,  str, ___) /* type check (string) */ \
 _(TESTSET,  obj, ___) /* type check (object) */ \
 \
-_(CALL, ___, ___) /* vanilla (skip CHKTYPE instructions on return) */ \
-_(CALL, chk, ___) /* do type checks on return */ \
+_(CALL, ___, ___) /* vanilla */ \
 \
 _(TAILCALL, ___, ___) \
 _(RETURN, ___, ___) \
 _(FORLOOP, ___, ___) \
 _(FORPREP, ___, ___) \
 \
-_(TFORCALL, ___, ___) /* vanilla (skip CHKTYPE instructions on return) */ \
-_(TFORCALL, chk, ___) /* do type checks on return */ \
+_(TFORCALL, ___, ___) \
 \
 _(TFORLOOP, ___, ___) \
 _(SETLIST, ___, ___) \
 _(CLOSURE, ___, ___) \
 \
-_(VARARG, ___, ___) /* vanilla (skip CHKTYPE instructions) */ \
-_(VARARG, chk, ___) /* do type checks */ \
+_(VARARG, ___, ___) \
 \
 _(CHKTYPE, ___, ___) /* no-op */ \
 _(CHKTYPE, num, ___) /* type check (number) */ \
@@ -595,7 +592,6 @@ LUAI_FUNC OpCode create_op_arith (OpGroup grp, OpType in, OpType out);
 LUAI_FUNC OpCode create_op_unm (OpType out, OpType in);
 LUAI_FUNC OpCode create_op_len (OpType out, OpType in);
 LUAI_FUNC OpCode create_op_less (OpGroup grp, OpType in);
-LUAI_FUNC OpCode create_op_multret (OpGroup grp, OpType out);
 LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
 
 
@@ -606,7 +602,6 @@ LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
   create_op_arith(op2grp(op),out,opin(op))
 #define set_out_unm(op,out) create_op_unm(out,opin(op))
 #define set_out_len(op,out) create_op_len(out,opin(op))
-#define set_out_multret(op,out) create_op_multret(op2grp(op),out)
 #define set_out(op,out) create_op_out(op2grp(op),out)
 
 #define set_in_move(op,in) create_op_move(in,opout(op))
