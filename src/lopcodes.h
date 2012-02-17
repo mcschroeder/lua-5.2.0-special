@@ -219,6 +219,8 @@ OP_CLOSURE,/* A Bx  R(A) := closure(KPROTO[Bx])     */
 
 OP_VARARG,/*  A B R(A), R(A+1), ..., R(A+B-2) = vararg    */
 
+OP_CHKTYPE,
+
 OP_EXTRAARG/* Ax  extra (larger) argument for previous opcode */
 } OpGroup;
 
@@ -538,6 +540,12 @@ _(CLOSURE, ___, ___) \
 \
 _(VARARG, ___, ___) /* vanilla (skip CHKTYPE instructions) */ \
 _(VARARG, chk, ___) /* do type checks */ \
+\
+_(CHKTYPE, ___, ___) /* no-op */ \
+_(CHKTYPE, num, ___) /* type check (number) */ \
+_(CHKTYPE, int, ___) /* type check (integer) */ \
+_(CHKTYPE, str, ___) /* type check (str) */ \
+_(CHKTYPE, obj, ___) /* type check (obj) */ \
 \
 _(EXTRAARG, ___, ___)
 

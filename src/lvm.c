@@ -28,7 +28,7 @@
 #include "lvmspec.h"
 
 
-// #define DEBUG_PRINT
+#define DEBUG_PRINT
 
 
 /* limit for table tag-method chains (to avoid loops) */
@@ -582,18 +582,6 @@ void luaV_finishOp (lua_State *L) {
 
 
 
-static void remember_param_types(Proto *p, StkId base) {
-  int arg;  
-  for (arg=0; arg < p->numparams; arg++) {
-    if (p->paramtypes[arg] == LUA_TNOSPEC) continue;
-    int t = rttype(base+arg);
-    if (t == LUA_TNUMBER && ttisint(base+arg)) t = LUA_TINT;
-    p->paramtypes[arg] = rttype(base+arg);
-  }
-}
-
-
-
 //#define dispatch_again { ci->u.l.savedpc--; continue; }
 #define dispatch_again { i = *(ci->u.l.savedpc-1); goto l_dispatch_again; }
 // TODO: is there a nicer way to do this?
@@ -609,25 +597,6 @@ void luaV_execute (lua_State *L) {
   #ifdef DEBUG_PRINT
   printf("\n---\n");
   #endif
-
-  // TODO: replace with CHKTYPEs
-newframe_param_guard: { /* guard against polymorphic parameters */
-  Proto *p = clLvalue(ci->func)->p;
-  int reg;
-  #ifdef DEBUG_PRINT
-  printf("newframe_param_guard\n");
-  #endif
-  for (reg = 0; reg < p->numparams; reg++) {
-    int t = p->paramtypes[reg];
-    if ((t >= 0 && t != rttype(ci->u.l.base+reg)) ||
-        (t == LUA_TINT && !ttisint(ci->u.l.base+reg))) {
-      #ifdef DEBUG_PRINT
-      printf("reg %i was:%i is:%i\n",reg,t,rttype(ci->u.l.base+reg));
-      #endif
-      luaVS_despecialize_param(p, reg);
-    }
-  }
-}
 
 newframe:  /* reentry point when frame changes (call/return) */
   lua_assert(ci == L->ci);
@@ -649,14 +618,14 @@ newframe:  /* reentry point when frame changes (call/return) */
     lua_assert(base <= L->top && L->top < L->stack + L->stacksize);
   
     
-    #ifdef DEBUG_PRINT
+#ifdef DEBUG_PRINT
     #define getfuncline(f,pc) (((f)->lineinfo) ? (f)->lineinfo[pc] : 0)
     int _pc = pcRel(ci->u.l.savedpc, ci_func(ci)->p);
     printf("<%s:%i>[%i] ", getstr(cl->p->source), getfuncline(cl->p, _pc), _pc);
-    //printf("%s %i ", luaP_opnames[GET_OPGROUP(i)], GET_OPCODE(i));
     printop(GET_OPCODE(i));
+    printf(" %i %i %i",GETARG_A(i),GETARG_B(i),GETARG_C(i));
     printf("\n");
-    #endif
+#endif
 
     vmdispatch (GET_OPCODE(i)) {
 /* ------------------------------------------------------------------------ */
@@ -941,8 +910,6 @@ newframe:  /* reentry point when frame changes (call/return) */
         dispatch_again        \
       )
 
-      
-
       vmcase_len_raw(___, )
       vmcase_len_raw(num, num_check)
       vmcase_len_raw(int, int_check)
@@ -1089,7 +1056,8 @@ newframe:  /* reentry point when frame changes (call/return) */
           ci = L->ci;
           ci->callstatus |= CIST_REENTRY;
           /* restart luaV_execute over new Lua function */
-          goto newframe_param_guard;
+          // goto newframe_param_guard;
+          goto newframe;
         }
       )
 /* ------------------------------------------------------------------------ */
@@ -1100,7 +1068,6 @@ newframe:  /* reentry point when frame changes (call/return) */
         if (luaD_precall(L, ra, LUA_MULTRET))  /* C function? */
           base = ci->u.l.base;
         else {
-          remember_param_types(cl->p, base);
           /* tail call: put called frame (n) in place of caller one (o) */
           CallInfo *nci = L->ci;  /* called frame */
           CallInfo *oci = nci->previous;  /* caller frame */
@@ -1121,12 +1088,12 @@ newframe:  /* reentry point when frame changes (call/return) */
           ci = L->ci = oci;  /* remove new frame */
           lua_assert(L->top == oci->u.l.base + getproto(ofunc)->maxstacksize);
           /* restart luaV_execute over new Lua function */
-          goto newframe_param_guard;
+          // goto newframe_param_guard;
+          goto newframe;
         }
       )
 /* ------------------------------------------------------------------------ */
       vmcasenb(sOP(RETURN),
-        remember_param_types(cl->p, base);
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b-1;
         if (cl->p->sizep > 0) luaF_close(L, base);
@@ -1267,6 +1234,12 @@ newframe:  /* reentry point when frame changes (call/return) */
           }
         }
       )
+/* ------------------------------------------------------------------------ */
+      vmcase(OP(CHKTYPE,___,___), /* nop */)
+      vmcase(OP(CHKTYPE,num,___), num_check)
+      vmcase(OP(CHKTYPE,int,___), int_check)
+      vmcase(OP(CHKTYPE,str,___), str_check)
+      vmcase(OP(CHKTYPE,obj,___), obj_check)
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(EXTRAARG),
         lua_assert(0);

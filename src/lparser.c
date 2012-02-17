@@ -843,8 +843,11 @@ static void parlist (LexState *ls) {
   adjustlocalvars(ls, nparams);
   f->numparams = cast_byte(fs->nactvar);
 
-  f->paramtypes = luaM_newvector(fs->ls->L, f->numparams, int);
-  while (nparams > 0) f->paramtypes[--nparams] = LUA_TNIL;
+  int arg;
+  for (arg = 0; arg < nparams; arg++) {
+    addregstore(fs, arg);
+    luaK_codeABC(fs, OP(CHKTYPE,___,___), arg, 0, 0);
+  }
 
   luaK_reserveregs(fs, fs->nactvar);  /* reserve register for parameters */
 }

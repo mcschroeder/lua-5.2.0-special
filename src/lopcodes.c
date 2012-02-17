@@ -56,6 +56,7 @@ LUAI_DDEF OpCode luaP_opgroup2code[NUM_OPGROUPS] = {
   OP(SETLIST,___,___),
   OP(CLOSURE,___,___),
   OP(VARARG,___,___),
+  OP(CHKTYPE,___,___),
   OP(EXTRAARG,___,___)
 };
 
@@ -301,6 +302,7 @@ LUAI_DDEF const char *const luaP_opnames[NUM_OPGROUPS+1] = {
   "SETLIST",
   "CLOSURE",
   "VARARG",
+  "CHKTYPE",
   "EXTRAARG",
   NULL
 };
@@ -350,6 +352,7 @@ LUAI_DDEF const lu_byte luaP_opmodes[NUM_OPGROUPS] = {
  ,opmode(0, 0, OpArgU, OpArgU, iABC)    /* OP_SETLIST */
  ,opmode(0, 1, OpArgU, OpArgN, iABx)    /* OP_CLOSURE */
  ,opmode(0, 1, OpArgU, OpArgN, iABC)    /* OP_VARARG */
+ ,opmode(0, 0, OpArgN, OpArgN, iABC)    /* OP_CHKTYPE */
  ,opmode(0, 0, OpArgU, OpArgU, iAx)   /* OP_EXTRAARG */
 };
 

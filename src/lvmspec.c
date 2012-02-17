@@ -15,7 +15,7 @@
 
 
 
- // #define DEBUG_PRINT
+ #define DEBUG_PRINT
 
 
 
@@ -50,6 +50,7 @@ static void remove_guard (Proto *p, int pc, int reg) {
     case OP_GETUPVAL:
     case OP_CONCAT:
     case OP_TESTSET:
+    case OP_CHKTYPE:
       if (a == reg) SET_OPCODE(*i, set_out(op, OpType_raw));
       break;
     case OP_GETTABLE:
@@ -134,6 +135,7 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
     case OP_GETUPVAL:
     case OP_CONCAT:
     case OP_TESTSET:
+    case OP_CHKTYPE:
       if (a == reg) SET_OPCODE(*i, set_out(op, type));
       break;
     case OP_GETTABLE:
@@ -358,15 +360,14 @@ static void despecialize_all (Proto *p, int reg, RegInfo *reginfo) {
 #ifdef DEBUG_PRINT
   printf("%s reg=%i\n",__func__,reg);
 #endif
-
-  // TODO: replace with function arg CHKTYPEs
-  if (reg < p->numparams && &(p->reginfos[reg]) == reginfo)
-    p->paramtypes[reg] = LUA_TNOSPEC;
+  
+  // if (reg < p->numparams && &(p->reginfos[reg]) == reginfo)
+  //   SET_OPCODE(p->code[reg], OP(CHKTYPE,___,___));
 
   int pc = reginfo->startpc;
-  if (reginfo->firstuse == REGINFO_USE_STORE) despecialize(p, pc, reg);
-  while (++pc < reginfo->lastuse)             despecialize(p, pc, reg);
-  if (reginfo->lastuse == REGINFO_USE_STORE)  despecialize(p, pc, reg);
+  if (reginfo->firstuse == REGINFO_USE_LOAD) despecialize(p, pc, reg);
+  while (++pc < reginfo->endpc)              despecialize(p, pc, reg);
+  if (reginfo->lastuse == REGINFO_USE_LOAD)  despecialize(p, pc, reg);
 }
 
 
@@ -547,18 +548,6 @@ void luaVS_despecialize (lua_State *L, int reg) {
   remove_guards(p, reg, reginfo);
 }
 
-
-void luaVS_despecialize_param (Proto *p, int reg) {
-#ifdef DEBUG_PRINT
-  printf("%s %i\n",__func__,reg);
-#endif
-
-  lua_assert(reg < p->numparams);
-  RegInfo *reginfo = &p->reginfos[reg];
-  if (reginfo->state == REGINFO_STATE_UNUSED) return;
-  despecialize_all(p, reg, reginfo);
-  remove_guards(p, reg, reginfo);
-}
 
 void luaVS_despecialize_upval (Proto *p, int idx) {
 #ifdef DEBUG_PRINT
