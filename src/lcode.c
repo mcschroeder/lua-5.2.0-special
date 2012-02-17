@@ -1064,7 +1064,7 @@ void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use) {
       if (use == REGINFO_USE_STORE) goto l_add_scope;
       /* else fall through */
     case REGINFO_STATE_LOCAL_OPEN: /* extend scope */
-      if (reginfo->endpc < pc) { 
+      if (reginfo->endpc <= pc) { 
         reginfo->endpc = pc;
         reginfo->lastuse = use;
       }
