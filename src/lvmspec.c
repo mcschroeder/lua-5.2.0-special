@@ -261,6 +261,12 @@ static void despecialize (Proto *p, int pc, int reg) {
         despecialize_store
       }
       break;
+    case OP_GETTABLE:
+    case OP_GETTABUP:
+      if (!ISK(c) && c == reg) {
+        SET_OPCODE(*i, set_in_gettab(op, OpType_raw));
+      }
+      break;
     case OP_SETTABLE:
     case OP_SETTABUP:
       if (!ISK(b) && b == reg) {
