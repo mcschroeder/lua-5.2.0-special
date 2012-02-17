@@ -404,12 +404,14 @@ static void PrintHeader(const Proto* f)
 }
 
 static void PrintRegInfo(RegInfo *r) {
-  printf("(%d,%d)\t%s\t%s%s",
+  printf("(%d,%d)\t%s\t(%s%s,%s%s)",
           r->startpc,
           r->endpc,
           reginfostates[r->state],
-          r->firstuse ? "S" : "L",
-          r->lastuse ? "S" : "L");  
+          r->firstuse & REGINFO_USE_STORE ? "S" : "",
+          r->firstuse & REGINFO_USE_LOAD ? "L" : "",
+          r->lastuse & REGINFO_USE_STORE ? "S" : "",
+          r->lastuse & REGINFO_USE_LOAD ? "L" : "");
 }
 
 static void PrintDebug(const Proto* f)

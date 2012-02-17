@@ -457,7 +457,7 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
 
 static int code_label (FuncState *fs, int A, int b, int jump) {
   luaK_getlabel(fs);  /* those instructions may be jump targets */
-  return luaK_codeABC(fs, create_op_out(OP_LOADBOOL, OpType_raw), A, b, jump);
+  return luaK_codeABC(fs, sOP(LOADBOOL), A, b, jump);
 }
 
 
@@ -470,8 +470,7 @@ static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
     }
     case VFALSE:  case VTRUE: {
       addregstore(fs, reg);
-      OpCode op = create_op_out(OP_LOADBOOL, OpType_raw);
-      luaK_codeABC(fs, op, reg, e->k == VTRUE, 0);
+      luaK_codeABC(fs, sOP(LOADBOOL), reg, e->k == VTRUE, 0);
       break;
     }
     case VK: {
@@ -1038,8 +1037,13 @@ static void growreginfos (FuncState *fs, int reg) {
   luaM_reallocvector(fs->ls->L, fs->f->reginfos, oldsize, newsize, RegInfo);
   fs->f->sizereginfos = newsize;
   while (oldsize < newsize) {
-    fs->f->reginfos[oldsize].next = NULL;
-    fs->f->reginfos[oldsize++].state = REGINFO_STATE_UNUSED;
+    RegInfo *reginfo = &(fs->f->reginfos[oldsize++]);
+    reginfo->startpc = -1;
+    reginfo->endpc = -1;
+    reginfo->next = NULL;
+    reginfo->state = REGINFO_STATE_UNUSED;
+    reginfo->firstuse = 0;
+    reginfo->lastuse = 0;
   }
 }
 
@@ -1064,9 +1068,11 @@ void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use) {
       if (use == REGINFO_USE_STORE) goto l_add_scope;
       /* else fall through */
     case REGINFO_STATE_LOCAL_OPEN: /* extend scope */
-      if (reginfo->endpc <= pc) { 
+      if (reginfo->endpc < pc) { 
         reginfo->endpc = pc;
         reginfo->lastuse = use;
+      } else if (reginfo->endpc == pc) {
+        reginfo->lastuse |= use;
       }
       break;
     case REGINFO_STATE_LOCAL_CLOSED: /* add new scope */
@@ -1078,7 +1084,6 @@ void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use) {
       reginfo->startpc = pc;
       reginfo->endpc = pc;
       reginfo->state = REGINFO_STATE_TEMP;
-      // reginfo->nspec = 0;
       reginfo->firstuse = use;
       reginfo->lastuse = use;
       reginfo->next = NULL;
@@ -1087,7 +1092,6 @@ void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use) {
       reginfo->startpc = pc;
       reginfo->endpc = pc;
       reginfo->state = REGINFO_STATE_LOCAL_OPEN;
-      // reginfo->nspec = 0;
       reginfo->firstuse = use;
       reginfo->lastuse = use;
       reginfo->next = NULL;

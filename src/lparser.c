@@ -1387,7 +1387,7 @@ static void fornum (LexState *ls, TString *varname, int line) {
   addregload(fs, base+1); /* limit */
   addregstore(fs, base); /* internal index */
   lastreginfo(fs, base+3)->endpc = fs->pc; /* external index */
-  lastreginfo(fs, base+3)->lastuse = REGINFO_USE_STORE;
+  lastreginfo(fs, base+3)->lastuse |= REGINFO_USE_STORE;
   endfor = luaK_codeAsBx(fs, sOP(FORLOOP), base, NO_JUMP);
   luaK_patchlist(fs, endfor, prep + 1);
   luaK_fixline(fs, line);

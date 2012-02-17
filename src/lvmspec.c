@@ -26,9 +26,9 @@ static RegInfo *findreginfo (Proto *p, int pc, int reg, int use) {
   while (reginfo) {
     if (reginfo->state == REGINFO_STATE_UNUSED) return NULL;
     if (reginfo->state == REGINFO_STATE_LOCAL_UNUSED) return NULL;
-    if ((reginfo->startpc == pc && reginfo->firstuse == use) ||
-        (reginfo->startpc < pc && reginfo->endpc > pc) ||
-        (reginfo->endpc == pc && reginfo->lastuse == use)) break;
+    if (pc > reginfo->startpc && pc < reginfo->endpc) break;
+    if (pc == reginfo->startpc && (reginfo->firstuse & use) != 0) break;
+    if (pc == reginfo->endpc && (reginfo->lastuse & use) != 0) break;
     reginfo = reginfo->next;
   }
   return reginfo;
@@ -189,13 +189,13 @@ static void remove_guards (Proto *p, int reg, RegInfo *reginfo) {
   printf("\t%s %i\n",__func__,reg);
 #endif
   int pc = reginfo->startpc;
-  if (reginfo->firstuse == REGINFO_USE_STORE) remove_guard(p, pc, reg);
-  while (++pc < reginfo->endpc)               remove_guard(p, pc, reg);
-  if (reginfo->lastuse == REGINFO_USE_STORE)  remove_guard(p, pc, reg);
+  if (reginfo->firstuse & REGINFO_USE_STORE) remove_guard(p, pc, reg);
+  while (++pc < reginfo->endpc)              remove_guard(p, pc, reg);
+  if (reginfo->lastuse & REGINFO_USE_STORE)  remove_guard(p, pc, reg);
 }
 
 
-static void add_upvalue_guards (Proto *p, int idx, int instack, int type) {
+static void add_upvalue_guards (Proto *p, int idx, int instack, OpType type) {
 #ifdef DEBUG_PRINT
   printf("%s %p %i %i %i\n", __func__, p, idx, instack, type);
 #endif
@@ -219,30 +219,38 @@ static void add_upvalue_guards (Proto *p, int idx, int instack, int type) {
     return 0;                         \
   }
 
-static int add_guards (Proto *p, int reg, RegInfo *reginfo, int type) {
-  lua_assert(reginfo != NULL);
+static int add_guards (Proto *p, int reg, RegInfo *reginfo, OpType type) {
 #ifdef DEBUG_PRINT
   printf("\t%s %i %i\n",__func__,reg,type);
 #endif
 
+  lua_assert(reginfo != NULL);
   int n = p->sizep;
   while (n > 0)
     add_upvalue_guards(p->p[--n], reg, 1, type);
 
   int pc = reginfo->startpc;
-  if (reginfo->firstuse == REGINFO_USE_STORE) _add_guard_or_abort
-  while (++pc < reginfo->endpc)               _add_guard_or_abort
-  if (reginfo->lastuse == REGINFO_USE_STORE)  _add_guard_or_abort
+  if (reginfo->firstuse & REGINFO_USE_STORE) _add_guard_or_abort
+  while (++pc < reginfo->endpc)              _add_guard_or_abort
+  if (reginfo->lastuse & REGINFO_USE_STORE)  _add_guard_or_abort
   return 1;
 }
 
 
 static void despecialize_all (Proto *p, int reg, RegInfo *reginfo);
 
-#define despecialize_store { \
-  RegInfo *reginfo = findreginfo(p, pc, a, REGINFO_USE_STORE); \
-  despecialize_all(p, a, reginfo); \
-  remove_guards(p, a, reginfo); }
+static void despecialize_store (Proto *p, int pc, int a) {
+#ifdef DEBUG_PRINT
+  printf("\n\t\t%s [%i] %i\n",__func__,pc,a);
+#endif
+  RegInfo *reginfo = findreginfo(p, pc, a, REGINFO_USE_STORE);
+  lua_assert(reginfo != NULL);
+  if ((reginfo->startpc == pc && (reginfo->firstuse & REGINFO_USE_LOAD)) ||
+      (reginfo->endpc == pc && (reginfo->lastuse & REGINFO_USE_LOAD)))
+      return; /* avoid infinite loop */
+  despecialize_all(p, a, reginfo);
+  remove_guards(p, a, reginfo);
+}
 
 static void despecialize (Proto *p, int pc, int reg) {
   Instruction *i = &(p->code[pc]);
@@ -258,7 +266,7 @@ static void despecialize (Proto *p, int pc, int reg) {
     case OP_MOVE:
       if (b == reg) {
         SET_OPCODE(*i, set_in_move(op, OpType_raw));
-        despecialize_store
+        despecialize_store(p, pc, a);
       }
       break;
     case OP_GETTABLE:
@@ -277,19 +285,19 @@ static void despecialize (Proto *p, int pc, int reg) {
     case OP_DIV: case OP_MOD: case OP_POW:
       if ((!ISK(b) && b == reg) || (!ISK(c) && c == reg)) {
         SET_OPCODE(*i, set_in_arith(op, OpType_raw));
-        despecialize_store
+        despecialize_store(p, pc, a);
       }
       break;
     case OP_UNM:
       if (b == reg) {
         SET_OPCODE(*i, set_in_unm(op, OpType_raw));
-        despecialize_store
+        despecialize_store(p, pc, a);
       }
       break;
     case OP_LEN:
       if (b == reg) {
         SET_OPCODE(*i, set_in_len(op, OpType_raw));
-        despecialize_store
+        despecialize_store(p, pc, a);
       }
       break;
     case OP_LT: case OP_LE:
@@ -313,16 +321,13 @@ static void despecialize (Proto *p, int pc, int reg) {
 
 static void despecialize_all (Proto *p, int reg, RegInfo *reginfo) {
 #ifdef DEBUG_PRINT
-  printf("%s reg=%i\n",__func__,reg);
+  printf("%s %p reg=%i\n",__func__,p,reg);
 #endif
   
-  // if (reg < p->numparams && &(p->reginfos[reg]) == reginfo)
-  //   SET_OPCODE(p->code[reg], OP(CHKTYPE,___,___));
-
   int pc = reginfo->startpc;
-  if (reginfo->firstuse == REGINFO_USE_LOAD) despecialize(p, pc, reg);
-  while (++pc < reginfo->endpc)              despecialize(p, pc, reg);
-  if (reginfo->lastuse == REGINFO_USE_LOAD)  despecialize(p, pc, reg);
+  if (reginfo->firstuse & REGINFO_USE_LOAD) despecialize(p, pc, reg);
+  while (++pc < reginfo->endpc)             despecialize(p, pc, reg);
+  if (reginfo->lastuse & REGINFO_USE_LOAD)  despecialize(p, pc, reg);
 }
 
 
@@ -518,6 +523,7 @@ void luaVS_despecialize_upval (Proto *p, int idx) {
   }
   /* find the right reginfo for the local */
   RegInfo *reginfo = &p->reginfos[desc.idx];
+  lua_assert(reginfo != NULL);
   while (chaini-- > 0) reginfo = reginfo->next;
   lua_assert(reginfo->state == REGINFO_STATE_LOCAL_CLOSED);
   despecialize_all(p, desc.idx, reginfo);

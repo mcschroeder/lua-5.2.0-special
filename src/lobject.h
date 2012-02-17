@@ -474,8 +474,8 @@ typedef struct RegInfo {
   struct RegInfo *next;
   lu_byte state;  
   // lu_byte nspec; /* how often this register has been specialized */
-  lu_byte firstuse; /* usage at startpc */
-  lu_byte lastuse; /* usage at endpc */
+  lu_byte firstuse; /* usage bitmask at startpc */
+  lu_byte lastuse; /* usage bitmask at endpc */
 } RegInfo;
 
 #define REGINFO_STATE_TEMP         0
@@ -484,8 +484,8 @@ typedef struct RegInfo {
 #define REGINFO_STATE_UNUSED       3
 #define REGINFO_STATE_LOCAL_UNUSED 4
 
-#define REGINFO_USE_LOAD  0
-#define REGINFO_USE_STORE 1
+#define REGINFO_USE_LOAD  1
+#define REGINFO_USE_STORE 2
 
 
 
