@@ -401,7 +401,7 @@ void luaVS_specialize (lua_State *L) {
       OpType type = OpType_raw;
       if (ttisnumber(rb)) {
         if (ttisnumber(rc)) {
-          int status = 0;
+          int status = 1;
           if (!ISK(b)) status = _add_guards(b, OpType_num);
           if (status && !ISK(c)) {
             if (!_add_guards(c, OpType_num)) {
@@ -470,7 +470,7 @@ void luaVS_specialize (lua_State *L) {
         else if (ttisstring(rb)) type = OpType_str;
       }
       if (type != OpType_raw) {
-        int status = 0;
+        int status = 1;
         if (!ISK(b)) status = _add_guards(b, type);
         if (status && !ISK(c)) {
           if (!_add_guards(c, OpType_num)) {
