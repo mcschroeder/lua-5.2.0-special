@@ -496,8 +496,7 @@ static void discharge2reg (FuncState *fs, expdesc *e, int reg) {
       if (reg != e->u.info) {
         addregload(fs, e->u.info);
         addregstore(fs, reg);
-        OpCode op = create_op_out(OP_MOVE, OpType_raw);
-        luaK_codeABC(fs, op, reg, e->u.info, 0);
+        luaK_codeABC(fs, OP(MOVE,___,chk), reg, e->u.info, 0);
       }
       break;
     }

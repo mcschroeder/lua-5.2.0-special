@@ -1196,8 +1196,7 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
   }
   if (conflict) {
     /* copy upvalue/local value to a temporary (in position 'extra') */
-    OpCode op = create_op_out((v->k == VLOCAL) ? OP_MOVE : OP_GETUPVAL,
-                              OpType_raw);
+    OpCode op = (v->k == VLOCAL) ? OP(MOVE,___,chk) : OP(GETUPVAL,___,___);
     addregstore(fs, extra);
     luaK_codeABC(fs, op, extra, v->u.info, 0);
     luaK_reserveregs(fs, 1);
