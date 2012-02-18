@@ -95,7 +95,8 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
         int intype = opin(op);
         if (intype == OpType_raw || intype == OpType_chk)
           SET_OPCODE(*i, set_out_move(op, type));
-        else if (intype == type)
+        else if (intype == type || 
+                (intype == OpType_int && type == OpType_num))
           SET_OPCODE(*i, set_out_move(op, OpType_raw));
         else
           return 0;
@@ -103,7 +104,12 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
       break;
     case OP_LOADK:
     case OP_LOADKX:
-      if (a == reg && type != opin(op)) return 0;
+      if (a == reg) {        
+        int intype = opin(op);
+        if (intype == OpType_int) {
+          if (type != OpType_int || type != OpType_num) return 0;
+        } else if (intype != type) return 0;
+      }
       break;
     case OP_LOADBOOL:
       if (a == reg) return 0;
