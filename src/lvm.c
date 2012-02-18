@@ -917,13 +917,35 @@ newframe:  /* reentry point when frame changes (call/return) */
         dojump(ci, i, 0);
       )
 /* ------------------------------------------------------------------------ */
-      vmcase(sOP(EQ),
+      vmcase(OP(EQ,___,___),
         Protect(
           if (cast_int(equalobj(L, RKB(i), RKC(i))) != GETARG_A(i))
             ci->u.l.savedpc++;
           else
             donextjump(ci);
         )
+      )
+      vmcase(OP(EQ,___,chk),
+        luaVS_specialize(L);
+        dispatch_again
+      )
+      vmcase(OP(EQ,___,num),
+        if (luai_numeq(nvalue(RKB(i)), nvalue(RKC(i))) != GETARG_A(i))
+          ci->u.l.savedpc++;
+        else
+          donextjump(ci);
+      )
+      vmcase(OP(EQ,___,str),
+        if (eqstr(rawtsvalue(RKB(i)), rawtsvalue(RKC(i))) != GETARG_A(i))
+          ci->u.l.savedpc++;
+        else
+          donextjump(ci);
+      )
+      vmcase(OP(EQ,___,obj),
+        if (luaV_equalobj_(L, RKB(i), RKC(i)) != GETARG_A(i))
+          ci->u.l.savedpc++;
+        else
+          donextjump(ci);
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_less_raw(op,func)                      \

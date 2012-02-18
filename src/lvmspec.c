@@ -294,9 +294,10 @@ static void despecialize (Proto *p, int pc, int reg) {
         despecialize_store(p, pc, a);
       }
       break;
+    case OP_EQ:
     case OP_LT: case OP_LE:
       if ((!ISK(b) && b == reg) || (!ISK(c) && c == reg)) {
-        SET_OPCODE(*i, set_in_less(op, OpType_raw));
+        SET_OPCODE(*i, set_in_cmp(op, OpType_raw));
       }
       break;
     default: 
@@ -453,6 +454,7 @@ void luaVS_specialize (lua_State *L) {
       SET_OPCODE(*i, set_in_len(op, type));
       break;
     }
+    case OP_EQ:
     case OP_LT: case OP_LE: {
       OpType type = OpType_raw;
       if (ttisequal(rb, rc)) {
@@ -470,7 +472,7 @@ void luaVS_specialize (lua_State *L) {
         }
         if (!status) type = OpType_raw;
       }
-      SET_OPCODE(*i, set_in_less(op, type));
+      SET_OPCODE(*i, set_in_cmp(op, type));
       break;
     }
     default:

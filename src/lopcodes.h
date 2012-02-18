@@ -456,7 +456,11 @@ _(CONCAT, obj, ___) /* type check (object) */ \
 \
 _(JMP, ___, ___) \
 \
-_(EQ, ___, ___) \
+_(EQ, ___, ___) /* vanilla */ \
+_(EQ, ___, num) /* two number values */ \
+_(EQ, ___, str) /* two string values */ \
+_(EQ, ___, obj) /* two object values */ \
+_(EQ, ___, chk) /* specialize */ \
 \
 _(LT, ___, ___) /* vanilla */ \
 _(LT, ___, num) /* fast number comparison */ \
@@ -541,7 +545,7 @@ LUAI_FUNC OpCode create_op_self (OpType out);
 LUAI_FUNC OpCode create_op_arith (OpGroup grp, OpType in, OpType out);
 LUAI_FUNC OpCode create_op_unm (OpType out, OpType in);
 LUAI_FUNC OpCode create_op_len (OpType out, OpType in);
-LUAI_FUNC OpCode create_op_less (OpGroup grp, OpType in);
+LUAI_FUNC OpCode create_op_cmp (OpGroup grp, OpType in);
 LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
 
 
@@ -562,7 +566,7 @@ LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
   create_op_arith(op2grp(op),opout(op),in)
 #define set_in_unm(op,in) create_op_unm(opout(op),in)
 #define set_in_len(op,in) create_op_len(opout(op),in)
-#define set_in_less(op,in) create_op_less(op2grp(op),in)
+#define set_in_cmp(op,in) create_op_cmp(op2grp(op),in)
 
 
 

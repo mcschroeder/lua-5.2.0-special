@@ -200,8 +200,8 @@ OpCode create_op_len (OpType out, OpType in) {
   return op;
 }
 
-OpCode create_op_less (OpGroup grp, OpType in) {
-  lua_assert(grp == OP_LT || grp == OP_LE);
+OpCode create_op_cmp (OpGroup grp, OpType in) {
+  lua_assert(grp == OP_EQ || grp == OP_LT || grp == OP_LE);
   OpCode op = grp2op(grp);
   switch (in) {
     case OpType_raw: op += 0; break;

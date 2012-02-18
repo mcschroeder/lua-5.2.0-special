@@ -904,7 +904,7 @@ static void codeeq (FuncState *fs, int cond, expdesc *e1, expdesc *e2) {
   freeexp(fs, e1);
   if (!ISK(o1)) addregload(fs, o1);
   if (!ISK(o2)) addregload(fs, o2);
-  e1->u.info = condjump(fs, sOP(EQ), cond, o1, o2);
+  e1->u.info = condjump(fs, OP(EQ,___,chk), cond, o1, o2);
   e1->k = VJMP;
 }
 
@@ -932,7 +932,7 @@ static void codecomp (FuncState *fs, BinOpr opr, expdesc *e1, expdesc *e2) {
     if (!ISK(o1)) addregload(fs, o1);
     if (!ISK(o2)) addregload(fs, o2);
   }
-  e1->u.info = condjump(fs, create_op_less(grp, in), 1, o1, o2);
+  e1->u.info = condjump(fs, create_op_cmp(grp, in), 1, o1, o2);
   e1->k = VJMP;
 }
 
