@@ -95,8 +95,7 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
         int intype = opin(op);
         if (intype == OpType_raw || intype == OpType_chk)
           SET_OPCODE(*i, set_out_move(op, type));
-        else if (intype == type || 
-                (intype == OpType_int && type == OpType_num))
+        else if (intype == type)
           SET_OPCODE(*i, set_out_move(op, OpType_raw));
         else
           return 0;
@@ -104,12 +103,7 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
       break;
     case OP_LOADK:
     case OP_LOADKX:
-      if (a == reg) {        
-        int intype = opin(op);
-        if (intype == OpType_int) {
-          if (type != OpType_int || type != OpType_num) return 0;
-        } else if (intype != type) return 0;
-      }
+      if (a == reg && opin(op) != type) return 0;
       break;
     case OP_LOADBOOL:
       if (a == reg) return 0;
@@ -135,9 +129,7 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
     case OP_DIV: case OP_MOD: case OP_POW:
       if (a == reg) {
         if (opin(op) == OpType_num) {
-          if (type == OpType_int)
-            SET_OPCODE(*i, set_out_arith(op, type));
-          else if (type == OpType_num)
+          if (type == OpType_num)
             SET_OPCODE(*i, set_out_arith(op, OpType_raw));
           else
             return 0;
@@ -149,9 +141,7 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
     case OP_UNM:
       if (a == reg) {
         if (opin(op) == OpType_num) {
-          if (type == OpType_int)
-            SET_OPCODE(*i, set_out_unm(op, OpType_int));
-          else if (type == OpType_num)
+          if (type == OpType_num)
             SET_OPCODE(*i, set_out_unm(op, OpType_raw));
           else
             return 0;
@@ -163,9 +153,7 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
     case OP_LEN:
       if (a == reg) {
         if (opin(op) == OpType_str) {
-          if (type == OpType_int)
-            SET_OPCODE(*i, set_out_len(op, OpType_int));
-          else if (type == OpType_num)
+          if (type == OpType_num)
             SET_OPCODE(*i, set_out_len(op, OpType_raw));
           else
             return 0;
@@ -363,25 +351,21 @@ void luaVS_specialize (lua_State *L) {
   switch (op2grp(op)) {
     case OP_MOVE: {
       OpType type = OpType_obj;
-      if (ttisint(rb)) type = OpType_int;
-      else if (ttisnumber(rb)) type = OpType_num;
+      if (ttisnumber(rb)) type = OpType_num;
       else if (ttisstring(rb)) type = OpType_str;
-      if (!_add_guards(b, type)) {
-        SET_OPCODE(*i, set_in_move(op, OpType_raw));
-      }
-      else {
-        if (opout(op) != OpType_raw && opout(op) != OpType_raw)
+      if (_add_guards(b, type)) {
+        if (opout(op) != OpType_raw)
           luaVS_despecialize(L, a);
-        else
-          op = set_out_move(op, OpType_raw);
         SET_OPCODE(*i, set_in_move(op, type));
+      } else {
+        SET_OPCODE(*i, set_in_move(op, OpType_raw));
       }
       break;
     }
     case OP_GETTABLE:
     case OP_GETTABUP: {
       OpType type = OpType_obj;
-      if (ttisint(rc)) type = OpType_int;
+      if (ttisnumber(rc)) type = OpType_num;
       else if (ttisstring(rc)) type = OpType_str;
       else if (ttisnil(rc)) type = OpType_raw;
       if (type != OpType_raw && !ISK(c) && !_add_guards(c, type))
@@ -393,7 +377,7 @@ void luaVS_specialize (lua_State *L) {
     case OP_SETTABLE: 
     case OP_SETTABUP: {
       OpType type = OpType_obj;
-      if (ttisint(rb)) type = OpType_int;
+      if (ttisnumber(rb)) type = OpType_num;
       else if (ttisstring(rb)) type = OpType_str;
       else if (ttisnil(rb)) type = OpType_raw;
       if (type != OpType_raw && !ISK(b) && !_add_guards(b, type))

@@ -128,7 +128,7 @@ void name (lua_State *L, const TValue *t, TValue *key, StkId val) {         \
 }
 
 _luaV_gettable_def(luaV_gettable, luaH_get,);
-_luaV_gettable_def(luaV_gettable_int, luaH_getint, nvalue);
+_luaV_gettable_def(luaV_gettable_num, luaH_getnum, );
 _luaV_gettable_def(luaV_gettable_str, luaH_getstr, rawtsvalue);
 _luaV_gettable_def(luaV_gettable_obj, luaH_getobj,);
 
@@ -175,7 +175,7 @@ void name (lua_State *L, const TValue *t, TValue *key, StkId val) {       \
 }
 
 _luaV_settable_def(luaV_settable, luaH_get,);
-_luaV_settable_def(luaV_settable_int, luaH_getint, nvalue);
+_luaV_settable_def(luaV_settable_num, luaH_getnum, );
 _luaV_settable_def(luaV_settable_str, luaH_getstr, rawtsvalue);
 _luaV_settable_def(luaV_settable_obj, luaH_getobj,);
 
@@ -429,9 +429,6 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
 #define num_check if (!ttisnumber(ra)) { \
   luaVS_despecialize(L, GETARG_A(i)); }
 
-#define int_check if (!ttisint(ra)) { \
-  luaVS_despecialize(L, GETARG_A(i)); }
-
 #define str_check if (!ttisstring(ra)) { \
   luaVS_despecialize(L, GETARG_A(i)); }
 
@@ -460,7 +457,6 @@ void luaV_finishOp (lua_State *L) {
       setobjs2s(L, ra, --L->top);
       switch (opout(op)) {
         case OpType_num: num_check break;
-        case OpType_int: int_check break;
         case OpType_str: str_check break;
         case OpType_obj: obj_check break;
         default: break;
@@ -494,7 +490,6 @@ void luaV_finishOp (lua_State *L) {
       setobj2s(L, ra, L->top - 1);
       switch (opout(op)) {
         case OpType_num: num_check break;
-        case OpType_int: int_check break;
         case OpType_str: str_check break;
         case OpType_obj: obj_check break;
         default: break;
@@ -618,7 +613,7 @@ newframe:  /* reentry point when frame changes (call/return) */
 
     vmdispatch (GET_OPCODE(i)) {
 /* ------------------------------------------------------------------------ */
-#define vmcase_move(spec,out,guard) \
+#define vmcase_move(out,spec,guard) \
       vmcase(OP(MOVE,out,spec),     \
         setobjs2s(L, ra, RB(i));    \
         {guard;}                    \
@@ -630,17 +625,14 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 
       vmcase_move(___, ___, )
-      vmcase_move(___, num, num_check)
-      vmcase_move(___, int, int_check)
-      vmcase_move(___, str, str_check)
-      vmcase_move(___, obj, obj_check)
-      vmcase_move(num, ___, )
-      vmcase_move(int, ___, )
-      vmcase_move(str, ___, )
-      vmcase_move(obj, ___, )
+      vmcase_move(num, ___, num_check)
+      vmcase_move(str, ___, str_check)
+      vmcase_move(obj, ___, obj_check)
+      vmcase_move(___, num, )
+      vmcase_move(___, str, )
+      vmcase_move(___, obj, )
       vmcase_move_chk(___)
       vmcase_move_chk(num)
-      vmcase_move_chk(int)
       vmcase_move_chk(str)
       vmcase_move_chk(obj)
 /* ------------------------------------------------------------------------ */
@@ -650,7 +642,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 
       vmcase_loadk(num)
-      vmcase_loadk(int)
       vmcase_loadk(str)
 /* ------------------------------------------------------------------------ */
 #define vmcase_loadkx(in)                                           \
@@ -662,7 +653,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 
       vmcase_loadkx(num)
-      vmcase_loadkx(int)
       vmcase_loadkx(str)
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(LOADBOOL),
@@ -685,7 +675,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 
       vmcase_getupval(___, )
       vmcase_getupval(num, num_check)
-      vmcase_getupval(int, int_check)
       vmcase_getupval(str, str_check)
       vmcase_getupval(obj, obj_check)      
 /* ------------------------------------------------------------------------ */
@@ -697,7 +686,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_gettab_spec(op,b,spec)                 \
     _vmcase_gettab_spec(op, b, spec, ___, )           \
     _vmcase_gettab_spec(op, b, spec, num, num_check)  \
-    _vmcase_gettab_spec(op, b, spec, int, int_check)  \
     _vmcase_gettab_spec(op, b, spec, str, str_check)  \
     _vmcase_gettab_spec(op, b, spec, obj, obj_check)
 
@@ -709,13 +697,12 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_gettab_chk(op)   \
     _vmcase_gettab_chk(op, ___) \
     _vmcase_gettab_chk(op, num) \
-    _vmcase_gettab_chk(op, int) \
     _vmcase_gettab_chk(op, str) \
     _vmcase_gettab_chk(op, obj)
 
 #define vmcase_gettab(op,b)         \
     vmcase_gettab_spec(op, b, ___)  \
-    vmcase_gettab_spec(op, b, int)  \
+    vmcase_gettab_spec(op, b, num)  \
     vmcase_gettab_spec(op, b, str)  \
     vmcase_gettab_spec(op, b, obj)  \
     vmcase_gettab_chk(op)
@@ -723,18 +710,18 @@ newframe:  /* reentry point when frame changes (call/return) */
     vmcase_gettab(GETTABLE, RB(i))
     vmcase_gettab(GETTABUP, cl->upvals[GETARG_B(i)]->v)
 /* ------------------------------------------------------------------------ */
-#define vmcase_settab_spec(op,spec,a)     \
-      vmcase(OP(op,___,spec),                 \
+#define vmcase_settab_spec(op,spec,a)                         \
+      vmcase(OP(op,___,spec),                                 \
         Protect(luaV_settable_##spec(L, a, RKB(i), RKC(i)));  \
       )
 #define vmcase_settab_chk(op) \
       vmcase(OP(op,___,chk),  \
-        luaVS_specialize(L);        \
-        dispatch_again              \
+        luaVS_specialize(L);  \
+        dispatch_again        \
       )      
-#define vmcase_settab(op,a)                                   \
+#define vmcase_settab(op,a)           \
       vmcase_settab_spec(op, ___, a)  \
-      vmcase_settab_spec(op, int, a)  \
+      vmcase_settab_spec(op, num, a)  \
       vmcase_settab_spec(op, str, a)  \
       vmcase_settab_spec(op, obj, a)  \
       vmcase_settab_chk(op) \
@@ -750,7 +737,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 
         switch (cl->p->upvalues[idx].expected_type) {
           case OpType_num: if (ttisnumber(ra)) break;
-          case OpType_int: if (ttisint(ra)) break;
           case OpType_str: if (ttisstring(ra)) break;
           case OpType_obj: if (!ttisnumber(ra) && !ttisstring(ra)) break;
             luaVS_despecialize_upval(cl->p, idx);
@@ -793,7 +779,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_arith_raw(op,func,tm)                  \
       _vmcase_arith_raw(op, func, tm, ___, )          \
       _vmcase_arith_raw(op, func, tm, num, num_check) \
-      _vmcase_arith_raw(op, func, tm, int, int_check) \
       _vmcase_arith_raw(op, func, tm, str, str_check) \
       _vmcase_arith_raw(op, func, tm, obj, obj_check)
 
@@ -806,7 +791,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
 #define vmcase_arith_num(op,func)                 \
       _vmcase_arith_num(op, func, ___, )          \
-      _vmcase_arith_num(op, func, int, int_check) \
 
 #define _vmcase_arith_obj(op,tm,out,guard)    \
       vmcase(OP(op,out,obj),                  \
@@ -821,7 +805,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_arith_obj(op,tm)                 \
       _vmcase_arith_obj(op, tm, ___, )          \
       _vmcase_arith_obj(op, tm, num, num_check) \
-      _vmcase_arith_obj(op, tm, int, int_check) \
       _vmcase_arith_obj(op, tm, str, str_check) \
       _vmcase_arith_obj(op, tm, obj, obj_check) \
 
@@ -833,7 +816,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_arith_chk(op)      \
       _vmcase_arith_chk(op, ___)  \
       _vmcase_arith_chk(op, num)  \
-      _vmcase_arith_chk(op, int)  \
       _vmcase_arith_chk(op, str)  \
       _vmcase_arith_chk(op, obj)
 
@@ -870,14 +852,11 @@ newframe:  /* reentry point when frame changes (call/return) */
 
       vmcase_unm_raw(___, )
       vmcase_unm_raw(num, num_check)
-      vmcase_unm_raw(int, int_check)
       vmcase_unm_raw(str, str_check)
       vmcase_unm_raw(obj, obj_check)
       vmcase_unm_num(___, )
-      vmcase_unm_num(int, int_check)
       vmcase_unm_chk(___)
       vmcase_unm_chk(num)
-      vmcase_unm_chk(int)
       vmcase_unm_chk(str)
       vmcase_unm_chk(obj)
 /* ------------------------------------------------------------------------ */
@@ -903,14 +882,11 @@ newframe:  /* reentry point when frame changes (call/return) */
 
       vmcase_len_raw(___, )
       vmcase_len_raw(num, num_check)
-      vmcase_len_raw(int, int_check)
       vmcase_len_raw(str, str_check)
       vmcase_len_raw(obj, obj_check)
       vmcase_len_str(___, )
-      vmcase_len_str(int, int_check)
       vmcase_len_chk(___)
       vmcase_len_chk(num)
-      vmcase_len_chk(int)
       vmcase_len_chk(str)
       vmcase_len_chk(obj)    
 /* ------------------------------------------------------------------------ */
@@ -934,7 +910,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 
       vmcase_concat(___, )
       vmcase_concat(num, num_check)
-      vmcase_concat(int, int_check)
       vmcase_concat(str, str_check)
       vmcase_concat(obj, obj_check)
 /* ------------------------------------------------------------------------ */
@@ -1022,7 +997,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 
       vmcase_testset(___, )
       vmcase_testset(num, num_check)
-      vmcase_testset(int, int_check)
       vmcase_testset(str, str_check)
       vmcase_testset(obj, obj_check)
 /* ------------------------------------------------------------------------ */
@@ -1200,7 +1174,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 /* ------------------------------------------------------------------------ */
       vmcase(OP(CHKTYPE,___,___), /* nop */)
       vmcase(OP(CHKTYPE,num,___), num_check)
-      vmcase(OP(CHKTYPE,int,___), int_check)
       vmcase(OP(CHKTYPE,str,___), str_check)
       vmcase(OP(CHKTYPE,obj,___), obj_check)
 /* ------------------------------------------------------------------------ */

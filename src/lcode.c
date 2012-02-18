@@ -435,10 +435,10 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
         in = OpType_chk;
       } else {
         TValue *k = fs->f->k + INDEXK(e->u.ind.idx);
-        if (ttisstring(k))    in = OpType_str;
-        else if (ttisint(k))  in = OpType_int;
-        else if (ttisnil(k))  in = OpType_raw;
-        else                  in = OpType_obj;
+        if (ttisnumber(k))      in = OpType_num;
+        else if (ttisstring(k)) in = OpType_str;
+        else if (ttisnil(k))    in = OpType_raw;
+        else                    in = OpType_obj;
       } 
       OpCode op = create_op_gettab(grp, OpType_raw, in);
       e->u.info = luaK_codeABC(fs, op, 0, e->u.ind.t, e->u.ind.idx);
@@ -635,10 +635,10 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
         in = OpType_chk;        
       } else {
         TValue *k = fs->f->k + INDEXK(var->u.ind.idx);
-        if (ttisstring(k))    in = OpType_str;
-        else if (ttisint(k))  in = OpType_int;
-        else if (ttisnil(k))  in = OpType_raw;
-        else                  in = OpType_obj;
+        if (ttisnumber(k))      in = OpType_num;
+        else if (ttisstring(k)) in = OpType_str;
+        else if (ttisnil(k))    in = OpType_raw;
+        else                    in = OpType_obj;
       }
       if (var->u.ind.vt == VLOCAL) {
         addregload(fs, var->u.ind.t);
