@@ -396,7 +396,7 @@ void luaVS_specialize (lua_State *L) {
           if (!ISK(b)) status = _add_guards(b, OpType_num);
           if (status && !ISK(c)) {
             if (!_add_guards(c, OpType_num)) {
-              _remove_guards(b);
+              if (!ISK(b)) _remove_guards(b);
               status = 0;
             }
           }
@@ -466,7 +466,7 @@ void luaVS_specialize (lua_State *L) {
         if (!ISK(b)) status = _add_guards(b, type);
         if (status && !ISK(c)) {
           if (!_add_guards(c, OpType_num)) {
-            _remove_guards(b);
+            if (!ISK(b)) _remove_guards(b);
             status = 0;
           }
         }
