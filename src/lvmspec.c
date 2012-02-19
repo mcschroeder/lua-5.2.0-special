@@ -513,11 +513,13 @@ void luaVS_despecialize_upval (Proto *p, int idx) {
     if (desc.instack) { chaini = desc.reginfo_idx; break; } 
     else desc = p->upvalues[desc.idx];
   }
-  /* find the right reginfo for the local */
-  RegInfo *reginfo = &p->reginfos[desc.idx];
-  lua_assert(reginfo != NULL);
-  while (chaini-- > 0) reginfo = reginfo->next;
-  lua_assert(reginfo->state == REGINFO_STATE_LOCAL_CLOSED);
-  despecialize_all(p, desc.idx, reginfo);
-  remove_guards(p, desc.idx, reginfo);
+  if (p) {
+    /* find the right reginfo for the local */
+    RegInfo *reginfo = &p->reginfos[desc.idx];
+    lua_assert(reginfo != NULL);
+    while (chaini-- > 0) reginfo = reginfo->next;
+    lua_assert(reginfo->state == REGINFO_STATE_LOCAL_CLOSED);
+    despecialize_all(p, desc.idx, reginfo);
+    remove_guards(p, desc.idx, reginfo);
+  }
 }
