@@ -316,7 +316,7 @@ static void despecialize (Proto *p, int pc, int reg, int *visited) {
 static void despecialize_all (Proto *p, int reg, RegInfo *reginfo, 
                               int *visited) {
 #ifdef DEBUG_PRINT
-  printf("%s %p reg=%i\n %i",__func__,p,reg);
+  printf("%s %p reg=%i\n",__func__,p,reg);
 #endif
   visited[reg] = 1;
   int pc = reginfo->startpc;
