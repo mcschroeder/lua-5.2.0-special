@@ -231,22 +231,21 @@ static int add_guards (Proto *p, int reg, RegInfo *reginfo, OpType type) {
 }
 
 
-static void despecialize_all (Proto *p, int reg, RegInfo *reginfo);
+static void despecialize_all (Proto *p, int reg, RegInfo *reginfo, 
+                              int *visited);
 
-static void despecialize_store (Proto *p, int pc, int a) {
+static void despecialize_store (Proto *p, int pc, int a, int *visited) {  
 #ifdef DEBUG_PRINT
   printf("\n\t\t%s [%i] %i\n",__func__,pc,a);
 #endif
+  if (visited[a]) return; /* avoid loop */
   RegInfo *reginfo = findreginfo(p, pc, a, REGINFO_USE_STORE);
-  lua_assert(reginfo != NULL);
-  if ((reginfo->startpc == pc && (reginfo->firstuse & REGINFO_USE_LOAD)) ||
-      (reginfo->endpc == pc && (reginfo->lastuse & REGINFO_USE_LOAD)))
-      return; /* avoid infinite loop */
-  despecialize_all(p, a, reginfo);
+  lua_assert(reginfo != NULL);    
+  despecialize_all(p, a, reginfo, visited);
   remove_guards(p, a, reginfo);
 }
 
-static void despecialize (Proto *p, int pc, int reg) {
+static void despecialize (Proto *p, int pc, int reg, int *visited) {
   Instruction *i = &(p->code[pc]);
   OpCode op = GET_OPCODE(*i);
 #ifdef DEBUG_PRINT
@@ -260,7 +259,7 @@ static void despecialize (Proto *p, int pc, int reg) {
     case OP_MOVE:
       if (b == reg) {
         SET_OPCODE(*i, set_in_move(op, OpType_raw));
-        despecialize_store(p, pc, a);
+        despecialize_store(p, pc, a, visited);
       }
       break;
     case OP_GETTABLE:
@@ -279,19 +278,19 @@ static void despecialize (Proto *p, int pc, int reg) {
     case OP_DIV: case OP_MOD: case OP_POW:
       if ((!ISK(b) && b == reg) || (!ISK(c) && c == reg)) {
         SET_OPCODE(*i, set_in_arith(op, OpType_raw));
-        despecialize_store(p, pc, a);
+        despecialize_store(p, pc, a, visited);
       }
       break;
     case OP_UNM:
       if (b == reg) {
         SET_OPCODE(*i, set_in_unm(op, OpType_raw));
-        despecialize_store(p, pc, a);
+        despecialize_store(p, pc, a, visited);
       }
       break;
     case OP_LEN:
       if (b == reg) {
         SET_OPCODE(*i, set_in_len(op, OpType_raw));
-        despecialize_store(p, pc, a);
+        despecialize_store(p, pc, a, visited);
       }
       break;
     case OP_EQ:
@@ -314,15 +313,16 @@ static void despecialize (Proto *p, int pc, int reg) {
 }
 
 
-static void despecialize_all (Proto *p, int reg, RegInfo *reginfo) {
+static void despecialize_all (Proto *p, int reg, RegInfo *reginfo, 
+                              int *visited) {
 #ifdef DEBUG_PRINT
-  printf("%s %p reg=%i\n",__func__,p,reg);
+  printf("%s %p reg=%i\n %i",__func__,p,reg);
 #endif
-  
+  visited[reg] = 1;
   int pc = reginfo->startpc;
-  if (reginfo->firstuse & REGINFO_USE_LOAD) despecialize(p, pc, reg);
-  while (++pc < reginfo->endpc)             despecialize(p, pc, reg);
-  if (reginfo->lastuse & REGINFO_USE_LOAD)  despecialize(p, pc, reg);
+  if (reginfo->firstuse & REGINFO_USE_LOAD) despecialize(p, pc, reg, visited);
+  while (++pc < reginfo->endpc)             despecialize(p, pc, reg, visited);
+  if (reginfo->lastuse & REGINFO_USE_LOAD)  despecialize(p, pc, reg, visited);
 }
 
 
@@ -488,6 +488,19 @@ void luaVS_specialize (lua_State *L) {
 }
 
 
+static int *init_visited (lua_State *L, Proto *p) {
+  int n = p->sizereginfos;
+  int *visited = luaM_newvector(L, n, int);
+  while (n > 0) visited[--n] = 0;
+  return visited;
+}
+
+
+static void free_visited (lua_State *L, Proto *p, int *visited) {
+  luaM_freearray(L, visited, p->sizereginfos);
+}
+
+
 void luaVS_despecialize (lua_State *L, int reg) {
   Proto *p = clLvalue(L->ci->func)->p;
   int pc = pcRel(L->ci->u.l.savedpc, p);
@@ -496,12 +509,14 @@ void luaVS_despecialize (lua_State *L, int reg) {
 #endif
   RegInfo *reginfo = findreginfo(p, pc, reg, REGINFO_USE_STORE);
   lua_assert(reginfo != NULL);
-  despecialize_all(p, reg, reginfo);
-  remove_guards(p, reg, reginfo);
+  int *visited = init_visited(L, p);
+  despecialize_all(p, reg, reginfo, visited);
+  free_visited(L, p, visited);
+  remove_guards(p, reg, reginfo);  
 }
 
 
-void luaVS_despecialize_upval (Proto *p, int idx) {
+void luaVS_despecialize_upval (lua_State *L, Proto *p, int idx) {
 #ifdef DEBUG_PRINT
   printf("%s %p %i\n", __func__, p, idx);
 #endif
@@ -519,7 +534,9 @@ void luaVS_despecialize_upval (Proto *p, int idx) {
     lua_assert(reginfo != NULL);
     while (chaini-- > 0) reginfo = reginfo->next;
     lua_assert(reginfo->state == REGINFO_STATE_LOCAL_CLOSED);
-    despecialize_all(p, desc.idx, reginfo);
+    int *visited = init_visited(L, p);
+    despecialize_all(p, desc.idx, reginfo, visited);
+    free_visited(L, p, visited);
     remove_guards(p, desc.idx, reginfo);
   }
 }

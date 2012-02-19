@@ -739,7 +739,7 @@ newframe:  /* reentry point when frame changes (call/return) */
           case OpType_num: if (ttisnumber(ra)) break;
           case OpType_str: if (ttisstring(ra)) break;
           case OpType_obj: if (!ttisnumber(ra) && !ttisstring(ra)) break;
-            luaVS_despecialize_upval(cl->p, idx);
+            luaVS_despecialize_upval(L, cl->p, idx);
           default: break;
         }
       )
