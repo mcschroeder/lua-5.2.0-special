@@ -258,13 +258,19 @@ static int codeextraarg (FuncState *fs, int a) {
 
 
 int luaK_codek (FuncState *fs, int reg, int k) {
+  OpCode op;
+  TValue *rk = fs->f->k + INDEXK(k);
   if (k <= MAXARG_Bx) {
     addregstore(fs, reg);
-    return luaK_codeABx(fs, create_op_out(OP_LOADK, OpType_raw), reg, k);
+    if (ttisnumber(rk)) op = OP(LOADK, ___, num);
+    else op = OP(LOADK, ___, str);
+    return luaK_codeABx(fs, op, reg, k);
   }
   else {
     addregstore(fs, reg);
-    int p = luaK_codeABx(fs, create_op_out(OP_LOADKX, OpType_raw), reg, 0);
+    if (ttisnumber(rk)) op = OP(LOADKX, ___, num);
+    else op = OP(LOADKX, ___, str);
+    int p = luaK_codeABx(fs, op, reg, 0);
     codeextraarg(fs, k);
     return p;
   }
