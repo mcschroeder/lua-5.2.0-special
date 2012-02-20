@@ -130,7 +130,6 @@ void name (lua_State *L, const TValue *t, TValue *key, StkId val) {         \
 _luaV_gettable_def(luaV_gettable, luaH_get,);
 _luaV_gettable_def(luaV_gettable_num, luaH_getnum, );
 _luaV_gettable_def(luaV_gettable_str, luaH_getstr, rawtsvalue);
-_luaV_gettable_def(luaV_gettable_obj, luaH_getobj,);
 
 #define luaV_gettable____(L,t,key,val) luaV_gettable(L,t,key,val)
 
@@ -177,7 +176,6 @@ void name (lua_State *L, const TValue *t, TValue *key, StkId val) {       \
 _luaV_settable_def(luaV_settable, luaH_get,);
 _luaV_settable_def(luaV_settable_num, luaH_getnum, );
 _luaV_settable_def(luaV_settable_str, luaH_getstr, rawtsvalue);
-_luaV_settable_def(luaV_settable_obj, luaH_getobj,);
 
 #define luaV_settable____(L,t,key,val) luaV_settable(L,t,key,val)
 
@@ -432,9 +430,6 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
 #define str_check if (!ttisstring(ra)) { \
   luaVS_despecialize(L, GETARG_A(i)); }
 
-#define obj_check if (ttisnumber(ra) || ttisstring(ra)) { \
-  luaVS_despecialize(L, GETARG_A(i)); }
-
 
 /*
 ** finish execution of an opcode interrupted by an yield
@@ -458,7 +453,6 @@ void luaV_finishOp (lua_State *L) {
       switch (opout(op)) {
         case OpType_num: num_check break;
         case OpType_str: str_check break;
-        case OpType_obj: obj_check break;
         default: break;
       }
       break;
@@ -491,7 +485,6 @@ void luaV_finishOp (lua_State *L) {
       switch (opout(op)) {
         case OpType_num: num_check break;
         case OpType_str: str_check break;
-        case OpType_obj: obj_check break;
         default: break;
       }
       L->top = ci->top;  /* restore top */
@@ -627,14 +620,11 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_move(___, ___, )
       vmcase_move(num, ___, num_check)
       vmcase_move(str, ___, str_check)
-      vmcase_move(obj, ___, obj_check)
       vmcase_move(___, num, )
       vmcase_move(___, str, )
-      vmcase_move(___, obj, )
       vmcase_move_chk(___)
       vmcase_move_chk(num)
       vmcase_move_chk(str)
-      vmcase_move_chk(obj)
 /* ------------------------------------------------------------------------ */
 #define vmcase_loadk(in)                    \
       vmcase(OP(LOADK,___,in),              \
@@ -676,7 +666,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_getupval(___, )
       vmcase_getupval(num, num_check)
       vmcase_getupval(str, str_check)
-      vmcase_getupval(obj, obj_check)      
 /* ------------------------------------------------------------------------ */
 #define _vmcase_gettab_spec(op,b,spec,out,guard)        \
     vmcase(OP(op,out,spec),                             \
@@ -686,8 +675,7 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_gettab_spec(op,b,spec)                 \
     _vmcase_gettab_spec(op, b, spec, ___, )           \
     _vmcase_gettab_spec(op, b, spec, num, num_check)  \
-    _vmcase_gettab_spec(op, b, spec, str, str_check)  \
-    _vmcase_gettab_spec(op, b, spec, obj, obj_check)
+    _vmcase_gettab_spec(op, b, spec, str, str_check)
 
 #define _vmcase_gettab_chk(op,out)  \
     vmcase(OP(op,out,chk),          \
@@ -697,14 +685,12 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_gettab_chk(op)   \
     _vmcase_gettab_chk(op, ___) \
     _vmcase_gettab_chk(op, num) \
-    _vmcase_gettab_chk(op, str) \
-    _vmcase_gettab_chk(op, obj)
+    _vmcase_gettab_chk(op, str)
 
 #define vmcase_gettab(op,b)         \
     vmcase_gettab_spec(op, b, ___)  \
     vmcase_gettab_spec(op, b, num)  \
     vmcase_gettab_spec(op, b, str)  \
-    vmcase_gettab_spec(op, b, obj)  \
     vmcase_gettab_chk(op)
 
     vmcase_gettab(GETTABLE, RB(i))
@@ -723,7 +709,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_settab_spec(op, ___, a)  \
       vmcase_settab_spec(op, num, a)  \
       vmcase_settab_spec(op, str, a)  \
-      vmcase_settab_spec(op, obj, a)  \
       vmcase_settab_chk(op) \
 
       vmcase_settab(SETTABLE, ra)
@@ -737,8 +722,7 @@ newframe:  /* reentry point when frame changes (call/return) */
 
         switch (cl->p->upvalues[idx].expected_type) {
           case OpType_num: if (ttisnumber(ra)) break;
-          case OpType_str: if (ttisstring(ra)) break;
-          case OpType_obj: if (!ttisnumber(ra) && !ttisstring(ra)) break;
+          case OpType_str: if (ttisstring(ra)) break;          
             luaVS_despecialize_upval(L, cl->p, idx);
           default: break;
         }
@@ -779,8 +763,7 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_arith_raw(op,func,tm)                  \
       _vmcase_arith_raw(op, func, tm, ___, )          \
       _vmcase_arith_raw(op, func, tm, num, num_check) \
-      _vmcase_arith_raw(op, func, tm, str, str_check) \
-      _vmcase_arith_raw(op, func, tm, obj, obj_check)
+      _vmcase_arith_raw(op, func, tm, str, str_check)
 
 #define _vmcase_arith_num(op,func,out,guard)            \
       vmcase(OP(op,out,num),                            \
@@ -792,22 +775,6 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_arith_num(op,func)                 \
       _vmcase_arith_num(op, func, ___, )          \
 
-#define _vmcase_arith_obj(op,tm,out,guard)    \
-      vmcase(OP(op,out,obj),                  \
-        TValue *rb = RKB(i);                  \
-        TValue *rc = RKC(i);                  \
-        Protect(                              \
-          if (!call_binTM(L, rb, rc, ra, tm)) \
-            luaG_aritherror(L, rb, rc);       \
-        )                                     \
-        {guard;}                              \
-      )
-#define vmcase_arith_obj(op,tm)                 \
-      _vmcase_arith_obj(op, tm, ___, )          \
-      _vmcase_arith_obj(op, tm, num, num_check) \
-      _vmcase_arith_obj(op, tm, str, str_check) \
-      _vmcase_arith_obj(op, tm, obj, obj_check) \
-
 #define _vmcase_arith_chk(op,out) \
       vmcase(OP(op,out,chk),      \
         luaVS_specialize(L);      \
@@ -816,13 +783,11 @@ newframe:  /* reentry point when frame changes (call/return) */
 #define vmcase_arith_chk(op)      \
       _vmcase_arith_chk(op, ___)  \
       _vmcase_arith_chk(op, num)  \
-      _vmcase_arith_chk(op, str)  \
-      _vmcase_arith_chk(op, obj)
+      _vmcase_arith_chk(op, str)
 
 #define vmcase_arith(op,func,tm)      \
       vmcase_arith_raw(op, func, tm)  \
       vmcase_arith_num(op, func)      \
-      vmcase_arith_obj(op, tm)        \
       vmcase_arith_chk(op)
 
       vmcase_arith(ADD, luai_numadd, TM_ADD)
@@ -853,12 +818,10 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_unm_raw(___, )
       vmcase_unm_raw(num, num_check)
       vmcase_unm_raw(str, str_check)
-      vmcase_unm_raw(obj, obj_check)
       vmcase_unm_num(___, )
       vmcase_unm_chk(___)
       vmcase_unm_chk(num)
       vmcase_unm_chk(str)
-      vmcase_unm_chk(obj)
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(NOT),
         setbvalue(ra, l_isfalse(RB(i)));
@@ -883,12 +846,10 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_len_raw(___, )
       vmcase_len_raw(num, num_check)
       vmcase_len_raw(str, str_check)
-      vmcase_len_raw(obj, obj_check)
       vmcase_len_str(___, )
       vmcase_len_chk(___)
       vmcase_len_chk(num)
       vmcase_len_chk(str)
-      vmcase_len_chk(obj)    
 /* ------------------------------------------------------------------------ */
 #define vmcase_concat(out,guard)                                            \
       vmcase(OP(CONCAT,out,___),                                            \
@@ -911,7 +872,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_concat(___, )
       vmcase_concat(num, num_check)
       vmcase_concat(str, str_check)
-      vmcase_concat(obj, obj_check)
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(JMP),
         dojump(ci, i, 0);
@@ -937,12 +897,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       )
       vmcase(OP(EQ,___,str),
         if (eqstr(rawtsvalue(RKB(i)), rawtsvalue(RKC(i))) != GETARG_A(i))
-          ci->u.l.savedpc++;
-        else
-          donextjump(ci);
-      )
-      vmcase(OP(EQ,___,obj),
-        if (luaV_equalobj_(L, RKB(i), RKC(i)) != GETARG_A(i))
           ci->u.l.savedpc++;
         else
           donextjump(ci);
@@ -1020,7 +974,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_testset(___, )
       vmcase_testset(num, num_check)
       vmcase_testset(str, str_check)
-      vmcase_testset(obj, obj_check)
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(CALL),
         int b = GETARG_B(i);
@@ -1197,7 +1150,6 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase(OP(CHKTYPE,___,___), /* nop */)
       vmcase(OP(CHKTYPE,num,___), num_check)
       vmcase(OP(CHKTYPE,str,___), str_check)
-      vmcase(OP(CHKTYPE,obj,___), obj_check)
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(EXTRAARG),
         lua_assert(0);

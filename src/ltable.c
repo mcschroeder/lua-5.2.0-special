@@ -461,8 +461,15 @@ const TValue *luaH_getnum (Table *t, const TValue *key) {
   lua_number2int(k, n);
   if (luai_numeq(cast_num(k), nvalue(key))) { /* index is int? */
     return luaH_getint(t, k);  /* use specialized version */
-  } else {  // TODO: inline
-    return luaH_getobj(t, key);
+  } 
+  else {
+    Node *no = mainposition(t, key);
+    do {  /* check whether `key' is somewhere in the chain */
+      if (luaV_rawequalobj(gkey(no), key))
+        return gval(no);  /* that's it */
+      else no = gnext(no);
+    } while (no);
+    return luaO_nilobject;
   }
 }
 
@@ -506,19 +513,6 @@ const TValue *luaH_get (Table *t, const TValue *key) {
       return luaO_nilobject;
     }
   }
-}
-
-/*
-** search function for "objects"
-*/
-const TValue *luaH_getobj (Table *t, const TValue *key) {
-  Node *n = mainposition(t, key);
-  do {  /* check whether `key' is somewhere in the chain */
-    if (luaV_rawequalobj(gkey(n), key))
-      return gval(n);  /* that's it */
-    else n = gnext(n);
-  } while (n);
-  return luaO_nilobject;
 }
 
 

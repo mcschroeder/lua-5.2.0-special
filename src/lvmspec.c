@@ -123,7 +123,7 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
       break;
     case OP_NEWTABLE:
     case OP_CLOSURE:
-      if (a == reg && type != OpType_obj) return 0;
+      if (a == reg) return 0;
       break;
     case OP_ADD: case OP_SUB: case OP_MUL:
     case OP_DIV: case OP_MOD: case OP_POW:
@@ -351,7 +351,7 @@ void luaVS_specialize (lua_State *L) {
   TValue *rc = ISK(c) ? p->k+INDEXK(c) : base+c;
   switch (op2grp(op)) {
     case OP_MOVE: {
-      OpType type = OpType_obj;
+      OpType type = OpType_raw;
       if (ttisnumber(rb)) type = OpType_num;
       else if (ttisstring(rb)) type = OpType_str;
       if (_add_guards(b, type)) {
@@ -365,10 +365,9 @@ void luaVS_specialize (lua_State *L) {
     }
     case OP_GETTABLE:
     case OP_GETTABUP: {
-      OpType type = OpType_obj;
+      OpType type = OpType_raw;
       if (ttisnumber(rc)) type = OpType_num;
       else if (ttisstring(rc)) type = OpType_str;
-      else if (ttisnil(rc)) type = OpType_raw;
       if (type != OpType_raw && !ISK(c) && !_add_guards(c, type))
         SET_OPCODE(*i, set_in_gettab(op, OpType_raw));
       else
@@ -377,10 +376,9 @@ void luaVS_specialize (lua_State *L) {
     }
     case OP_SETTABLE: 
     case OP_SETTABUP: {
-      OpType type = OpType_obj;
+      OpType type = OpType_raw;
       if (ttisnumber(rb)) type = OpType_num;
       else if (ttisstring(rb)) type = OpType_str;
-      else if (ttisnil(rb)) type = OpType_raw;
       if (type != OpType_raw && !ISK(b) && !_add_guards(b, type))
         SET_OPCODE(*i, set_in_settab(op, OpType_raw));
       else
@@ -390,39 +388,23 @@ void luaVS_specialize (lua_State *L) {
     case OP_ADD: case OP_SUB: case OP_MUL:
     case OP_DIV: case OP_MOD: case OP_POW: {
       OpType type = OpType_raw;
-      if (ttisnumber(rb)) {
-        if (ttisnumber(rc)) {
-          int status = 1;
-          if (!ISK(b)) status = _add_guards(b, OpType_num);
-          if (status && !ISK(c)) {
-            if (!_add_guards(c, OpType_num)) {
-              if (!ISK(b)) _remove_guards(b);
-              status = 0;
-            }
+      if (ttisnumber(rb) && ttisnumber(rc)) {
+        int status = 1;
+        if (!ISK(b)) status = _add_guards(b, OpType_num);
+        if (status && !ISK(c)) {
+          if (!_add_guards(c, OpType_num)) {
+            if (!ISK(b)) _remove_guards(b);
+            status = 0;
           }
-          if (status) {
-            type = OpType_num;
-            if (opout(op) == OpType_num)
-              op = set_out_arith(op, OpType_raw);
-            else if (opout(op) == OpType_str || opout(op) == OpType_obj)
-              luaVS_despecialize(L, a);
-          }
-        } 
-        else if (!ttisstring(rc)) {
-          if (ISK(c) || _add_guards(c, OpType_obj))
-            type = OpType_obj;
         }
-      }
-      else if (ttisstring(rb)) {
-        if (!ttisnumber(rc) && !ttisstring(rc)) {
-          if (ISK(c) || _add_guards(c, OpType_obj))
-            type = OpType_obj;
+        if (status) {
+          type = OpType_num;
+          if (opout(op) == OpType_num)
+            op = set_out_arith(op, OpType_raw);
+          else if (opout(op) == OpType_str)
+            luaVS_despecialize(L, a);
         }
-      }
-      else {
-        if (ISK(b) || _add_guards(b, OpType_obj))
-          type = OpType_obj;
-      }
+      } 
       SET_OPCODE(*i, set_in_arith(op, type));
       break;
     }
@@ -433,7 +415,7 @@ void luaVS_specialize (lua_State *L) {
           type = OpType_num;
           if (opout(op) == OpType_num)
             op = set_out_unm(op, OpType_raw);
-          else if (opout(op) == OpType_str || opout(op) == OpType_obj)
+          else if (opout(op) == OpType_str)
             luaVS_despecialize(L, a);          
         }
       }
@@ -447,7 +429,7 @@ void luaVS_specialize (lua_State *L) {
           type = OpType_str;
           if (opout(op) == OpType_num)
             op = set_out_unm(op, OpType_raw);
-          else if (opout(op) == OpType_str || opout(op)== OpType_obj)
+          else if (opout(op) == OpType_str)
             luaVS_despecialize(L, a);
         }
       }

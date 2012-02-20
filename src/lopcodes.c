@@ -77,10 +77,9 @@ OpCode create_op_move (OpType in, OpType out) {
   OpCode op = grp2op(OP_MOVE);
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_str: op += 5; break;
-    case OpType_obj: op += 6; break;
-    case OpType_chk: op += 7; break;
+    case OpType_num: op += 3; break;
+    case OpType_str: op += 4; break;
+    case OpType_chk: op += 5; break;
     default: lua_assert(0); break;
   }
   if (in == OpType_raw || in == OpType_chk) {
@@ -88,7 +87,6 @@ OpCode create_op_move (OpType in, OpType out) {
       case OpType_raw: op += 0; break;
       case OpType_num: op += 1; break;
       case OpType_str: op += 2; break;
-      case OpType_obj: op += 3; break;
       default: lua_assert(0); break;
     }
   } else {
@@ -104,8 +102,7 @@ OpCode create_op_settab (OpGroup grp, OpType in) {
     case OpType_raw: op += 0; break;
     case OpType_num: op += 1; break;
     case OpType_str: op += 2; break;
-    case OpType_obj: op += 3; break;
-    case OpType_chk: op += 4; break;
+    case OpType_chk: op += 3; break;
     default: lua_assert(0); break;
   }
   return op;
@@ -116,17 +113,15 @@ OpCode create_op_gettab (OpGroup grp, OpType out, OpType in) {
   OpCode op = grp2op(grp);
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_str: op += 8; break;
-    case OpType_obj: op += 12; break;
-    case OpType_chk: op += 16; break;
+    case OpType_num: op += 3; break;
+    case OpType_str: op += 6; break;
+    case OpType_chk: op += 9; break;
     default: lua_assert(0); break;
   }
   switch (out) {
     case OpType_raw: op += 0; break;
     case OpType_num: op += 1; break;
     case OpType_str: op += 2; break;
-    case OpType_obj: op += 3; break;
     default: lua_assert(0); break;
   }
   return op;
@@ -137,9 +132,8 @@ OpCode create_op_arith (OpGroup grp, OpType out, OpType in) {
   OpCode op = grp2op(grp);  
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_obj: op += 5; break;
-    case OpType_chk: op += 9; break;
+    case OpType_num: op += 3; break;
+    case OpType_chk: op += 4; break;
     default: lua_assert(0); break;
   }
   if (in == OpType_num) {
@@ -149,7 +143,6 @@ OpCode create_op_arith (OpGroup grp, OpType out, OpType in) {
       case OpType_raw: op += 0; break;
       case OpType_num: op += 1; break;
       case OpType_str: op += 2; break;
-      case OpType_obj: op += 3; break;
       default: lua_assert(0); break;
     }      
   }  
@@ -160,8 +153,8 @@ OpCode create_op_unm (OpType out, OpType in) {
   OpCode op = grp2op(OP_UNM);
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_chk: op += 5; break;
+    case OpType_num: op += 3; break;
+    case OpType_chk: op += 4; break;
     default: lua_assert(0); break;
   }
   if (in == OpType_num) {
@@ -171,7 +164,6 @@ OpCode create_op_unm (OpType out, OpType in) {
       case OpType_raw: op += 0; break;
       case OpType_num: op += 1; break;
       case OpType_str: op += 2; break;
-      case OpType_obj: op += 3; break;
       default: lua_assert(0); break;
     }      
   }  
@@ -182,8 +174,8 @@ OpCode create_op_len (OpType out, OpType in) {
   OpCode op = grp2op(OP_LEN);
   switch (in) {
     case OpType_raw: op += 0; break;
-    case OpType_str: op += 4; break;
-    case OpType_chk: op += 5; break;
+    case OpType_str: op += 3; break;
+    case OpType_chk: op += 4; break;
     default: lua_assert(0); break;
   }
   if (in == OpType_str) {
@@ -193,7 +185,6 @@ OpCode create_op_len (OpType out, OpType in) {
       case OpType_raw: op += 0; break;
       case OpType_num: op += 1; break;
       case OpType_str: op += 2; break;
-      case OpType_obj: op += 3; break;
       default: lua_assert(0); break;
     }      
   }  
@@ -219,7 +210,6 @@ OpCode create_op_out (OpGroup grp, OpType out) {
     case OpType_raw: op += 0; break;
     case OpType_num: op += 1; break;
     case OpType_str: op += 2; break;
-    case OpType_obj: op += 3; break;
     default: lua_assert(0); break;
   }
   return op;
@@ -228,7 +218,7 @@ OpCode create_op_out (OpGroup grp, OpType out) {
 
 
 const char * const optypenames[7] = {
-  "___","num","str","obj","chk"
+  "___","num","str","chk"
 };
 void printop(OpCode op) {  
   OpGroup grp = op2grp(op);

@@ -718,8 +718,7 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
     TValue *k = fs->f->k + INDEXK(rkkey);
     if (ttisnumber(k))      in = OpType_num;
     else if (ttisstring(k)) in = OpType_str;
-    else if (ttisnil(k))    in = OpType_raw;
-    else                    in = OpType_obj;
+    else                    in = OpType_raw;
   } 
   addregload(fs, cc->t->u.info);
   OpCode op = create_op_settab(OP_SETTABLE, in);

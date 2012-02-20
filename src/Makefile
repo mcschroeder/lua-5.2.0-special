@@ -6,11 +6,12 @@
 # Your platform. See PLATS for possible values.
 PLAT= none
 
-#CC= gcc
-CC = clang
+CC= gcc
+#CC = clang
 #CFLAGS= -O2 -Wall -DLUA_COMPAT_ALL $(SYSCFLAGS) $(MYCFLAGS)
 #CFLAGS= -gfull -O2 -Wall -DLUA_COMPAT_ALL $(SYSCFLAGS) $(MYCFLAGS)
-CFLAGS= -gfull -Wall -DLUA_COMPAT_ALL $(SYSCFLAGS) $(MYCFLAGS)
+#CFLAGS= -gfull -Wall -DLUA_COMPAT_ALL $(SYSCFLAGS) $(MYCFLAGS)
+CFLAGS= -O3 -fomit-frame-pointer -Wall -DLUA_COMPAT_ALL $(SYSCFLAGS) $(MYCFLAGS)
 LDFLAGS= $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -lm $(SYSLIBS) $(MYLIBS)
 

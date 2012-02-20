@@ -22,7 +22,6 @@ LUAI_FUNC const TValue *luaH_get (Table *t, const TValue *key);
 LUAI_FUNC const TValue *luaH_getint (Table *t, int key);
 LUAI_FUNC const TValue *luaH_getnum (Table *t, const TValue *key);
 LUAI_FUNC const TValue *luaH_getstr (Table *t, TString *key);
-LUAI_FUNC const TValue *luaH_getobj (Table *t, const TValue *key);
 
 LUAI_FUNC TValue *luaH_set (lua_State *L, Table *t, const TValue *key);
 LUAI_FUNC void luaH_setint (lua_State *L, Table *t, int key, TValue *value);
