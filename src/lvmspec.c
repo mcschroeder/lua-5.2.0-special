@@ -357,7 +357,7 @@ void luaVS_specialize (lua_State *L) {
       if (_add_guards(b, type)) {
         if (opout(op) != OpType_raw && opout(op) != type)
           luaVS_despecialize(L, a);
-        SET_OPCODE(*i, create_op_move(OpType_raw, type));
+        SET_OPCODE(*i, create_op_move(type, OpType_raw));
       } else {
         SET_OPCODE(*i, set_in_move(op, OpType_raw));
       }
