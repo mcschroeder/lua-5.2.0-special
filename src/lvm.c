@@ -721,9 +721,14 @@ newframe:  /* reentry point when frame changes (call/return) */
         luaC_barrier(L, uv, ra);
 
         switch (cl->p->upvalues[idx].expected_type) {
-          case OpType_num: if (ttisnumber(ra)) break;
-          case OpType_str: if (ttisstring(ra)) break;          
-            luaVS_despecialize_upval(L, cl->p, idx);
+          case OpType_num: 
+            if (!ttisnumber(ra)) 
+              luaVS_despecialize_upval(L, cl->p, idx); 
+            break;
+          case OpType_str: 
+            if (!ttisstring(ra)) 
+              luaVS_despecialize_upval(L, cl->p, idx); 
+            break;
           default: break;
         }
       )
