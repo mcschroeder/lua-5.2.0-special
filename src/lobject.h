@@ -450,10 +450,9 @@ typedef union Udata {
 */
 typedef struct Upvaldesc {
   TString *name;  /* upvalue name (for debug information) */
-  int expected_type; // TODO: naming
   lu_byte instack;  /* whether it is in stack */
   lu_byte idx;  /* index of upvalue (in stack or in outer function's list) */  
-  lu_byte reginfo_idx; /* if in stack, idx in reginfo scope chain */
+  int startpc;  /* pc at which upvalue is first declared (if in stack) */
 } Upvaldesc;
 
 

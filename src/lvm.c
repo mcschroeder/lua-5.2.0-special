@@ -714,23 +714,21 @@ newframe:  /* reentry point when frame changes (call/return) */
       vmcase_settab(SETTABLE, ra)
       vmcase_settab(SETTABUP, cl->upvals[GETARG_A(i)]->v)
 /* ------------------------------------------------------------------------ */
-      vmcase(sOP(SETUPVAL),
-        int idx = GETARG_B(i);
-        UpVal *uv = cl->upvals[idx];
-        setobj(L, uv->v, ra);
-        luaC_barrier(L, uv, ra);
+#define vmcase_setupval(out, guard)   \
+      vmcase(OP(SETUPVAL,out,___),    \
+        int idx = GETARG_B(i);        \
+        UpVal *uv = cl->upvals[idx];  \
+        setobj(L, uv->v, ra);         \
+        luaC_barrier(L, uv, ra);      \
+        {guard;}                      \
+      )
 
-        switch (cl->p->upvalues[idx].expected_type) {
-          case OpType_num: 
-            if (!ttisnumber(ra)) 
-              luaVS_despecialize_upval(L, cl->p, idx); 
-            break;
-          case OpType_str: 
-            if (!ttisstring(ra)) 
-              luaVS_despecialize_upval(L, cl->p, idx); 
-            break;
-          default: break;
-        }
+      vmcase_setupval(___, )
+      vmcase_setupval(num,
+        if (!ttisnumber(ra)) luaVS_despecialize_upval(L, cl->p, idx);
+      )
+      vmcase_setupval(str,
+        if (!ttisstring(ra)) luaVS_despecialize_upval(L, cl->p, idx);
       )
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(NEWTABLE),

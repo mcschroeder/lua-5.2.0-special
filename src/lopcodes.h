@@ -311,6 +311,8 @@ _(SETTABUP, ___, str) /* fast string key */ \
 _(SETTABUP, ___, chk) /* specialize */ \
 \
 _(SETUPVAL, ___, ___) \
+_(SETUPVAL, num, ___) \
+_(SETUPVAL, str, ___) \
 \
 _(SETTABLE, ___, ___) /* vanilla */ \
 _(SETTABLE, ___, num) /* fast number key */ \

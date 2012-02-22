@@ -188,8 +188,7 @@ static void remove_guards (Proto *p, int reg, RegInfo *reginfo) {
   if (reginfo->lastuse & REGINFO_USE_STORE)  remove_guard(p, pc, reg);
 }
 
-
-static void add_upvalue_guards (Proto *p, int idx, int instack, OpType type) {
+static void add_downvalue_guards (Proto *p, int idx, int instack, OpType type) {
 #ifdef DEBUG_PRINT
   printf("%s %p %i %i %i\n", __func__, p, idx, instack, type);
 #endif
@@ -197,10 +196,20 @@ static void add_upvalue_guards (Proto *p, int idx, int instack, OpType type) {
   for (i = 0; i < p->sizeupvalues; i++) {
     Upvaldesc *desc = &p->upvalues[i];
     if (desc->idx == idx && desc->instack == instack) {
-      desc->expected_type = type;
+      /* this function may set the upvalue via SETUPVAL */
+      int pc;
+      for (pc = 0; pc < p->sizecode; pc++) {
+        Instruction *i = &(p->code[pc]);
+        OpCode op = GET_OPCODE(*i);
+        if (op2grp(op) == OP_SETUPVAL &&
+            GETARG_B(*i) == idx) {
+          SET_OPCODE(*i, set_out(op, type));
+        }
+      }
+      /* go deeper */
       int n = p->sizep;
       while (n > 0)
-        add_upvalue_guards(p->p[--n], i, 0, type);
+        add_downvalue_guards(p->p[--n], i, 0, type);
       break;
     }
   }
@@ -221,7 +230,7 @@ static int add_guards (Proto *p, int reg, RegInfo *reginfo, OpType type) {
   lua_assert(reginfo != NULL);
   int n = p->sizep;
   while (n > 0)
-    add_upvalue_guards(p->p[--n], reg, 1, type);
+    add_downvalue_guards(p->p[--n], reg, 1, type);  
 
   int pc = reginfo->startpc;
   if (reginfo->firstuse & REGINFO_USE_STORE) _add_guard_or_abort
@@ -503,18 +512,16 @@ void luaVS_despecialize_upval (lua_State *L, Proto *p, int idx) {
   printf("%s %p %i\n", __func__, p, idx);
 #endif
   /* find the function that has the local that is the origin of the upvalue */
-  int chaini = 0;
   Upvaldesc desc = p->upvalues[idx];
   for (;;) {
     p = p->encp;
-    if (desc.instack) { chaini = desc.reginfo_idx; break; } 
+    if (desc.instack) break;
     else desc = p->upvalues[desc.idx];
   }
   if (p) {
     /* find the right reginfo for the local */
-    RegInfo *reginfo = &p->reginfos[desc.idx];
+    RegInfo *reginfo = findreginfo(p, desc.startpc, desc.idx, REGINFO_USE_STORE);    
     lua_assert(reginfo != NULL);
-    while (chaini-- > 0) reginfo = reginfo->next;
     lua_assert(reginfo->state == REGINFO_STATE_LOCAL_CLOSED);
     int *visited = init_visited(L, p);
     despecialize_all(p, desc.idx, reginfo, visited);

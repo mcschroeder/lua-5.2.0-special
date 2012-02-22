@@ -257,18 +257,14 @@ static int newupvalue (FuncState *fs, TString *name, expdesc *v) {
   f->upvalues[fs->nups].instack = (v->k == VLOCAL);
   f->upvalues[fs->nups].idx = cast_byte(v->u.info);
   f->upvalues[fs->nups].name = name;
-  f->upvalues[fs->nups].expected_type = LUA_TNONE;
-  f->upvalues[fs->nups].reginfo_idx = 0;
+  f->upvalues[fs->nups].startpc = -1;
   luaC_objbarrier(fs->ls->L, f, name);
 
   FuncState *ofs = fs;
   int idx = fs->nups;
   getupvalorigin(&ofs, &idx);
-  if (ofs) {    
-    RegInfo *r = &ofs->f->reginfos[idx];
-    while ((r = r->next) != NULL)
-      f->upvalues[fs->nups].reginfo_idx++;
-  }
+  if (ofs)
+    f->upvalues[fs->nups].startpc = lastreginfo(ofs, idx)->startpc;
 
   return fs->nups++;
 }

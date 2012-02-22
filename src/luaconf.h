@@ -525,7 +525,7 @@
 */
 
 
-// #define lua_assert(c) assert(c)
+#define lua_assert(c) assert(c)
 
 #endif
 
