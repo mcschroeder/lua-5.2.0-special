@@ -516,6 +516,18 @@
 
 
 
+/* =================================================================== */
+
+/*
+** If the gcc labels-as-values extension is available, we can use
+** indirect threading in the main VM dispatch loop.
+*/
+#if defined(__GNUC__)
+#define LUA_THREADED_DISPATCH
+#endif
+
+
+
 
 /* =================================================================== */
 

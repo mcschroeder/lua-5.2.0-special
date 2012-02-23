@@ -543,41 +543,47 @@ void luaV_finishOp (lua_State *L) {
 #define checkGC(L,c)	Protect(luaC_condGC(L, c); luai_threadyield(L);)
 
 
+#define vmdispatch(o) switch(o)
+#define vmcase(op,out,in,b)   case OP(op,out,in): {b}  break;  
+#define vmcasenb(op,out,in,b) case OP(op,out,in): {b}  /* nb = no break */
+
 
 void luaV_execute (lua_State *L) {
+
+#ifdef LUA_THREADED_DISPATCH
+
+  static void *disptab[] = {
+  #define OPENUM(op,out,in) &&L_OP_##op##_##out##_##in,
+    OPDEF(OPENUM)
+  #undef OPENUM
+  };
+
+  #undef vmdispatch
+  #define vmdispatch(x) goto *disptab[x];
+
+  #undef vmcasenb
+  #define vmcasenb(op,out,in,b) L_OP_##op##_##out##_##in: {b};
+
+  #undef vmcase
+  #define vmcase(op,out,in,b)   L_OP_##op##_##out##_##in: {b};  \
+    i = *(ci->u.l.savedpc++);                                   \
+    if ((L->hookmask & (LUA_MASKLINE | LUA_MASKCOUNT)) &&       \
+        (--L->hookcount == 0 || L->hookmask & LUA_MASKLINE)) {  \
+      Protect(traceexec(L));                                    \
+    }                                                           \
+    ra = RA(i);                                                 \
+    vmdispatch(GET_OPCODE(i));
+
+#endif
+
   CallInfo *ci = L->ci;
   LClosure *cl;
   TValue *k;
   StkId base;
 
-  #ifdef DEBUG_PRINT
+#ifdef DEBUG_PRINT
   printf("\n---\n");
-  #endif
-
-
-/*==================================================================*/
-#define vmdispatch(x)     goto *disptab[x];
-
-#define vmcase(op,out,in,b)     L_OP_##op##_##out##_##in: {b}; \
-    i = *(ci->u.l.savedpc++); \
-    if ((L->hookmask & (LUA_MASKLINE | LUA_MASKCOUNT)) && \
-        (--L->hookcount == 0 || L->hookmask & LUA_MASKLINE)) { \
-      Protect(traceexec(L)); \
-    } \
-    ra = RA(i); \
-    vmdispatch(GET_OPCODE(i));
-
-#define vmcasenb(op,out,in,b) L_OP_##op##_##out##_##in: {b};
-
-
-static void *disptab[] = {
-#define OPENUM(op,out,in) &&L_OP_##op##_##out##_##in,
-  OPDEF(OPENUM)
-#undef OPENUM
-};
-/*==================================================================*/
-
-
+#endif
 
 newframe:  /* reentry point when frame changes (call/return) */
   lua_assert(ci == L->ci);
