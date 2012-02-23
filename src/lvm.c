@@ -732,10 +732,10 @@ l_dispatch_again:
     _vmcase_gettab(op, b, str, ___, str_check)  \
     _vmcase_gettab(op, b, ___, num,)            \
     _vmcase_gettab(op, b, num, num, num_check)  \
-    _vmcase_gettab(op, b, str, num, num_check)  \
+    _vmcase_gettab(op, b, str, num, str_check)  \
     _vmcase_gettab(op, b, ___, str,)            \
     _vmcase_gettab(op, b, num, str, num_check)  \
-    _vmcase_gettab(op, b, str, str, num_check)
+    _vmcase_gettab(op, b, str, str, str_check)
 
     vmcase_gettab(GETTABLE, RB(i))
     vmcase_gettab(GETTABUP, cl->upvals[GETARG_B(i)]->v)
