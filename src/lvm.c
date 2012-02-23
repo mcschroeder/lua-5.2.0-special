@@ -643,10 +643,14 @@ l_dispatch_again:
         goto l_dispatch_again;
       )
 /* ------------------------------------------------------------------------ */
-      vmcasenb(OP(MOVE,___,___),)
-      vmcasenb(OP(MOVE,___,num),)      
-      vmcase(OP(MOVE,___,str), 
+      vmcase(OP(MOVE,___,___),
         setobjs2s(L, ra, RB(i));
+      )
+      vmcase(OP(MOVE,___,num),
+        setnvalue(ra, nvalue(RB(i)));
+      )    
+      vmcase(OP(MOVE,___,str), 
+        setsvalue2s(L, ra, rawtsvalue(RB(i)));
       )
       vmcase(OP(MOVE,num,___), 
         setobjs2s(L, ra, RB(i));
@@ -657,17 +661,26 @@ l_dispatch_again:
         str_check
       )
 /* ------------------------------------------------------------------------ */
-      vmcasenb(OP(LOADK,___,num),)
+      vmcase(OP(LOADK,___,num),
+        TValue *rb = k + GETARG_Bx(i);
+        setnvalue(ra, nvalue(rb));
+      )
       vmcase(OP(LOADK,___,str),
-        setobj2s(L, ra, k + GETARG_Bx(i));
+        TValue *rb = k + GETARG_Bx(i);
+        setsvalue2s(L, ra, rawtsvalue(rb));
       )
 /* ------------------------------------------------------------------------ */
-      vmcasenb(OP(LOADKX,___,num),)
+      vmcase(OP(LOADKX,___,num),
+        TValue *rb;
+        lua_assert(GET_OPCODE(*ci->u.l.savedpc) == sOP(EXTRAARG));
+        rb = k + GETARG_Ax(*ci->u.l.savedpc++);
+        setnvalue(ra, nvalue(rb));
+      )
       vmcase(OP(LOADKX,___,str),
         TValue *rb;
         lua_assert(GET_OPCODE(*ci->u.l.savedpc) == sOP(EXTRAARG));
         rb = k + GETARG_Ax(*ci->u.l.savedpc++);
-        setobj2s(L, ra, rb);
+        setsvalue2s(L, ra, rawtsvalue(rb));
       )
 /* ------------------------------------------------------------------------ */
       vmcase(sOP(LOADBOOL),

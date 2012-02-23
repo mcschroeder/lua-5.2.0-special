@@ -238,13 +238,6 @@ typedef struct lua_TValue TValue;
 	  io1->value_ = io2->value_; io1->tt_ = io2->tt_; \
 	  checkliveness(G(L),io1); }
 
-/* WARNING: if the objects do not have the same types,
-            all hell will break loose! */
-#define setobj_fast(L,obj1,obj2) \
-  { const TValue *io2=(obj2); TValue *io1=(obj1); \
-    io1->value_ = io2->value_; \
-    checkliveness(G(L),io1); }
-
 
 /*
 ** different types of assignments, according to destination
@@ -252,10 +245,8 @@ typedef struct lua_TValue TValue;
 
 /* from stack to (same) stack */
 #define setobjs2s	setobj
-#define setobjs2s_fast setobj_fast
 /* to stack (not from same stack) */
 #define setobj2s	setobj
-#define setobj2s_fast setobj_fast
 #define setsvalue2s	setsvalue
 #define sethvalue2s	sethvalue
 #define setptvalue2s	setptvalue
