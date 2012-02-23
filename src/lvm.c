@@ -559,7 +559,18 @@ void luaV_execute (lua_State *L) {
   };
 
   #undef vmdispatch
-  #define vmdispatch(x) goto *disptab[x];
+#ifdef DEBUG_PRINT
+    #define getfuncline(f,pc) (((f)->lineinfo) ? (f)->lineinfo[pc] : 0)
+    #define vmdispatch(x) { \
+    int _pc = pcRel(ci->u.l.savedpc, ci_func(ci)->p); \
+    printf("<%s:%i>[%i] ", getstr(cl->p->source), getfuncline(cl->p, _pc), _pc); \
+    printop(GET_OPCODE(i)); \
+    printf(" %i %i %i",GETARG_A(i),GETARG_B(i),GETARG_C(i)); \
+    printf("\n"); } \
+    goto *disptab[x];
+#else
+    #define vmdispatch(x) goto *disptab[x];
+#endif
 
   #undef vmcasenb
   #define vmcasenb(op,out,in,b) L_OP_##op##_##out##_##in: {b};
@@ -603,17 +614,6 @@ l_dispatch_again:
     ra = RA(i);
     lua_assert(base == ci->u.l.base);
     lua_assert(base <= L->top && L->top < L->stack + L->stacksize);
-  
-    
-#ifdef DEBUG_PRINT
-    #define getfuncline(f,pc) (((f)->lineinfo) ? (f)->lineinfo[pc] : 0)
-    int _pc = pcRel(ci->u.l.savedpc, ci_func(ci)->p);
-    printf("<%s:%i>[%i] ", getstr(cl->p->source), getfuncline(cl->p, _pc), _pc);
-    printop(GET_OPCODE(i));
-    printf(" %i %i %i",GETARG_A(i),GETARG_B(i),GETARG_C(i));
-    printf("\n");
-#endif
-
     vmdispatch (GET_OPCODE(i)) {
 /* ------------------------------------------------------------------------ */
       vmcasenb(MOVE,     ___, chk,)
@@ -1108,11 +1108,6 @@ l_dispatch_again:
       vmcase(EXTRAARG,___,___,
         lua_assert(0);
       )
-/* ------------------------------------------------------------------------ */
-      // default:
-      //   printf("*** ILLEGAL OP: %i (%i)", GET_OPCODE(i), i);
-      //   lua_assert(0);
-      //   break;
     }
   }
 }
