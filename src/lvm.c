@@ -1118,7 +1118,7 @@ l_dispatch_again:
       
       vmcase_cmp(LE, ___, luaV_lessequal,)
       vmcase_cmp(LE, num, luai_numle, nvalue)
-      vmcase_cmp(LE, str, l_strcmp_lt, rawtsvalue)
+      vmcase_cmp(LE, str, l_strcmp_le, rawtsvalue)
       vmcase_cmp(LE, tab, lessequal_tm, )
 /* ------------------------------------------------------------------------ */
       vmcase(TEST,___,___,
