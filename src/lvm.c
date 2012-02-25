@@ -827,7 +827,7 @@ l_dispatch_again:
             (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { \
           setobj2s(L, ra, res);                                 \
         } else {                                                \
-          gettable_tm(L, b, tm, key, ra);                       \
+          Protect(gettable_tm(L, b, tm, key, ra));              \
         }                                                       \
         {guard;}                                                \
       )
@@ -843,7 +843,7 @@ l_dispatch_again:
               (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { \
             setobj2s(L, ra, res);                                 \
           } else {                                                \
-            gettable_tm(L, b, tm, key, ra);                       \
+            Protect(gettable_tm(L, b, tm, key, ra));              \
           }                                                       \
         } else {                                                  \
           Protect(luaV_gettable(L, b, RKC(i), ra));               \
@@ -896,7 +896,7 @@ l_dispatch_again:
             invalidateTMcache(h);                                       \
             luaC_barrierback(L, obj2gco(h), val);                       \
           } else {                                                      \
-            settable_tm(L, a, tm, key, val);                            \
+            Protect(settable_tm(L, a, tm, key, val));                   \
           }                                                             \
         } else {                                                        \
           Protect(luaV_settable(L, a, key, val));                       \
@@ -918,7 +918,7 @@ l_dispatch_again:
           invalidateTMcache(h);                                       \
           luaC_barrierback(L, obj2gco(h), val);                       \
         } else {                                                      \
-          settable_tm(L, ra, tm, key, val);                           \
+          Protect(settable_tm(L, ra, tm, key, val));                  \
         }                                                             \
       )
 
@@ -984,7 +984,7 @@ l_dispatch_again:
             (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) {
           setobj2s(L, ra, res);
         } else {
-          gettable_tm(L, rb, tm, key, ra);
+          Protect(gettable_tm(L, rb, tm, key, ra));
         }
       )
 /* ------------------------------------------------------------------------ */
@@ -1204,7 +1204,6 @@ l_dispatch_again:
           ci = L->ci;
           if (b) L->top = ci->top;
           lua_assert(isLua(ci));
-          // TODO: this assert needs to take CHKTYPEs into account
           lua_assert(GET_OPGROUP(*((ci)->u.l.savedpc - 1)) == OP_CALL);
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
