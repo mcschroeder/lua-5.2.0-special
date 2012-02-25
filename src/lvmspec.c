@@ -122,6 +122,8 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
       if (a == reg) SET_OPCODE(*i, set_out_gettab(op, type));
       break;
     case OP_NEWTABLE:
+      if (a == reg && type != OpType_tab) return 0;
+      break;
     case OP_CLOSURE:
       if (a == reg) return 0;
       break;
@@ -152,7 +154,7 @@ static int add_guard (Proto *p, int pc, int reg, OpType type) {
       break;
     case OP_LEN:
       if (a == reg) {
-        if (opin(op) == OpType_str) {
+        if (opin(op) == OpType_str || opin(op) == OpType_tab) {
           if (type == OpType_num)
             SET_OPCODE(*i, set_out_len(op, OpType_raw));
           else
@@ -272,6 +274,10 @@ static void despecialize (Proto *p, int pc, int reg, int *visited) {
       }
       break;
     case OP_GETTABLE:
+      if ((!ISK(c) && c == reg) || (b == reg)) {
+        SET_OPCODE(*i, set_in_gettab(op, OpType_raw));
+      }
+      break;
     case OP_GETTABUP:
       if (!ISK(c) && c == reg) {
         SET_OPCODE(*i, set_in_gettab(op, OpType_raw));
@@ -281,6 +287,11 @@ static void despecialize (Proto *p, int pc, int reg, int *visited) {
     case OP_SETTABUP:
       if (!ISK(b) && b == reg) {
         SET_OPCODE(*i, set_in_settab(op, OpType_raw));
+      }
+      break;
+    case OP_SELF:
+      if (b == reg) {
+        SET_OPCODE(*i, OP(SELF,___,___));
       }
       break;
     case OP_ADD: case OP_SUB: case OP_MUL:
@@ -363,6 +374,7 @@ void luaVS_specialize (lua_State *L) {
       OpType type = OpType_raw;
       if (ttisnumber(rb)) type = OpType_num;
       else if (ttisstring(rb)) type = OpType_str;
+      else if (ttistable(rb)) type = OpType_tab;
       if (_add_guards(b, type)) {
         if (opout(op) != OpType_raw && opout(op) != type)
           luaVS_despecialize(L, a);
@@ -372,7 +384,25 @@ void luaVS_specialize (lua_State *L) {
       }
       break;
     }
-    case OP_GETTABLE:
+    case OP_GETTABLE: {
+      OpType type = OpType_raw;
+      if (ttisnumber(rc)) type = OpType_num;
+      else if (ttisstring(rc)) type = OpType_str;
+      if (type != OpType_raw) {
+        int status = 1;
+        if (!ISK(c)) status = _add_guards(c, type);
+        if (status) {
+          if (!_add_guards(b, OpType_tab)) {
+            if (!ISK(c)) _remove_guards(c);
+            status = 0;
+          }
+        }
+        if (!status)
+          type = OpType_raw;
+      }
+      SET_OPCODE(*i, set_in_gettab(op, type));
+      break;
+    }
     case OP_GETTABUP: {
       OpType type = OpType_raw;
       if (ttisnumber(rc)) type = OpType_num;
@@ -392,6 +422,13 @@ void luaVS_specialize (lua_State *L) {
         SET_OPCODE(*i, set_in_settab(op, OpType_raw));
       else
         SET_OPCODE(*i, set_in_settab(op, type));
+      break;
+    }
+    case OP_SELF: {
+      if (ttistable(rb) && _add_guards(b, OpType_tab))
+        SET_OPCODE(*i, OP(SELF,___,tab));
+      else
+        SET_OPCODE(*i, OP(SELF,___,___));
       break;
     }
     case OP_ADD: case OP_SUB: case OP_MUL:
@@ -433,12 +470,13 @@ void luaVS_specialize (lua_State *L) {
     }
     case OP_LEN: {
       OpType type = OpType_raw;
-      if (ttisstring(rb)) {
-        if (_add_guards(b, OpType_str)) {
-          type = OpType_str;
+      if (ttisstring(rb)) type = OpType_str;
+      if (ttistable(rb)) type = OpType_tab;
+      if (type != OpType_raw) {
+        if (_add_guards(b, type)) {
           if (opout(op) == OpType_num)
             op = set_out_unm(op, OpType_raw);
-          else if (opout(op) == OpType_str)
+          else if (opout(op) != OpType_raw)
             luaVS_despecialize(L, a);
         }
       }
@@ -451,6 +489,7 @@ void luaVS_specialize (lua_State *L) {
       if (ttisequal(rb, rc)) {
         if (ttisnumber(rb)) type = OpType_num;
         else if (ttisstring(rb)) type = OpType_str;
+        else if (ttistable(rb)) type = OpType_tab;
       }
       if (type != OpType_raw) {
         int status = 1;

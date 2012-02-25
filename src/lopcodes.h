@@ -259,11 +259,14 @@ OP_EXTRAARG/* Ax  extra (larger) argument for previous opcode */
 _(MOVE, ___, ___) /* vanilla */ \
 _(MOVE, num, ___) /* type check (number) */ \
 _(MOVE, str, ___) /* type check (string) */ \
+_(MOVE, tab, ___) /* type check (table) */ \
 _(MOVE, ___, num) /* move number */ \
 _(MOVE, ___, str) /* move string */ \
+_(MOVE, ___, tab) /* move table */ \
 _(MOVE, ___, chk) /* specialize */ \
 _(MOVE, num, chk) /* specialize + keep type check (number) */ \
 _(MOVE, str, chk) /* specialize + keep type check (string) */ \
+_(MOVE, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(LOADK, ___, num) /* load number */ \
 _(LOADK, ___, str) /* load string */ \
@@ -278,32 +281,41 @@ _(LOADNIL, ___, ___) \
 _(GETUPVAL, ___, ___) /* vanilla */ \
 _(GETUPVAL, num, ___) /* type check (number) */ \
 _(GETUPVAL, str, ___) /* type check (string) */ \
+_(GETUPVAL, tab, ___) /* type check (table) */ \
 \
 _(GETTABUP, ___, ___) /* vanilla */ \
 _(GETTABUP, num, ___) /* type check (number) */ \
 _(GETTABUP, str, ___) /* type check (string) */ \
+_(GETTABUP, tab, ___) /* type check (table) */ \
 _(GETTABUP, ___, num) /* fast number key */ \
 _(GETTABUP, num, num) /* fast number key + type check (number) */ \
 _(GETTABUP, str, num) /* fast number key + type check (string) */ \
+_(GETTABUP, tab, num) /* fast number key + type check (table) */ \
 _(GETTABUP, ___, str) /* fast string key */ \
 _(GETTABUP, num, str) /* fast string key + type check (number) */ \
 _(GETTABUP, str, str) /* fast string key + type check (string) */ \
+_(GETTABUP, tab, str) /* fast string key + type check (table) */ \
 _(GETTABUP, ___, chk) /* specialize */ \
 _(GETTABUP, num, chk) /* specialize + keep type check (number) */ \
 _(GETTABUP, str, chk) /* specialize + keep type check (string) */ \
+_(GETTABUP, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(GETTABLE, ___, ___) /* vanilla */ \
 _(GETTABLE, num, ___) /* type check (number) */ \
 _(GETTABLE, str, ___) /* type check (string) */ \
-_(GETTABLE, ___, num) /* fast number key */ \
-_(GETTABLE, num, num) /* fast number key + type check (number) */ \
-_(GETTABLE, str, num) /* fast number key + type check (string) */ \
-_(GETTABLE, ___, str) /* fast string key */ \
-_(GETTABLE, num, str) /* fast string key + type check (number) */ \
-_(GETTABLE, str, str) /* fast string key + type check (string) */ \
+_(GETTABLE, tab, ___) /* type check (table) */ \
+_(GETTABLE, ___, num) /* table + fast number key */ \
+_(GETTABLE, num, num) /* table + fast number key + type check (number) */ \
+_(GETTABLE, str, num) /* table + fast number key + type check (string) */ \
+_(GETTABLE, tab, num) /* table + fast number key + type check (table) */ \
+_(GETTABLE, ___, str) /* table + fast string key */ \
+_(GETTABLE, num, str) /* table + fast string key + type check (number) */ \
+_(GETTABLE, str, str) /* table + fast string key + type check (string) */ \
+_(GETTABLE, tab, str) /* table + fast string key + type check (table) */ \
 _(GETTABLE, ___, chk) /* specialize */ \
 _(GETTABLE, num, chk) /* specialize + keep type check (number) */ \
 _(GETTABLE, str, chk) /* specialize + keep type check (string) */ \
+_(GETTABLE, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(SETTABUP, ___, ___) /* vanilla */ \
 _(SETTABUP, ___, num) /* fast number key */ \
@@ -313,6 +325,7 @@ _(SETTABUP, ___, chk) /* specialize */ \
 _(SETUPVAL, ___, ___) \
 _(SETUPVAL, num, ___) \
 _(SETUPVAL, str, ___) \
+_(SETUPVAL, tab, ___) \
 \
 _(SETTABLE, ___, ___) /* vanilla */ \
 _(SETTABLE, ___, num) /* fast number key */ \
@@ -321,93 +334,116 @@ _(SETTABLE, ___, chk) /* specialize */ \
 \
 _(NEWTABLE, ___, ___) \
 \
-_(SELF, ___, ___) \
+_(SELF, ___, ___) /* vanilla */ \
+_(SELF, ___, tab) /* table + fast string key */\
+_(SELF, ___, chk) /* specialize */ \
 \
 _(ADD, ___, ___) /* vanilla */ \
 _(ADD, num, ___) /* type check (number) */ \
 _(ADD, str, ___) /* type check (string) */ \
+_(ADD, tab, ___) /* type check (table) */ \
 _(ADD, ___, num) /* fast number operation */ \
 _(ADD, ___, chk) /* specialize */ \
 _(ADD, num, chk) /* specialize + keep type check (number) */ \
 _(ADD, str, chk) /* specialize + keep type check (string) */ \
+_(ADD, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(SUB, ___, ___) /* vanilla */ \
 _(SUB, num, ___) /* type check (number) */ \
 _(SUB, str, ___) /* type check (string) */ \
+_(SUB, tab, ___) /* type check (table) */ \
 _(SUB, ___, num) /* fast number operation */ \
 _(SUB, ___, chk) /* specialize */ \
 _(SUB, num, chk) /* specialize + keep type check (number) */ \
 _(SUB, str, chk) /* specialize + keep type check (string) */ \
+_(SUB, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(MUL, ___, ___) /* vanilla */ \
 _(MUL, num, ___) /* type check (number) */ \
 _(MUL, str, ___) /* type check (string) */ \
+_(MUL, tab, ___) /* type check (table) */ \
 _(MUL, ___, num) /* fast number operation */ \
 _(MUL, ___, chk) /* specialize */ \
 _(MUL, num, chk) /* specialize + keep type check (number) */ \
 _(MUL, str, chk) /* specialize + keep type check (string) */ \
+_(MUL, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(DIV, ___, ___) /* vanilla */ \
 _(DIV, num, ___) /* type check (number) */ \
 _(DIV, str, ___) /* type check (string) */ \
+_(DIV, tab, ___) /* type check (table) */ \
 _(DIV, ___, num) /* fast number operation */ \
 _(DIV, ___, chk) /* specialize */ \
 _(DIV, num, chk) /* specialize + keep type check (number) */ \
 _(DIV, str, chk) /* specialize + keep type check (string) */ \
+_(DIV, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(MOD, ___, ___) /* vanilla */ \
 _(MOD, num, ___) /* type check (number) */ \
 _(MOD, str, ___) /* type check (string) */ \
+_(MOD, tab, ___) /* type check (table) */ \
 _(MOD, ___, num) /* fast number operation */ \
 _(MOD, ___, chk) /* specialize */ \
 _(MOD, num, chk) /* specialize + keep type check (number) */ \
 _(MOD, str, chk) /* specialize + keep type check (string) */ \
+_(MOD, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(POW, ___, ___) /* vanilla */ \
 _(POW, num, ___) /* type check (number) */ \
 _(POW, str, ___) /* type check (string) */ \
+_(POW, tab, ___) /* type check (table) */ \
 _(POW, ___, num) /* fast number operation */ \
 _(POW, ___, chk) /* specialize */ \
 _(POW, num, chk) /* specialize + keep type check (number) */ \
 _(POW, str, chk) /* specialize + keep type check (string) */ \
+_(POW, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(UNM, ___, ___) /* vanilla */ \
 _(UNM, num, ___) /* type check (number) */ \
 _(UNM, str, ___) /* type check (string) */ \
+_(UNM, tab, ___) /* type check (table) */ \
 _(UNM, ___, num) /* fast number operation */ \
 _(UNM, ___, chk) /* specialize */ \
 _(UNM, num, chk) /* specialize + keep type check (number) */ \
 _(UNM, str, chk) /* specialize + keep type check (string) */ \
+_(UNM, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(NOT, ___, ___) \
 \
 _(LEN, ___, ___) /* vanilla */ \
 _(LEN, num, ___) /* type check (number) */ \
 _(LEN, str, ___) /* type check (string) */ \
+_(LEN, tab, ___) /* type check (table) */ \
 _(LEN, ___, str) /* fast string length */ \
+_(LEN, ___, tab) /* fast table length */ \
 _(LEN, ___, chk) /* specialize */ \
 _(LEN, num, chk) /* specialize + keep type check (number) */ \
 _(LEN, str, chk) /* specialize + keep type check (string) */ \
+_(LEN, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(CONCAT, ___, ___) /* vanilla */ \
 _(CONCAT, num, ___) /* type check (number) */ \
 _(CONCAT, str, ___) /* type check (string) */ \
+_(CONCAT, tab, ___) /* type check (table) */ \
 \
 _(JMP, ___, ___) \
 \
 _(EQ, ___, ___) /* vanilla */ \
 _(EQ, ___, num) /* two number values */ \
 _(EQ, ___, str) /* two string values */ \
+_(EQ, ___, tab) /* two table values */ \
 _(EQ, ___, chk) /* specialize */ \
 \
 _(LT, ___, ___) /* vanilla */ \
 _(LT, ___, num) /* fast number comparison */ \
 _(LT, ___, str) /* fast string comparison */ \
+_(LT, ___, tab) /* fast table comparison */ \
 _(LT, ___, chk) /* specialize */ \
 \
 _(LE, ___, ___) /* vanilla */ \
 _(LE, ___, num) /* fast number comparison */ \
 _(LE, ___, str) /* fast string comparison */ \
+_(LE, ___, tab) /* fast table comparison */ \
 _(LE, ___, chk) /* specialize */ \
 \
 _(TEST, ___, ___) \
@@ -415,6 +451,7 @@ _(TEST, ___, ___) \
 _(TESTSET,  ___, ___) /* vanilla */ \
 _(TESTSET,  num, ___) /* type check (number) */ \
 _(TESTSET,  str, ___) /* type check (string) */ \
+_(TESTSET,  tab, ___) /* type check (table) */ \
 \
 _(CALL, ___, ___) /* vanilla */ \
 \
@@ -433,7 +470,8 @@ _(VARARG, ___, ___) \
 \
 _(CHKTYPE, ___, ___) /* no-op */ \
 _(CHKTYPE, num, ___) /* type check (number) */ \
-_(CHKTYPE, str, ___) /* type check (str) */ \
+_(CHKTYPE, str, ___) /* type check (string) */ \
+_(CHKTYPE, tab, ___) /* type check (table) */ \
 \
 _(EXTRAARG, ___, ___)
 
@@ -461,6 +499,7 @@ typedef enum {
   OpType_raw,
   OpType_num,
   OpType_str,
+  OpType_tab,
   OpType_chk
 } OpType;
 
@@ -473,6 +512,9 @@ LUAI_DDEC OpType luaP_opin[NUM_OPCODES];
 #define opin(op) luaP_opin[op]
 
 
+// TODO: these are all (in,out) whereas the opcodes are (out,in)
+// THIS IS CONFUSING AS FUCK
+
 LUAI_FUNC OpCode create_op_move (OpType in, OpType out);
 LUAI_FUNC OpCode create_op_settab (OpGroup grp, OpType in);
 LUAI_FUNC OpCode create_op_gettab (OpGroup grp, OpType out, OpType in);
@@ -482,7 +524,6 @@ LUAI_FUNC OpCode create_op_unm (OpType out, OpType in);
 LUAI_FUNC OpCode create_op_len (OpType out, OpType in);
 LUAI_FUNC OpCode create_op_cmp (OpGroup grp, OpType in);
 LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
-
 
 #define set_out_move(op,out) create_op_move(opin(op),out)
 #define set_out_gettab(op,out) \

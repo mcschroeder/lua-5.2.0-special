@@ -101,84 +101,124 @@ static void callTM (lua_State *L, const TValue *f, const TValue *p1,
   }
 }
 
-#define _luaV_gettable_def(name, getfunc, keyfunc)                          \
-void name (lua_State *L, const TValue *t, TValue *key, StkId val) {         \
-  int loop;                                                                 \
-  for (loop = 0; loop < MAXTAGLOOP; loop++) {                               \
-    const TValue *tm;                                                       \
-    if (ttistable(t)) {  /* `t' is a table? */                              \
-      Table *h = hvalue(t);                                                 \
-      const TValue *res = getfunc(h, keyfunc(key));                         \
-      if (!ttisnil(res) ||  /* result is not nil? */                        \
-          (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { /* no TM? */  \
-        setobj2s(L, val, res);                                              \
-        return;                                                             \
-      }                                                                     \
-      /* else will try the tag method */                                    \
-    }                                                                       \
-    else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_INDEX)))                 \
-      luaG_typeerror(L, t, "index");                                        \
-    if (ttisfunction(tm)) {                                                 \
-      callTM(L, tm, t, key, val, 1);                                        \
-      return;                                                               \
-    }                                                                       \
-    t = tm;  /* else repeat with 'tm' */                                    \
-  }                                                                         \
-  luaG_runerror(L, "loop in gettable");                                     \
+
+void luaV_gettable (lua_State *L, const TValue *t, TValue *key, StkId val) {
+  int loop;
+  for (loop = 0; loop < MAXTAGLOOP; loop++) {
+    const TValue *tm;
+    if (ttistable(t)) {  /* `t' is a table? */
+      Table *h = hvalue(t);
+      const TValue *res = luaH_get(h, key);
+      if (!ttisnil(res) ||  /* result is not nil? */
+          (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { /* no TM? */
+        setobj2s(L, val, res);
+        return;
+      }
+      /* else will try the tag method */
+    }
+    else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_INDEX)))
+      luaG_typeerror(L, t, "index");
+    if (ttisfunction(tm)) {
+      callTM(L, tm, t, key, val, 1);
+      return;
+    }
+    t = tm;  /* else repeat with 'tm' */
+  }
+  luaG_runerror(L, "loop in gettable");
 }
 
-_luaV_gettable_def(luaV_gettable, luaH_get,);
-_luaV_gettable_def(luaV_gettable_num, luaH_getnum, );
-_luaV_gettable_def(luaV_gettable_str, luaH_getstr, rawtsvalue);
+void gettable_tm (lua_State *L, const TValue *t, const TValue *tm, 
+                  TValue *key, StkId val) {
+  int loop;
+  for (loop = 0; loop < MAXTAGLOOP; loop++) {
+    if (ttisfunction(tm)) {
+      callTM(L, tm, t, key, val, 1);
+      return;
+    }
+    t = tm;
+    if (ttistable(t)) {
+      Table *h = hvalue(t);
+      const TValue *res = luaH_get(h, key);
+      if (!ttisnil(res) ||
+          (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) {
+        setobj2s(L, val, res);
+        return;
+      }
+      /* else will try the tag method */
+    }
+    else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_INDEX)))
+      luaG_typeerror(L, t, "index");
+  }
+  luaG_runerror(L, "loop in gettable");
+}
 
-#define luaV_gettable____(L,t,key,val) luaV_gettable(L,t,key,val)
 
-
-#define _luaV_settable_def(name, getfunc, keyfunc)                        \
-void name (lua_State *L, const TValue *t, TValue *key, StkId val) {       \
-  int loop;                                                               \
-  for (loop = 0; loop < MAXTAGLOOP; loop++) {                             \
-    const TValue *tm;                                                     \
-    if (ttistable(t)) {  /* `t' is a table? */                            \
-      Table *h = hvalue(t);                                               \
-      TValue *oldval = cast(TValue *, getfunc(h, keyfunc(key)));          \
+void luaV_settable (lua_State *L, const TValue *t, TValue *key, StkId val) {
+  int loop;
+  for (loop = 0; loop < MAXTAGLOOP; loop++) {
+    const TValue *tm;
+    if (ttistable(t)) {  /* `t' is a table? */
+      Table *h = hvalue(t);
+      TValue *oldval = cast(TValue *, luaH_get(h, key));
       /* if previous value is not nil, there must be a previous entry
-         in the table; moreover, a metamethod has no relevance */         \
-      if (!ttisnil(oldval) ||                                             \
-         /* previous value is nil; must check the metamethod */           \
-         ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL &&          \
-         /* no metamethod; is there a previous entry in the table? */     \
-         (oldval != luaO_nilobject ||                                     \
+         in the table; moreover, a metamethod has no relevance */
+      if (!ttisnil(oldval) ||
+         /* previous value is nil; must check the metamethod */
+         ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL &&
+         /* no metamethod; is there a previous entry in the table? */
+         (oldval != luaO_nilobject ||
          /* no previous entry; must create one. (The next test is
-            always true; we only need the assignment.) */                 \
-         (oldval = luaH_newkey(L, h, key), 1)))) {                        \
-        /* no metamethod and (now) there is an entry with given key */    \
-        setobj2t(L, oldval, val);  /* assign new value to that entry */   \
-        invalidateTMcache(h);                                             \
-        luaC_barrierback(L, obj2gco(h), val);                             \
-        return;                                                           \
-      }                                                                   \
-      /* else will try the metamethod */                                  \
-    }                                                                     \
-    else  /* not a table; check metamethod */                             \
-      if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_NEWINDEX)))               \
-        luaG_typeerror(L, t, "index");                                    \
-    /* there is a metamethod */                                           \
-    if (ttisfunction(tm)) {                                               \
-      callTM(L, tm, t, key, val, 0);                                      \
-      return;                                                             \
-    }                                                                     \
-    t = tm;  /* else repeat with 'tm' */                                  \
-  }                                                                       \
-  luaG_runerror(L, "loop in settable");                                   \
+            always true; we only need the assignment.) */
+         (oldval = luaH_newkey(L, h, key), 1)))) {
+        /* no metamethod and (now) there is an entry with given key */
+        setobj2t(L, oldval, val);  /* assign new value to that entry */
+        invalidateTMcache(h);
+        luaC_barrierback(L, obj2gco(h), val);
+        return;
+      }
+      /* else will try the metamethod */
+    }
+    else  /* not a table; check metamethod */
+      if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_NEWINDEX)))
+        luaG_typeerror(L, t, "index");
+    /* there is a metamethod */
+    if (ttisfunction(tm)) {
+      callTM(L, tm, t, key, val, 0);
+      return;
+    }
+    t = tm;  /* else repeat with 'tm' */
+  }
+  luaG_runerror(L, "loop in settable");
 }
 
-_luaV_settable_def(luaV_settable, luaH_get,);
-_luaV_settable_def(luaV_settable_num, luaH_getnum, );
-_luaV_settable_def(luaV_settable_str, luaH_getstr, rawtsvalue);
-
-#define luaV_settable____(L,t,key,val) luaV_settable(L,t,key,val)
-
+void settable_tm (lua_State *L, const TValue *t, const TValue *tm, 
+                  TValue *key, StkId val) {
+  int loop;
+  for (loop = 0; loop < MAXTAGLOOP; loop++) {
+    if (ttisfunction(tm)) {
+      callTM(L, tm, t, key, val, 0);
+      return;
+    }
+    t = tm;
+    if (ttistable(t)) {
+      Table *h = hvalue(t);
+      TValue *oldval = cast(TValue *, luaH_get(h, key));
+      if (!ttisnil(oldval) ||
+         ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL &&
+         (oldval != luaO_nilobject ||
+         (oldval = luaH_newkey(L, h, key), 1)))) {
+        setobj2t(L, oldval, val);
+        invalidateTMcache(h);
+        luaC_barrierback(L, obj2gco(h), val);
+        return;
+      }
+      /* else will try the metamethod */
+    }
+    else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_NEWINDEX)))
+        luaG_typeerror(L, t, "index");
+  }
+  luaG_runerror(L, "loop in settable");
+}
 
 
 static int call_binTM (lua_State *L, const TValue *p1, const TValue *p2,
@@ -249,6 +289,13 @@ int luaV_lessthan (lua_State *L, const TValue *l, const TValue *r) {
 }
 
 
+static int lessthan_tm (lua_State *L, const TValue *l, const TValue *r) {
+  int res = call_orderTM(L, l, r, TM_LT);
+  if (res < 0) luaG_ordererror(L, l, r);
+  return res;
+}
+
+
 int luaV_lessequal (lua_State *L, const TValue *l, const TValue *r) {
   int res;
   if (ttisnumber(l) && ttisnumber(r))
@@ -259,6 +306,15 @@ int luaV_lessequal (lua_State *L, const TValue *l, const TValue *r) {
     return res;
   else if ((res = call_orderTM(L, r, l, TM_LT)) < 0)  /* else try `lt' */
     luaG_ordererror(L, l, r);
+  return !res;
+}
+
+
+static int lessequal_tm (lua_State *L, const TValue *l, const TValue *r) {
+  int res = call_orderTM(L, l, r, TM_LE);  /* first try `le' */
+  if (res >= 0) return res;
+  res = call_orderTM(L, r, l, TM_LT);  /* else try `lt' */
+  if (res < 0) luaG_ordererror(L, l, r);
   return !res;
 }
 
@@ -292,6 +348,17 @@ int luaV_equalobj_ (lua_State *L, const TValue *t1, const TValue *t2) {
       lua_assert(iscollectable(t1));
       return gcvalue(t1) == gcvalue(t2);
   }
+  if (tm == NULL) return 0;  /* no TM? */
+  callTM(L, tm, t1, t2, L->top, 1);  /* call TM */
+  return !l_isfalse(L->top);
+}
+
+
+static int equaltab (lua_State *L, const TValue *t1, const TValue *t2) {
+  const Table *h1 = hvalue(t1);
+  const Table *h2 = hvalue(t2);
+  if (h1 == h2) return 1;
+  const TValue *tm = get_equalTM(L, h1->metatable, h2->metatable, TM_EQ);
   if (tm == NULL) return 0;  /* no TM? */
   callTM(L, tm, t1, t2, L->top, 1);  /* call TM */
   return !l_isfalse(L->top);
@@ -430,6 +497,9 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
 #define str_check if (!ttisstring(ra)) { \
   luaVS_despecialize(L, GETARG_A(i)); }
 
+#define tab_check if (!ttistable(ra)) { \
+  luaVS_despecialize(L, GETARG_A(i)); }
+
 
 /*
 ** finish execution of an opcode interrupted by an yield
@@ -441,7 +511,8 @@ void luaV_finishOp (lua_State *L) {
   OpCode op = GET_OPCODE(i);
 #ifdef DEBUG_PRINT
     int _pc = pcRel(ci->u.l.savedpc-1, ci_func(ci)->p);
-    printf("%s <%s:%i>[%i] ", __func__, getstr(ci_func(ci)->p->source), getfuncline(ci_func(ci)->p, _pc), _pc);  
+    printf("%s <%s:%i>[%i] ", __func__, getstr(ci_func(ci)->p->source), 
+      getfuncline(ci_func(ci)->p, _pc), _pc);  
     printop(op); printf("\n");  
 #endif
   switch (luaP_opcode2group[op]) {  /* finish its execution */
@@ -453,6 +524,7 @@ void luaV_finishOp (lua_State *L) {
       switch (opout(op)) {
         case OpType_num: num_check break;
         case OpType_str: str_check break;
+        case OpType_tab: tab_check break;
         default: break;
       }
       break;
@@ -485,6 +557,7 @@ void luaV_finishOp (lua_State *L) {
       switch (opout(op)) {
         case OpType_num: num_check break;
         case OpType_str: str_check break;
+        case OpType_tab: tab_check break;
         default: break;
       }
       L->top = ci->top;  /* restore top */
@@ -563,7 +636,8 @@ void luaV_execute (lua_State *L) {
     #define getfuncline(f,pc) (((f)->lineinfo) ? (f)->lineinfo[pc] : 0)
     #define vmdispatch(x) { \
     int _pc = pcRel(ci->u.l.savedpc, ci_func(ci)->p); \
-    printf("<%s:%i>[%i] ", getstr(cl->p->source), getfuncline(cl->p, _pc), _pc); \
+    printf("<%s:%i>[%i] ", getstr(cl->p->source), \
+      getfuncline(cl->p, _pc), _pc); \
     printop(GET_OPCODE(i)); \
     printf(" %i %i %i",GETARG_A(i),GETARG_B(i),GETARG_C(i)); \
     printf("\n"); } \
@@ -619,38 +693,50 @@ l_dispatch_again:
       vmcasenb(MOVE,     ___, chk,)
       vmcasenb(MOVE,     num, chk,)
       vmcasenb(MOVE,     str, chk,)
+      vmcasenb(MOVE,     tab, chk,)
       vmcasenb(GETTABUP, ___, chk,)
       vmcasenb(GETTABUP, num, chk,)
       vmcasenb(GETTABUP, str, chk,)
+      vmcasenb(GETTABUP, tab, chk,)
       vmcasenb(GETTABLE, ___, chk,)
       vmcasenb(GETTABLE, num, chk,)
       vmcasenb(GETTABLE, str, chk,)
+      vmcasenb(GETTABLE, tab, chk,)
       vmcasenb(SETTABUP, ___, chk,)
       vmcasenb(SETTABLE, ___, chk,)
+      vmcasenb(SELF,     ___, chk,)
       vmcasenb(ADD,      ___, chk,)
       vmcasenb(ADD,      num, chk,)
       vmcasenb(ADD,      str, chk,)
+      vmcasenb(ADD,      tab, chk,)
       vmcasenb(SUB,      ___, chk,)
       vmcasenb(SUB,      num, chk,)
       vmcasenb(SUB,      str, chk,)
+      vmcasenb(SUB,      tab, chk,)
       vmcasenb(MUL,      ___, chk,)
       vmcasenb(MUL,      num, chk,)
       vmcasenb(MUL,      str, chk,)
+      vmcasenb(MUL,      tab, chk,)
       vmcasenb(DIV,      ___, chk,)
       vmcasenb(DIV,      num, chk,)
       vmcasenb(DIV,      str, chk,)
+      vmcasenb(DIV,      tab, chk,)
       vmcasenb(MOD,      ___, chk,)
       vmcasenb(MOD,      num, chk,)
       vmcasenb(MOD,      str, chk,)
+      vmcasenb(MOD,      tab, chk,)
       vmcasenb(POW,      ___, chk,)
       vmcasenb(POW,      num, chk,)
       vmcasenb(POW,      str, chk,)
+      vmcasenb(POW,      tab, chk,)
       vmcasenb(UNM,      ___, chk,)
       vmcasenb(UNM,      num, chk,)
       vmcasenb(UNM,      str, chk,)
+      vmcasenb(UNM,      tab, chk,)
       vmcasenb(LEN,      ___, chk,)
       vmcasenb(LEN,      num, chk,)
       vmcasenb(LEN,      str, chk,)
+      vmcasenb(LEN,      tab, chk,)
       vmcasenb(EQ,       ___, chk,)
       vmcasenb(LT,       ___, chk,)
       vmcasenb(LE,       ___, chk,
@@ -658,24 +744,27 @@ l_dispatch_again:
         i = *(ci->u.l.savedpc-1); /* stay on the same instruction */
         goto l_dispatch_again;
       )
-/* ------------------------------------------------------------------------ */
-      vmcase(MOVE,___,___,
-        setobjs2s(L, ra, RB(i));
+/* ------------------------------------------------------------------------ */      
+#define vmcase_move_raw(out, guard) \
+      vmcase(MOVE,out,___,          \
+        setobjs2s(L, ra, RB(i));    \
+        {guard;}                    \
       )
+
+      vmcase_move_raw(___, )
+      vmcase_move_raw(num, num_check)
+      vmcase_move_raw(str, str_check)
+      vmcase_move_raw(tab, tab_check)
+
       vmcase(MOVE,___,num,
         setnvalue(ra, nvalue(RB(i)));
       )    
       vmcase(MOVE,___,str, 
         setsvalue2s(L, ra, rawtsvalue(RB(i)));
       )
-      vmcase(MOVE,num,___, 
+      vmcase(MOVE,___,tab,
         setobjs2s(L, ra, RB(i));
-        num_check
-      )
-      vmcase(MOVE,str,___, 
-        setobjs2s(L, ra, RB(i));
-        str_check
-      )
+      )      
 /* ------------------------------------------------------------------------ */
       vmcase(LOADK,___,num,
         TValue *rb = k + GETARG_Bx(i);
@@ -720,38 +809,130 @@ l_dispatch_again:
       vmcase_getupval(___, )
       vmcase_getupval(num, num_check)
       vmcase_getupval(str, str_check)
+      vmcase_getupval(tab, tab_check)
 /* ------------------------------------------------------------------------ */
-#define _vmcase_gettab(op,b,out,in,guard)             \
-    vmcase(op,out,in,                             \
-      Protect(luaV_gettable_##in(L, b, RKC(i), ra));  \
-      {guard;}                                        \
-    )
-#define vmcase_gettab(op,b)                     \
-    _vmcase_gettab(op, b, ___, ___,)            \
-    _vmcase_gettab(op, b, num, ___, num_check)  \
-    _vmcase_gettab(op, b, str, ___, str_check)  \
-    _vmcase_gettab(op, b, ___, num,)            \
-    _vmcase_gettab(op, b, num, num, num_check)  \
-    _vmcase_gettab(op, b, str, num, str_check)  \
-    _vmcase_gettab(op, b, ___, str,)            \
-    _vmcase_gettab(op, b, num, str, num_check)  \
-    _vmcase_gettab(op, b, str, str, str_check)
+#define vmcase_gettab_raw(op,b,out,guard)         \
+      vmcase(op,out,___,                          \
+        Protect(luaV_gettable(L, b, RKC(i), ra)); \
+        {guard;}                                  \
+      )
+#define vmcase_gettable_spec(out,in,getfunc,guard)              \
+      vmcase(GETTABLE, out, in,                                 \
+        TValue *b = RB(i);                                      \
+        TValue *key = RKC(i);                                   \
+        Table *h = hvalue(b);                                   \
+        const TValue *res = getfunc(h, key);                    \
+        const TValue *tm;                                       \
+        if (!ttisnil(res) ||                                    \
+            (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { \
+          setobj2s(L, ra, res);                                 \
+        } else {                                                \
+          gettable_tm(L, b, tm, key, ra);                       \
+        }                                                       \
+        {guard;}                                                \
+      )
+#define vmcase_gettabup_spec(out, in, getfunc, guard)             \
+      vmcase(GETTABUP, out, in,                                   \
+        TValue *b = cl->upvals[GETARG_B(i)]->v;                   \
+        if (ttistable(b)) {                                       \
+          TValue *key = RKC(i);                                   \
+          Table *h = hvalue(b);                                   \
+          const TValue *res = getfunc(h, key);                    \
+          const TValue *tm;                                       \
+          if (!ttisnil(res) ||                                    \
+              (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { \
+            setobj2s(L, ra, res);                                 \
+          } else {                                                \
+            gettable_tm(L, b, tm, key, ra);                       \
+          }                                                       \
+        } else {                                                  \
+          Protect(luaV_gettable(L, b, RKC(i), ra));               \
+        }                                                         \
+        {guard;}                                                  \
+      )
+  
+  #define luaH_getstr_(h,key) luaH_getstr(h, rawtsvalue(key))
 
-    vmcase_gettab(GETTABLE, RB(i))
-    vmcase_gettab(GETTABUP, cl->upvals[GETARG_B(i)]->v)
+      vmcase_gettab_raw(GETTABLE, RB(i), ___, )
+      vmcase_gettab_raw(GETTABLE, RB(i), num, num_check)
+      vmcase_gettab_raw(GETTABLE, RB(i), str, str_check)
+      vmcase_gettab_raw(GETTABLE, RB(i), tab, tab_check)
+      vmcase_gettable_spec(___, num, luaH_getnum, )
+      vmcase_gettable_spec(num, num, luaH_getnum, num_check)
+      vmcase_gettable_spec(str, num, luaH_getnum, str_check)
+      vmcase_gettable_spec(tab, num, luaH_getnum, tab_check)
+      vmcase_gettable_spec(___, str, luaH_getstr_, )
+      vmcase_gettable_spec(num, str, luaH_getstr_, num_check)
+      vmcase_gettable_spec(str, str, luaH_getstr_, str_check)
+      vmcase_gettable_spec(tab, str, luaH_getstr_, tab_check)
+
+      vmcase_gettab_raw(GETTABUP, cl->upvals[GETARG_B(i)]->v, ___, )
+      vmcase_gettab_raw(GETTABUP, cl->upvals[GETARG_B(i)]->v, num, num_check)
+      vmcase_gettab_raw(GETTABUP, cl->upvals[GETARG_B(i)]->v, str, str_check)
+      vmcase_gettab_raw(GETTABUP, cl->upvals[GETARG_B(i)]->v, tab, tab_check)
+      vmcase_gettabup_spec(___, num, luaH_getnum, )
+      vmcase_gettabup_spec(num, num, luaH_getnum, num_check)
+      vmcase_gettabup_spec(str, num, luaH_getnum, str_check)
+      vmcase_gettabup_spec(tab, num, luaH_getnum, tab_check)
+      vmcase_gettabup_spec(___, str, luaH_getstr_, )
+      vmcase_gettabup_spec(num, str, luaH_getstr_, num_check)
+      vmcase_gettabup_spec(str, str, luaH_getstr_, str_check)
+      vmcase_gettabup_spec(tab, str, luaH_getstr_, tab_check)
 /* ------------------------------------------------------------------------ */
-#define _vmcase_settab(op,a,in)                             \
-      vmcase(op,___,in,                                 \
-        Protect(luaV_settable_##in(L, a, RKB(i), RKC(i)));  \
+#define vmcase_settabup_spec(in,getfunc)                                \
+      vmcase(SETTABUP, ___, in,                                         \
+        TValue *a = cl->upvals[GETARG_A(i)]->v;                         \
+        TValue *key = RKB(i);                                           \
+        StkId val = RKC(i);                                             \
+        if (ttistable(a)) {                                             \
+          Table *h = hvalue(a);                                         \
+          TValue *oldval = cast(TValue *, getfunc(h, key));             \
+          const TValue *tm;                                             \
+          if (!ttisnil(oldval) ||                                       \
+              ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL &&   \
+              (oldval != luaO_nilobject ||                              \
+              (oldval = luaH_newkey(L, h, key), 1)))) {                 \
+            setobj2t(L, oldval, val);                                   \
+            invalidateTMcache(h);                                       \
+            luaC_barrierback(L, obj2gco(h), val);                       \
+          } else {                                                      \
+            settable_tm(L, a, tm, key, val);                            \
+          }                                                             \
+        } else {                                                        \
+          Protect(luaV_settable(L, a, key, val));                       \
+        }                                                               \
       )
 
-#define vmcase_settab(op,a)       \
-      _vmcase_settab(op, a, ___)  \
-      _vmcase_settab(op, a, num)  \
-      _vmcase_settab(op, a, str)
+#define vmcase_settable_spec(in,getfunc)                              \
+      vmcase(SETTABLE, ___, in,                                       \
+        Table *h = hvalue(ra);                                        \
+        TValue *key = RKB(i);                                         \
+        StkId val = RKC(i);                                           \
+        TValue *oldval = cast(TValue *, getfunc(h, key));             \
+        const TValue *tm;                                             \
+        if (!ttisnil(oldval) ||                                       \
+            ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL &&   \
+            (oldval != luaO_nilobject ||                              \
+            (oldval = luaH_newkey(L, h, key), 1)))) {                 \
+          setobj2t(L, oldval, val);                                   \
+          invalidateTMcache(h);                                       \
+          luaC_barrierback(L, obj2gco(h), val);                       \
+        } else {                                                      \
+          settable_tm(L, ra, tm, key, val);                           \
+        }                                                             \
+      )
 
-      vmcase_settab(SETTABLE, ra)
-      vmcase_settab(SETTABUP, cl->upvals[GETARG_A(i)]->v)
+      vmcase(SETTABUP,___,___,
+        Protect(luaV_settable(L, cl->upvals[GETARG_A(i)]->v, RKB(i), RKC(i)));
+      )
+      vmcase_settabup_spec(num, luaH_getnum)
+      vmcase_settabup_spec(str, luaH_getstr_)
+
+      vmcase(SETTABLE,___,___,
+        Protect(luaV_settable(L, ra, RKB(i), RKC(i)));
+      )
+      vmcase_settable_spec(num, luaH_getnum)
+      vmcase_settable_spec(str, luaH_getstr_)
 /* ------------------------------------------------------------------------ */
 #define vmcase_setupval(out, guard)   \
       vmcase(SETUPVAL,out,___,    \
@@ -768,6 +949,9 @@ l_dispatch_again:
       )
       vmcase_setupval(str,
         if (!ttisstring(ra)) luaVS_despecialize_upval(L, cl->p, idx);
+      )
+      vmcase_setupval(tab,
+        if (!ttistable(ra)) luaVS_despecialize_upval(L, cl->p, idx);
       )
 /* ------------------------------------------------------------------------ */
       vmcase(NEWTABLE,___,___,
@@ -787,7 +971,21 @@ l_dispatch_again:
       vmcase(SELF,___,___,
         StkId rb = RB(i);
         setobjs2s(L, ra+1, rb);
-        Protect(luaV_gettable_str(L, rb, RKC(i), ra));
+        Protect(luaV_gettable(L, rb, RKC(i), ra));
+      )
+      vmcase(SELF,___,tab,
+        StkId rb = RB(i);
+        setobjs2s(L, ra+1, rb);
+        TValue *key = RKC(i);
+        Table *h = hvalue(rb);
+        const TValue *res = luaH_getstr(h, rawtsvalue(key));
+        const TValue *tm;
+        if (!ttisnil(res) ||
+            (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) {
+          setobj2s(L, ra, res);
+        } else {
+          gettable_tm(L, rb, tm, key, ra);
+        }
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_arith_raw(op,func,tm,out,guard)            \
@@ -812,6 +1010,7 @@ l_dispatch_again:
       vmcase_arith_raw(op, func, tm, ___, )           \
       vmcase_arith_raw(op, func, tm, num, num_check)  \
       vmcase_arith_raw(op, func, tm, str, str_check)  \
+      vmcase_arith_raw(op, func, tm, tab, tab_check)  \
       vmcase_arith_num(op, func)
 
       vmcase_arith(ADD, luai_numadd, TM_ADD)
@@ -831,6 +1030,7 @@ l_dispatch_again:
       vmcase_unm_raw(___, )
       vmcase_unm_raw(num, num_check)
       vmcase_unm_raw(str, str_check)
+      vmcase_unm_raw(tab, tab_check)
       vmcase(UNM,___,num,
         setnvalue(ra, luai_numunm(L, nvalue(RB(i))));
       )
@@ -840,7 +1040,7 @@ l_dispatch_again:
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_len_raw(out,guard)           \
-      vmcase(LEN,out,___,               \
+      vmcase(LEN,out,___,                   \
         Protect(luaV_objlen(L, ra, RB(i))); \
         {guard;}                            \
       )
@@ -848,12 +1048,21 @@ l_dispatch_again:
       vmcase_len_raw(___, )
       vmcase_len_raw(num, num_check)
       vmcase_len_raw(str, str_check)
+      vmcase_len_raw(tab, tab_check)
+
       vmcase(LEN,___,str,
         setnvalue(ra, cast_num(tsvalue(RB(i))->len));
       )
+      vmcase(LEN,___,tab,
+        TValue *rb = RB(i);
+        Table *h = hvalue(rb);
+        const TValue *tm = fasttm(L, h->metatable, TM_LEN);
+        if (tm) callTM(L, tm, rb, rb, ra, 1);
+        else setnvalue(ra, cast_num(luaH_getn(h)));
+      )
 /* ------------------------------------------------------------------------ */
 #define vmcase_concat(out,guard)                                            \
-      vmcase(CONCAT,out,___,                                            \
+      vmcase(CONCAT,out,___,                                                \
         int b = GETARG_B(i);                                                \
         int c = GETARG_C(i);                                                \
         StkId rb;                                                           \
@@ -873,13 +1082,14 @@ l_dispatch_again:
       vmcase_concat(___, )
       vmcase_concat(num, num_check)
       vmcase_concat(str, str_check)
+      vmcase_concat(tab, tab_check)
 /* ------------------------------------------------------------------------ */
       vmcase(JMP,___,___,
         dojump(ci, i, 0);
       )
 /* ------------------------------------------------------------------------ */
 #define vmcase_cmp(op,in,f,g)           \
-      vmcase(op,___,in,             \
+      vmcase(op,___,in,                 \
         int a = GETARG_A(i);            \
         TValue *rb = RKB(i);            \
         TValue *rc = RKC(i);            \
@@ -899,12 +1109,17 @@ l_dispatch_again:
       vmcase_cmp(EQ, ___, equalobj,)
       vmcase_cmp(EQ, num, luai_numeq_, nvalue)
       vmcase_cmp(EQ, str, eqstr_, rawtsvalue)
+      vmcase_cmp(EQ, tab, equaltab, )
+
       vmcase_cmp(LT, ___, luaV_lessthan,)
       vmcase_cmp(LT, num, luai_numlt, nvalue)
       vmcase_cmp(LT, str, l_strcmp_lt, rawtsvalue)
+      vmcase_cmp(LT, tab, lessthan_tm, )
+      
       vmcase_cmp(LE, ___, luaV_lessequal,)
       vmcase_cmp(LE, num, luai_numle, nvalue)
       vmcase_cmp(LE, str, l_strcmp_lt, rawtsvalue)
+      vmcase_cmp(LE, tab, lessequal_tm, )
 /* ------------------------------------------------------------------------ */
       vmcase(TEST,___,___,
         if (GETARG_C(i) ? l_isfalse(ra) : !l_isfalse(ra))
@@ -928,6 +1143,7 @@ l_dispatch_again:
       vmcase_testset(___, )
       vmcase_testset(num, num_check)
       vmcase_testset(str, str_check)
+      vmcase_testset(tab, tab_check)
 /* ------------------------------------------------------------------------ */
       vmcase(CALL,___,___,
         int b = GETARG_B(i);
@@ -1104,6 +1320,7 @@ l_dispatch_again:
       vmcase(CHKTYPE,___,___, /* nop */)
       vmcase(CHKTYPE,num,___, num_check)
       vmcase(CHKTYPE,str,___, str_check)
+      vmcase(CHKTYPE,tab,___, tab_check)
 /* ------------------------------------------------------------------------ */
       vmcase(EXTRAARG,___,___,
         lua_assert(0);
