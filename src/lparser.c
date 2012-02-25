@@ -706,18 +706,11 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   if (!ISK(rkval)) {
     addregload(fs, rkval);
   }
-  OpType in;
   if (!ISK(rkkey)) {
     addregload(fs, rkkey);
-    in = OpType_chk;
-  } else {
-    TValue *k = fs->f->k + INDEXK(rkkey);
-    if (ttisnumber(k))      in = OpType_num;
-    else if (ttisstring(k)) in = OpType_str;
-    else                    in = OpType_raw;
   } 
   addregload(fs, cc->t->u.info);
-  OpCode op = create_op_settab(OP_SETTABLE, in);
+  OpCode op = create_op_settab(OP_SETTABLE, OpType_chk);
   luaK_codeABC(fs, op, cc->t->u.info, rkkey, rkval);
   fs->freereg = reg;  /* free registers */
 }

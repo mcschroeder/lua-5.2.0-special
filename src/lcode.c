@@ -435,17 +435,10 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
         addregload(fs, e->u.ind.t);
         grp = OP_GETTABLE;
       }
-      OpType in;
       if (!ISK(e->u.ind.idx)) {
         addregload(fs, e->u.ind.idx);
-        in = OpType_chk;
-      } else {
-        TValue *k = fs->f->k + INDEXK(e->u.ind.idx);
-        if (ttisnumber(k))      in = OpType_num;
-        else if (ttisstring(k)) in = OpType_str;
-        else                    in = OpType_raw;
-      } 
-      OpCode op = create_op_gettab(grp, OpType_raw, in);
+      }
+      OpCode op = create_op_gettab(grp, OpType_raw, OpType_chk);
       e->u.info = luaK_codeABC(fs, op, 0, e->u.ind.t, e->u.ind.idx);
       e->k = VRELOCABLE;
       break;
@@ -632,17 +625,10 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
     }
     case VINDEXED: {
       OpGroup grp;
-      OpType in;
       int e = luaK_exp2RK(fs, ex);
       if (!ISK(e)) addregload(fs, e);
       if (!ISK(var->u.ind.idx)) {
         addregload(fs, var->u.ind.idx);
-        in = OpType_chk;        
-      } else {
-        TValue *k = fs->f->k + INDEXK(var->u.ind.idx);
-        if (ttisnumber(k))      in = OpType_num;
-        else if (ttisstring(k)) in = OpType_str;
-        else                    in = OpType_raw;
       }
       if (var->u.ind.vt == VLOCAL) {
         addregload(fs, var->u.ind.t);
@@ -650,7 +636,7 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
       } else {
         grp = OP_SETTABUP;
       }
-      OpCode op = create_op_settab(grp, in);
+      OpCode op = create_op_settab(grp, OpType_chk);
       luaK_codeABC(fs, op, var->u.ind.t, var->u.ind.idx, e);
       break;
     }
