@@ -392,6 +392,7 @@ void luaK_setreturns (FuncState *fs, expdesc *e, int nresults) {
   while (nresults-- > 0) {
     luaK_extendreginfo(fs, res, e->u.info, REGINFO_USE_STORE); /* result reg */
     lastreginfo(fs, res)->endpc = fs->pc; /* extend scope to include CHKTYPE */
+    lastreginfo(fs, res)->lastuse = REGINFO_USE_STORE;
     luaK_codeABC(fs, OP(CHKTYPE,___,___), res, 0, 0);
     res++;
   }
@@ -403,6 +404,7 @@ void luaK_setoneret (FuncState *fs, expdesc *e) {
     int res = GETARG_A(getcode(fs, e));
     luaK_extendreginfo(fs, res, e->u.info, REGINFO_USE_STORE); /* result reg */
     lastreginfo(fs, res)->endpc = fs->pc; /* extend scope to include CHKTYPE */
+    lastreginfo(fs, res)->lastuse = REGINFO_USE_STORE;
     luaK_codeABC(fs, OP(CHKTYPE,___,___), res, 0, 0);
     e->k = VNONRELOC;
     e->u.info = res;

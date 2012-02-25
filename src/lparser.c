@@ -1424,6 +1424,7 @@ static void forlist (LexState *ls, TString *indexname) {
   luaK_fixline(fs, line);
   for (res = base+3; res < base+nvars; res++) {
     lastreginfo(fs, res)->endpc = fs->pc;  /* var_1, ..., var_n */
+    lastreginfo(fs, res)->lastuse = REGINFO_USE_STORE;
     luaK_codeABC(fs, OP(CHKTYPE,___,___), res, 0, 0);
     luaK_fixline(fs, line);
   }  
