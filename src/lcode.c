@@ -259,7 +259,7 @@ static int codeextraarg (FuncState *fs, int a) {
 
 int luaK_codek (FuncState *fs, int reg, int k) {
   OpCode op;
-  TValue *rk = fs->f->k + INDEXK(k);
+  TValue *rk = fs->f->k + k;
   if (k <= MAXARG_Bx) {
     addregstore(fs, reg);
     if (ttisnumber(rk)) op = OP(LOADK, ___, num);
