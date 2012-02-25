@@ -367,6 +367,7 @@ void luaVS_specialize (lua_State *L) {
   int a = GETARG_A(*i);
   int b = GETARG_B(*i);
   int c = GETARG_C(*i);
+  TValue *ra = base+a;
   TValue *rb = ISK(b) ? p->k+INDEXK(b) : base+b;
   TValue *rc = ISK(c) ? p->k+INDEXK(c) : base+c;
   switch (op2grp(op)) {
@@ -386,9 +387,11 @@ void luaVS_specialize (lua_State *L) {
     }
     case OP_GETTABLE: {
       OpType type = OpType_raw;
-      if (ttisnumber(rc)) type = OpType_num;
-      else if (ttisstring(rc)) type = OpType_str;
-      if (type != OpType_raw) {
+      if (ttistable(rb)) {
+        if (ttisnumber(rc)) type = OpType_num;
+        else if (ttisstring(rc)) type = OpType_str;
+      }
+      if (type != OpType_raw) {        
         int status = 1;
         if (!ISK(c)) status = _add_guards(c, type);
         if (status) {
@@ -404,7 +407,7 @@ void luaVS_specialize (lua_State *L) {
       break;
     }
     case OP_GETTABUP: {
-      OpType type = OpType_raw;
+      OpType type = OpType_raw;      
       if (ttisnumber(rc)) type = OpType_num;
       else if (ttisstring(rc)) type = OpType_str;
       if (type != OpType_raw && !ISK(c) && !_add_guards(c, type))
@@ -413,7 +416,27 @@ void luaVS_specialize (lua_State *L) {
         SET_OPCODE(*i, set_in_gettab(op, type));
       break;
     }
-    case OP_SETTABLE: 
+    case OP_SETTABLE: {
+      OpType type = OpType_raw;
+      if (ttistable(ra)) {
+        if (ttisnumber(rb)) type = OpType_num;
+        else if (ttisstring(rb)) type = OpType_str;
+      }
+      if (type != OpType_raw) {
+        int status = 1;
+        if (!ISK(b)) status = _add_guards(b, type);
+        if (status) {
+          if (!_add_guards(a, OpType_tab)) {
+            if (!ISK(b)) _remove_guards(b);
+            status = 0;
+          }
+        }
+        if (!status)
+          type = OpType_raw;
+      }
+      SET_OPCODE(*i, set_in_settab(op, type));
+      break;
+    }
     case OP_SETTABUP: {
       OpType type = OpType_raw;
       if (ttisnumber(rb)) type = OpType_num;

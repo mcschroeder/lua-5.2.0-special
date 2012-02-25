@@ -328,8 +328,8 @@ _(SETUPVAL, str, ___) \
 _(SETUPVAL, tab, ___) \
 \
 _(SETTABLE, ___, ___) /* vanilla */ \
-_(SETTABLE, ___, num) /* fast number key */ \
-_(SETTABLE, ___, str) /* fast string key */ \
+_(SETTABLE, ___, num) /* table + fast number key */ \
+_(SETTABLE, ___, str) /* table + fast string key */ \
 _(SETTABLE, ___, chk) /* specialize */ \
 \
 _(NEWTABLE, ___, ___) \
