@@ -436,8 +436,9 @@ static void PrintDebug(const Proto* f)
  printf("upvalues (%d) for %p:\n",n,VOID(f));
  for (i=0; i<n; i++)
  {
-  printf("\t%d\t%s\t%d\t%d\n",
-  i,UPVALNAME(i),f->upvalues[i].instack,f->upvalues[i].idx);
+  printf("\t%d\t%s\t%d\t%d\t(%i,%i)\t%i\n",
+  i,UPVALNAME(i),f->upvalues[i].instack,f->upvalues[i].idx,
+  f->upvalues[i].startpc,f->upvalues[i].endpc,f->upvalues[i].regpc);
  }
  n=f->sizereginfos;
  printf("register info for %p:\n",VOID(f));

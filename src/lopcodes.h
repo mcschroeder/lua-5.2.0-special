@@ -145,7 +145,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 
 
 /*
-** invalid register that fits in 7 bits
+** invalid register that fits in 8 bits
 */
 #define NO_REG		MAXARG_A
 
@@ -282,19 +282,26 @@ _(GETUPVAL, ___, ___) /* vanilla */ \
 _(GETUPVAL, num, ___) /* type check (number) */ \
 _(GETUPVAL, str, ___) /* type check (string) */ \
 _(GETUPVAL, tab, ___) /* type check (table) */ \
+_(GETUPVAL, ___, num) /* get number upvalue */ \
+_(GETUPVAL, ___, str) /* get string upvalue */ \
+_(GETUPVAL, ___, tab) /* get table upvalue */ \
+_(GETUPVAL, ___, chk) /* specialize */ \
+_(GETUPVAL, num, chk) /* specialize + keep type check (number) */ \
+_(GETUPVAL, str, chk) /* specialize + keep type check (string) */ \
+_(GETUPVAL, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(GETTABUP, ___, ___) /* vanilla */ \
 _(GETTABUP, num, ___) /* type check (number) */ \
 _(GETTABUP, str, ___) /* type check (string) */ \
 _(GETTABUP, tab, ___) /* type check (table) */ \
-_(GETTABUP, ___, num) /* fast number key */ \
-_(GETTABUP, num, num) /* fast number key + type check (number) */ \
-_(GETTABUP, str, num) /* fast number key + type check (string) */ \
-_(GETTABUP, tab, num) /* fast number key + type check (table) */ \
-_(GETTABUP, ___, str) /* fast string key */ \
-_(GETTABUP, num, str) /* fast string key + type check (number) */ \
-_(GETTABUP, str, str) /* fast string key + type check (string) */ \
-_(GETTABUP, tab, str) /* fast string key + type check (table) */ \
+_(GETTABUP, ___, num) /* table + fast number key */ \
+_(GETTABUP, num, num) /* table + fast number key + type check (number) */ \
+_(GETTABUP, str, num) /* table + fast number key + type check (string) */ \
+_(GETTABUP, tab, num) /* table + fast number key + type check (table) */ \
+_(GETTABUP, ___, str) /* table + fast string key */ \
+_(GETTABUP, num, str) /* table + fast string key + type check (number) */ \
+_(GETTABUP, str, str) /* table + fast string key + type check (string) */ \
+_(GETTABUP, tab, str) /* table + fast string key + type check (table) */ \
 _(GETTABUP, ___, chk) /* specialize */ \
 _(GETTABUP, num, chk) /* specialize + keep type check (number) */ \
 _(GETTABUP, str, chk) /* specialize + keep type check (string) */ \
@@ -318,14 +325,21 @@ _(GETTABLE, str, chk) /* specialize + keep type check (string) */ \
 _(GETTABLE, tab, chk) /* specialize + keep type check (table) */ \
 \
 _(SETTABUP, ___, ___) /* vanilla */ \
-_(SETTABUP, ___, num) /* fast number key */ \
-_(SETTABUP, ___, str) /* fast string key */ \
+_(SETTABUP, ___, num) /* table + fast number key */ \
+_(SETTABUP, ___, str) /* table + fast string key */ \
 _(SETTABUP, ___, chk) /* specialize */ \
 \
 _(SETUPVAL, ___, ___) \
 _(SETUPVAL, num, ___) \
 _(SETUPVAL, str, ___) \
 _(SETUPVAL, tab, ___) \
+_(SETUPVAL, ___, num) \
+_(SETUPVAL, ___, str) \
+_(SETUPVAL, ___, tab) \
+_(SETUPVAL, ___, chk) \
+_(SETUPVAL, num, chk) \
+_(SETUPVAL, str, chk) \
+_(SETUPVAL, tab, chk) \
 \
 _(SETTABLE, ___, ___) /* vanilla */ \
 _(SETTABLE, ___, num) /* table + fast number key */ \
@@ -518,6 +532,8 @@ LUAI_DDEC OpType luaP_opin[NUM_OPCODES];
 LUAI_FUNC OpCode create_op_move (OpType in, OpType out);
 LUAI_FUNC OpCode create_op_settab (OpGroup grp, OpType in);
 LUAI_FUNC OpCode create_op_gettab (OpGroup grp, OpType out, OpType in);
+LUAI_FUNC OpCode create_op_setupval (OpType in, OpType out);
+LUAI_FUNC OpCode create_op_getupval (OpType in, OpType out);
 LUAI_FUNC OpCode create_op_self (OpType out);
 LUAI_FUNC OpCode create_op_arith (OpGroup grp, OpType in, OpType out);
 LUAI_FUNC OpCode create_op_unm (OpType out, OpType in);
@@ -525,9 +541,12 @@ LUAI_FUNC OpCode create_op_len (OpType out, OpType in);
 LUAI_FUNC OpCode create_op_cmp (OpGroup grp, OpType in);
 LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
 
+
 #define set_out_move(op,out) create_op_move(opin(op),out)
 #define set_out_gettab(op,out) \
   create_op_gettab(op2grp(op),out,opin(op))
+#define set_out_setupval(op,out) create_op_setupval(opin(op),out)
+#define set_out_getupval(op,out) create_op_getupval(opin(op),out)
 #define set_out_arith(op,out) \
   create_op_arith(op2grp(op),out,opin(op))
 #define set_out_unm(op,out) create_op_unm(out,opin(op))
@@ -538,6 +557,8 @@ LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
 #define set_in_settab(op,in) create_op_settab(op2grp(op),in)
 #define set_in_gettab(op,in) \
   create_op_gettab(op2grp(op),opout(op),in)
+#define set_in_setupval(op,in) create_op_setupval(in,opout(op))
+#define set_in_getupval(op,in) create_op_getupval(in,opout(op))
 #define set_in_arith(op,in) \
   create_op_arith(op2grp(op),opout(op),in)
 #define set_in_unm(op,in) create_op_unm(opout(op),in)

@@ -148,8 +148,9 @@ void reginfos_free (lua_State *L, Proto *f) {
       continue;
     reginfo = reginfo->next;
     while (reginfo != NULL) {
-      tmp = reginfo;
+      tmp = reginfo;      
       reginfo = reginfo->next;
+      tmp->next = NULL;
       luaM_free(L, tmp);
     }
   }

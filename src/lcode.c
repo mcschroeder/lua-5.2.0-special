@@ -424,18 +424,21 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
       break;
     }
     case VUPVAL: {
-      OpCode op = create_op_out(OP_GETUPVAL, OpType_raw);
-      e->u.info = luaK_codeABC(fs, op, 0, e->u.info, 0);
+      addupvalload(fs, e->u.info);
+      e->u.info = luaK_codeABC(fs, OP(GETUPVAL,___,chk), 0, e->u.info, 0);
       e->k = VRELOCABLE;
       break;
     }
     case VINDEXED: {
-      OpGroup grp = OP_GETTABUP; /* assume 't' is in an upvalue */      
+      OpGroup grp;
       freereg(fs, e->u.ind.idx);
       if (e->u.ind.vt == VLOCAL) {  /* 't' is in a register? */
         freereg(fs, e->u.ind.t);        
         addregload(fs, e->u.ind.t);
         grp = OP_GETTABLE;
+      } else {
+        addupvalload(fs, e->u.ind.t);
+        grp = OP_GETTABUP;
       }
       if (!ISK(e->u.ind.idx)) {
         addregload(fs, e->u.ind.idx);
@@ -621,8 +624,9 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
     }
     case VUPVAL: {
       int e = luaK_exp2anyreg(fs, ex);
-      addregload(fs, e);      
-      luaK_codeABC(fs, sOP(SETUPVAL), e, var->u.info, 0);
+      addregload(fs, e);
+      addupvalstore(fs, var->u.info);
+      luaK_codeABC(fs, OP(SETUPVAL,___,chk), e, var->u.info, 0);
       break;
     }
     case VINDEXED: {
@@ -636,6 +640,7 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
         addregload(fs, var->u.ind.t);
         grp = OP_SETTABLE;
       } else {
+        addupvalload(fs, var->u.ind.t);
         grp = OP_SETTABUP;
       }
       OpCode op = create_op_settab(grp, OpType_chk);
@@ -1145,4 +1150,15 @@ void reginfo_removelocal (FuncState *fs, int reg) {
   lua_assert(reginfo->state == REGINFO_STATE_LOCAL_OPEN);
   reginfo->state = REGINFO_STATE_LOCAL_CLOSED;
 }
+
+
+void addupvalload (FuncState *fs, int idx) {
+  lua_assert(idx < fs->f->sizeupvalues);
+  if (fs->f->upvalues[idx].startpc == -1) {
+    fs->f->upvalues[idx].startpc = fs->pc;
+  }
+  lua_assert(fs->f->upvalues[idx].endpc <= fs->pc);
+  fs->f->upvalues[idx].endpc = fs->pc;
+}
+
 

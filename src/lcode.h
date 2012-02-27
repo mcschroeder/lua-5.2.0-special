@@ -90,8 +90,10 @@ LUAI_FUNC void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use);
 
 LUAI_FUNC void reginfo_adjustlocal (FuncState *fs, int reg);
 LUAI_FUNC void reginfo_removelocal (FuncState *fs, int reg);
-LUAI_FUNC void reginfo_addupval (FuncState *fs, int reg, 
-                                 FuncState *use, int idx);
 LUAI_FUNC RegInfo *lastreginfo (FuncState *fs, int reg);
+
+
+LUAI_FUNC void addupvalload (FuncState *fs, int idx);
+#define addupvalstore(fs,idx) addupvalload(fs,idx)
 
 #endif

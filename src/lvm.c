@@ -694,6 +694,10 @@ l_dispatch_again:
       vmcasenb(MOVE,     num, chk,)
       vmcasenb(MOVE,     str, chk,)
       vmcasenb(MOVE,     tab, chk,)
+      vmcasenb(GETUPVAL, ___, chk,)
+      vmcasenb(GETUPVAL, num, chk,)
+      vmcasenb(GETUPVAL, str, chk,)
+      vmcasenb(GETUPVAL, tab, chk,)
       vmcasenb(GETTABUP, ___, chk,)
       vmcasenb(GETTABUP, num, chk,)
       vmcasenb(GETTABUP, str, chk,)
@@ -704,6 +708,10 @@ l_dispatch_again:
       vmcasenb(GETTABLE, tab, chk,)
       vmcasenb(SETTABUP, ___, chk,)
       vmcasenb(SETTABLE, ___, chk,)
+      vmcasenb(SETUPVAL, ___, chk,)
+      vmcasenb(SETUPVAL, num, chk,)
+      vmcasenb(SETUPVAL, str, chk,)
+      vmcasenb(SETUPVAL, tab, chk,)      
       vmcasenb(SELF,     ___, chk,)
       vmcasenb(ADD,      ___, chk,)
       vmcasenb(ADD,      num, chk,)
@@ -800,112 +808,74 @@ l_dispatch_again:
         } while (b--);
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_getupval(out,guard)                    \
-      vmcase(GETUPVAL,out,___,                    \
-        setobj2s(L, ra, cl->upvals[GETARG_B(i)]->v);  \
+#define vmcase_getupval_raw(out, guard)               \
+      vmcase(GETUPVAL,out,___,                        \
+        setobjs2s(L, ra, cl->upvals[GETARG_B(i)]->v); \
         {guard;}                                      \
       )
 
-      vmcase_getupval(___, )
-      vmcase_getupval(num, num_check)
-      vmcase_getupval(str, str_check)
-      vmcase_getupval(tab, tab_check)
+      vmcase_getupval_raw(___, )
+      vmcase_getupval_raw(num, num_check)
+      vmcase_getupval_raw(str, str_check)
+      vmcase_getupval_raw(tab, tab_check)
+
+      vmcase(GETUPVAL,___,num,
+        setnvalue(ra, nvalue(cl->upvals[GETARG_B(i)]->v));
+      )    
+      vmcase(GETUPVAL,___,str, 
+        setsvalue2s(L, ra, rawtsvalue(cl->upvals[GETARG_B(i)]->v));
+      )
+      vmcase(GETUPVAL,___,tab,
+        setobjs2s(L, ra, cl->upvals[GETARG_B(i)]->v);
+      ) 
 /* ------------------------------------------------------------------------ */
-#define vmcase_gettab_raw(op,b,out,guard)         \
+#define _vmcase_gettab_raw(op,b,out,guard)        \
       vmcase(op,out,___,                          \
         Protect(luaV_gettable(L, b, RKC(i), ra)); \
         {guard;}                                  \
       )
-#define vmcase_gettable_spec(out,in,getfunc,guard)              \
-      vmcase(GETTABLE, out, in,                                 \
-        TValue *b = RB(i);                                      \
+#define _vmcase_gettab_spec(op,b,out,in,getfunc,guard)          \
+      vmcase(op, out, in,                                       \
+        TValue *rb = b;                                         \
         TValue *key = RKC(i);                                   \
-        Table *h = hvalue(b);                                   \
+        Table *h = hvalue(rb);                                  \
         const TValue *res = getfunc(h, key);                    \
         const TValue *tm;                                       \
         if (!ttisnil(res) ||                                    \
             (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { \
           setobj2s(L, ra, res);                                 \
         } else {                                                \
-          Protect(gettable_tm(L, b, tm, key, ra));              \
+          Protect(gettable_tm(L, rb, tm, key, ra));             \
         }                                                       \
         {guard;}                                                \
       )
-#define vmcase_gettabup_spec(out, in, getfunc, guard)             \
-      vmcase(GETTABUP, out, in,                                   \
-        TValue *b = cl->upvals[GETARG_B(i)]->v;                   \
-        if (ttistable(b)) {                                       \
-          TValue *key = RKC(i);                                   \
-          Table *h = hvalue(b);                                   \
-          const TValue *res = getfunc(h, key);                    \
-          const TValue *tm;                                       \
-          if (!ttisnil(res) ||                                    \
-              (tm = fasttm(L, h->metatable, TM_INDEX)) == NULL) { \
-            setobj2s(L, ra, res);                                 \
-          } else {                                                \
-            Protect(gettable_tm(L, b, tm, key, ra));              \
-          }                                                       \
-        } else {                                                  \
-          Protect(luaV_gettable(L, b, RKC(i), ra));               \
-        }                                                         \
-        {guard;}                                                  \
-      )
   
-  #define luaH_getstr_(h,key) luaH_getstr(h, rawtsvalue(key))
+#define luaH_getstr_(h,key) luaH_getstr(h, rawtsvalue(key))
 
-      vmcase_gettab_raw(GETTABLE, RB(i), ___, )
-      vmcase_gettab_raw(GETTABLE, RB(i), num, num_check)
-      vmcase_gettab_raw(GETTABLE, RB(i), str, str_check)
-      vmcase_gettab_raw(GETTABLE, RB(i), tab, tab_check)
-      vmcase_gettable_spec(___, num, luaH_getnum, )
-      vmcase_gettable_spec(num, num, luaH_getnum, num_check)
-      vmcase_gettable_spec(str, num, luaH_getnum, str_check)
-      vmcase_gettable_spec(tab, num, luaH_getnum, tab_check)
-      vmcase_gettable_spec(___, str, luaH_getstr_, )
-      vmcase_gettable_spec(num, str, luaH_getstr_, num_check)
-      vmcase_gettable_spec(str, str, luaH_getstr_, str_check)
-      vmcase_gettable_spec(tab, str, luaH_getstr_, tab_check)
+#define vmcase_gettab(op,b)                                         \
+      _vmcase_gettab_raw(op, b, ___, )                              \
+      _vmcase_gettab_raw(op, b, num, num_check)                     \
+      _vmcase_gettab_raw(op, b, str, str_check)                     \
+      _vmcase_gettab_raw(op, b, tab, tab_check)                     \
+      _vmcase_gettab_spec(op, b, ___, num, luaH_getnum, )           \
+      _vmcase_gettab_spec(op, b, num, num, luaH_getnum, num_check)  \
+      _vmcase_gettab_spec(op, b, str, num, luaH_getnum, str_check)  \
+      _vmcase_gettab_spec(op, b, tab, num, luaH_getnum, tab_check)  \
+      _vmcase_gettab_spec(op, b, ___, str, luaH_getstr_, )          \
+      _vmcase_gettab_spec(op, b, num, str, luaH_getstr_, num_check) \
+      _vmcase_gettab_spec(op, b, str, str, luaH_getstr_, str_check) \
+      _vmcase_gettab_spec(op, b, tab, str, luaH_getstr_, tab_check)
 
-      vmcase_gettab_raw(GETTABUP, cl->upvals[GETARG_B(i)]->v, ___, )
-      vmcase_gettab_raw(GETTABUP, cl->upvals[GETARG_B(i)]->v, num, num_check)
-      vmcase_gettab_raw(GETTABUP, cl->upvals[GETARG_B(i)]->v, str, str_check)
-      vmcase_gettab_raw(GETTABUP, cl->upvals[GETARG_B(i)]->v, tab, tab_check)
-      vmcase_gettabup_spec(___, num, luaH_getnum, )
-      vmcase_gettabup_spec(num, num, luaH_getnum, num_check)
-      vmcase_gettabup_spec(str, num, luaH_getnum, str_check)
-      vmcase_gettabup_spec(tab, num, luaH_getnum, tab_check)
-      vmcase_gettabup_spec(___, str, luaH_getstr_, )
-      vmcase_gettabup_spec(num, str, luaH_getstr_, num_check)
-      vmcase_gettabup_spec(str, str, luaH_getstr_, str_check)
-      vmcase_gettabup_spec(tab, str, luaH_getstr_, tab_check)
+      vmcase_gettab(GETTABUP, cl->upvals[GETARG_B(i)]->v)
+      vmcase_gettab(GETTABLE, RB(i))
 /* ------------------------------------------------------------------------ */
-#define vmcase_settabup_spec(in,getfunc)                                \
-      vmcase(SETTABUP, ___, in,                                         \
-        TValue *a = cl->upvals[GETARG_A(i)]->v;                         \
-        TValue *key = RKB(i);                                           \
-        StkId val = RKC(i);                                             \
-        if (ttistable(a)) {                                             \
-          Table *h = hvalue(a);                                         \
-          TValue *oldval = cast(TValue *, getfunc(h, key));             \
-          const TValue *tm;                                             \
-          if (!ttisnil(oldval) ||                                       \
-              ((tm = fasttm(L, h->metatable, TM_NEWINDEX)) == NULL &&   \
-              (oldval != luaO_nilobject ||                              \
-              (oldval = luaH_newkey(L, h, key), 1)))) {                 \
-            setobj2t(L, oldval, val);                                   \
-            invalidateTMcache(h);                                       \
-            luaC_barrierback(L, obj2gco(h), val);                       \
-          } else {                                                      \
-            Protect(settable_tm(L, a, tm, key, val));                   \
-          }                                                             \
-        } else {                                                        \
-          Protect(luaV_settable(L, a, key, val));                       \
-        }                                                               \
+#define _vmcase_settab_raw(op,a)                      \
+      vmcase(op,___,___,                              \
+        Protect(luaV_settable(L, a, RKB(i), RKC(i))); \
       )
-
-#define vmcase_settable_spec(in,getfunc)                              \
-      vmcase(SETTABLE, ___, in,                                       \
-        Table *h = hvalue(ra);                                        \
+#define _vmcase_settab_spec(op,a,in,getfunc)                          \
+      vmcase(op, ___, in,                                             \
+        Table *h = hvalue(a);                                         \
         TValue *key = RKB(i);                                         \
         StkId val = RKC(i);                                           \
         TValue *oldval = cast(TValue *, getfunc(h, key));             \
@@ -918,41 +888,59 @@ l_dispatch_again:
           invalidateTMcache(h);                                       \
           luaC_barrierback(L, obj2gco(h), val);                       \
         } else {                                                      \
-          Protect(settable_tm(L, ra, tm, key, val));                  \
+          Protect(settable_tm(L, a, tm, key, val));                   \
         }                                                             \
       )
 
-      vmcase(SETTABUP,___,___,
-        Protect(luaV_settable(L, cl->upvals[GETARG_A(i)]->v, RKB(i), RKC(i)));
-      )
-      vmcase_settabup_spec(num, luaH_getnum)
-      vmcase_settabup_spec(str, luaH_getstr_)
+#define vmcase_settab(op,a)                         \
+      _vmcase_settab_raw(op, a)                     \
+      _vmcase_settab_spec(op, a, num, luaH_getnum)  \
+      _vmcase_settab_spec(op, a, str, luaH_getstr_)
 
-      vmcase(SETTABLE,___,___,
-        Protect(luaV_settable(L, ra, RKB(i), RKC(i)));
-      )
-      vmcase_settable_spec(num, luaH_getnum)
-      vmcase_settable_spec(str, luaH_getstr_)
+      vmcase_settab(SETTABUP, cl->upvals[GETARG_A(i)]->v)
+      vmcase_settab(SETTABLE, ra)
 /* ------------------------------------------------------------------------ */
-#define vmcase_setupval(out, guard)   \
-      vmcase(SETUPVAL,out,___,    \
-        int idx = GETARG_B(i);        \
-        UpVal *uv = cl->upvals[idx];  \
-        setobj(L, uv->v, ra);         \
-        luaC_barrier(L, uv, ra);      \
-        {guard;}                      \
+#define vmcase_setupval_raw(out, guard) \
+      vmcase(SETUPVAL,out,___,          \
+        int idx = GETARG_B(i);          \
+        UpVal *uv = cl->upvals[idx];    \
+        setobj(L, uv->v, ra);           \
+        luaC_barrier(L, uv, ra);        \
+        {guard;}                        \
       )
 
-      vmcase_setupval(___, )
-      vmcase_setupval(num,
-        if (!ttisnumber(ra)) luaVS_despecialize_upval(L, cl->p, idx);
+      vmcase_setupval_raw(___, )
+      vmcase_setupval_raw(num, 
+        if (!ttisnumber(uv->v)) 
+          luaVS_despecialize_upval_origin(L, cl->p, idx)
+      );
+      vmcase_setupval_raw(str, 
+        if (!ttisstring(uv->v)) 
+          luaVS_despecialize_upval_origin(L, cl->p, idx)
+      );
+      vmcase_setupval_raw(tab, 
+        if (!ttistable(uv->v)) 
+          luaVS_despecialize_upval_origin(L, cl->p, idx)
+      );
+
+      vmcase(SETUPVAL,___,num,
+        int idx = GETARG_B(i);
+        UpVal *uv = cl->upvals[idx];
+        setnvalue(uv->v, nvalue(ra));
+        luaC_barrier(L, uv, ra);
+      )    
+      vmcase(SETUPVAL,___,str, 
+        int idx = GETARG_B(i);
+        UpVal *uv = cl->upvals[idx];
+        setsvalue2s(L, uv->v, rawtsvalue(ra));
+        luaC_barrier(L, uv, ra);
       )
-      vmcase_setupval(str,
-        if (!ttisstring(ra)) luaVS_despecialize_upval(L, cl->p, idx);
-      )
-      vmcase_setupval(tab,
-        if (!ttistable(ra)) luaVS_despecialize_upval(L, cl->p, idx);
-      )
+      vmcase(SETUPVAL,___,tab,
+        int idx = GETARG_B(i);
+        UpVal *uv = cl->upvals[idx];
+        setobj(L, uv->v, ra);
+        luaC_barrier(L, uv, ra);
+      )  
 /* ------------------------------------------------------------------------ */
       vmcase(NEWTABLE,___,___,
         int b = GETARG_B(i);

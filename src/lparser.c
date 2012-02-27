@@ -236,17 +236,6 @@ static int searchupvalue (FuncState *fs, TString *name) {
 }
 
 
-static void getupvalorigin (FuncState **fs, int *idx) {
-  Upvaldesc desc = (*fs)->f->upvalues[*idx];
-  for (;;) {    
-    *fs = (*fs)->prev;
-    if (*fs == NULL || desc.instack) break;
-    else desc = (*fs)->f->upvalues[desc.idx];
-  }
-  *idx = desc.idx;
-}
-
-
 static int newupvalue (FuncState *fs, TString *name, expdesc *v) {
   Proto *f = fs->f;
   int oldsize = f->sizeupvalues;
@@ -256,15 +245,15 @@ static int newupvalue (FuncState *fs, TString *name, expdesc *v) {
   while (oldsize < f->sizeupvalues) f->upvalues[oldsize++].name = NULL;
   f->upvalues[fs->nups].instack = (v->k == VLOCAL);
   f->upvalues[fs->nups].idx = cast_byte(v->u.info);
-  f->upvalues[fs->nups].name = name;
+  f->upvalues[fs->nups].name = name;  
   f->upvalues[fs->nups].startpc = -1;
+  f->upvalues[fs->nups].endpc = -1;
+  f->upvalues[fs->nups].regpc = -1;
   luaC_objbarrier(fs->ls->L, f, name);
 
-  FuncState *ofs = fs;
-  int idx = fs->nups;
-  getupvalorigin(&ofs, &idx);
-  if (ofs)
-    f->upvalues[fs->nups].startpc = lastreginfo(ofs, idx)->startpc;
+  if (v->k == VLOCAL && fs->prev != NULL) {
+    f->upvalues[fs->nups].regpc = lastreginfo(fs->prev, v->u.info)->startpc;
+  }
 
   return fs->nups++;
 }
@@ -1184,7 +1173,13 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
   }
   if (conflict) {
     /* copy upvalue/local value to a temporary (in position 'extra') */
-    OpCode op = (v->k == VLOCAL) ? OP(MOVE,___,chk) : OP(GETUPVAL,___,___);
+    OpCode op;
+    if (v->k == VLOCAL) {
+      op = OP(MOVE,___,chk);
+    } else {
+      op = OP(GETUPVAL,___,chk);
+      addupvalload(fs, v->u.info);
+    }
     addregstore(fs, extra);
     luaK_codeABC(fs, op, extra, v->u.info, 0);
     luaK_reserveregs(fs, 1);

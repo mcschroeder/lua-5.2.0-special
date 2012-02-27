@@ -139,6 +139,8 @@ static void LoadUpvalues(LoadState* S, Proto* f)
   f->upvalues[i].instack=LoadByte(S);
   f->upvalues[i].idx=LoadByte(S);
   f->upvalues[i].startpc=LoadNumber(S);
+  f->upvalues[i].endpc=LoadNumber(S);
+  f->upvalues[i].regpc=LoadNumber(S);
  }
 }
 

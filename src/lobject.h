@@ -443,7 +443,9 @@ typedef struct Upvaldesc {
   TString *name;  /* upvalue name (for debug information) */
   lu_byte instack;  /* whether it is in stack */
   lu_byte idx;  /* index of upvalue (in stack or in outer function's list) */  
-  int startpc;  /* pc at which upvalue is first declared (if in stack) */
+  int startpc;  /* first use of upvalue */
+  int endpc;  /* last use of upvalue */
+  int regpc;  /* if in stack, startpc of the relevant reginfo */
 } Upvaldesc;
 
 

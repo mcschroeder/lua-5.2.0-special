@@ -97,6 +97,55 @@ OpCode create_op_move (OpType in, OpType out) {
   return op;
 }
 
+OpCode create_op_setupval (OpType in, OpType out) {  
+  OpCode op = grp2op(OP_SETUPVAL);
+  switch (in) {
+    case OpType_raw: op += 0; break;
+    case OpType_num: op += 4; break;
+    case OpType_str: op += 5; break;
+    case OpType_tab: op += 6; break;
+    case OpType_chk: op += 7; break;
+    default: lua_assert(0); break;
+  }
+  if (in == OpType_raw || in == OpType_chk) {
+    switch (out) {
+      case OpType_raw: op += 0; break;
+      case OpType_num: op += 1; break;
+      case OpType_str: op += 2; break;
+      case OpType_tab: op += 3; break;
+      default: lua_assert(0); break;
+    }
+  } else {
+    lua_assert(out == OpType_raw);
+  }
+  return op;
+}
+
+OpCode create_op_getupval (OpType in, OpType out) {  
+  OpCode op = grp2op(OP_GETUPVAL);
+  switch (in) {
+    case OpType_raw: op += 0; break;
+    case OpType_num: op += 4; break;
+    case OpType_str: op += 5; break;
+    case OpType_tab: op += 6; break;
+    case OpType_chk: op += 7; break;
+    default: lua_assert(0); break;
+  }
+  if (in == OpType_raw || in == OpType_chk) {
+    switch (out) {
+      case OpType_raw: op += 0; break;
+      case OpType_num: op += 1; break;
+      case OpType_str: op += 2; break;
+      case OpType_tab: op += 3; break;
+      default: lua_assert(0); break;
+    }
+  } else {
+    lua_assert(out == OpType_raw);
+  }
+  return op;
+}
+
+
 OpCode create_op_settab (OpGroup grp, OpType in) {
   lua_assert(grp == OP_SETTABLE || grp == OP_SETTABUP);
   OpCode op = grp2op(grp);
