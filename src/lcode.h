@@ -80,17 +80,13 @@ LUAI_FUNC void luaK_posfix (FuncState *fs, BinOpr op, expdesc *v1,
                             expdesc *v2, int line);
 LUAI_FUNC void luaK_setlist (FuncState *fs, int base, int nelems, int tostore);
 
+
 LUAI_FUNC void luaK_extendreginfo (FuncState *fs, int reg, int pc, int use);
-
-#define addregload(fs,reg) \
-        luaK_extendreginfo((fs), (reg), (fs)->pc, REGINFO_USE_LOAD)
-
-#define addregstore(fs,reg) \
-        luaK_extendreginfo((fs), (reg), (fs)->pc, REGINFO_USE_STORE)
-
-LUAI_FUNC void reginfo_adjustlocal (FuncState *fs, int reg);
-LUAI_FUNC void reginfo_removelocal (FuncState *fs, int reg);
-LUAI_FUNC RegInfo *lastreginfo (FuncState *fs, int reg);
+#define luaK_addregload(fs,reg) luaK_extendreginfo(fs,reg,(fs)->pc,RI_LOAD)
+#define luaK_addregstore(fs,reg) luaK_extendreginfo(fs,reg,(fs)->pc,RI_STORE)
+LUAI_FUNC RegInfo *luaK_lastreginfo (FuncState *fs, int reg);
+LUAI_FUNC void luaK_adjustlocalreginfo (FuncState *fs, int reg);
+LUAI_FUNC void luaK_removelocalreginfo (FuncState *fs, int reg);
 
 
 LUAI_FUNC void addupvalload (FuncState *fs, int idx);

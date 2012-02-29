@@ -460,24 +460,28 @@ typedef struct LocVar {
 } LocVar;
 
 
+/*
+** Register scope information
+*/
 typedef struct RegInfo {  
   int startpc;
   int endpc;
   struct RegInfo *next;
-  lu_byte state;  
-  // lu_byte nspec; /* how often this register has been specialized */
+  lu_byte state;
   lu_byte firstuse; /* usage bitmask at startpc */
   lu_byte lastuse; /* usage bitmask at endpc */
 } RegInfo;
 
-#define REGINFO_STATE_TEMP         0
-#define REGINFO_STATE_LOCAL_OPEN   1
-#define REGINFO_STATE_LOCAL_CLOSED 2
-#define REGINFO_STATE_UNUSED       3
-#define REGINFO_STATE_LOCAL_UNUSED 4
+/* reginfo states */
+#define RI_UNUSED       0
+#define RI_TEMP         1
+#define RI_LOCAL_UNUSED 2
+#define RI_LOCAL_OPEN   3
+#define RI_LOCAL_CLOSED 4
 
-#define REGINFO_USE_LOAD  1
-#define REGINFO_USE_STORE 2
+/* reginfo usage bitmask fields */
+#define RI_LOAD  1
+#define RI_STORE 2
 
 
 

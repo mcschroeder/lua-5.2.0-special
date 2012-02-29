@@ -212,7 +212,7 @@ static void adjustlocalvars (LexState *ls, int nvars) {
   fs->nactvar = cast_byte(fs->nactvar + nvars);
   for (; nvars; nvars--) {
     getlocvar(fs, fs->nactvar - nvars)->startpc = fs->pc;
-    reginfo_adjustlocal(fs, fs->nactvar - nvars);
+    luaK_adjustlocalreginfo(fs, fs->nactvar - nvars);
   }
 }
 
@@ -221,7 +221,7 @@ static void removevars (FuncState *fs, int tolevel) {
   fs->ls->dyd->actvar.n -= (fs->nactvar - tolevel);
   while (fs->nactvar > tolevel) {    
     getlocvar(fs, --fs->nactvar)->endpc = fs->pc;    
-    reginfo_removelocal(fs, fs->nactvar);
+    luaK_removelocalreginfo(fs, fs->nactvar);
   }
 }
 
@@ -252,7 +252,8 @@ static int newupvalue (FuncState *fs, TString *name, expdesc *v) {
   luaC_objbarrier(fs->ls->L, f, name);
 
   if (v->k == VLOCAL && fs->prev != NULL) {
-    f->upvalues[fs->nups].regpc = lastreginfo(fs->prev, v->u.info)->startpc;
+    RegInfo *reginfo = luaK_lastreginfo(fs->prev, v->u.info);
+    f->upvalues[fs->nups].regpc = reginfo->startpc;
   }
 
   return fs->nups++;
@@ -692,12 +693,12 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   expr(ls, &val);
   int rkval = luaK_exp2RK(fs, &val);
   if (!ISK(rkval)) {
-    addregload(fs, rkval);
+    luaK_addregload(fs, rkval);
   }
   if (!ISK(rkkey)) {
-    addregload(fs, rkkey);
+    luaK_addregload(fs, rkkey);
   } 
-  addregload(fs, cc->t->u.info);
+  luaK_addregload(fs, cc->t->u.info);
   luaK_codeABC(fs, OP(SETTABLE,___,chk), cc->t->u.info, rkkey, rkval);
   fs->freereg = reg;  /* free registers */
 }
@@ -818,7 +819,7 @@ static void parlist (LexState *ls) {
 
   int arg;
   for (arg = 0; arg < nparams; arg++) {
-    addregstore(fs, arg);
+    luaK_addregstore(fs, arg);
     luaK_codeABC(fs, OP(CHKTYPE,___,___), arg, 0, 0);
   }
 
@@ -900,8 +901,8 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
   }  
   int ra;
   for (ra = base+1; ra <= base+nparams; ra++)
-    addregload(fs, ra); /* function args */
-  addregload(fs, base); /* the closure */
+    luaK_addregload(fs, ra); /* function args */
+  luaK_addregload(fs, base); /* the closure */
   init_exp(f, VCALL, luaK_codeABC(fs, sOP(CALL), base, nparams+1, 2));  
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
@@ -1177,7 +1178,7 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
       op = OP(GETUPVAL,___,chk);
       addupvalload(fs, v->u.info);
     }
-    addregstore(fs, extra);
+    luaK_addregstore(fs, extra);
     luaK_codeABC(fs, op, extra, v->u.info, 0);
     luaK_reserveregs(fs, 1);
   }
@@ -1350,11 +1351,11 @@ static void fornum (LexState *ls, TString *varname, int line) {
   int prep, endfor;
   adjustlocalvars(ls, 3);  /* control variables */
   checknext(ls, TK_DO);
-  addregload(fs, base); /* initial index */
-  addregload(fs, base+1); /* limit */
-  addregload(fs, base+2); /* step */
-  addregstore(fs, base); /* internal index */
-  addregstore(fs, base+3); /* external index */
+  luaK_addregload(fs, base); /* initial index */
+  luaK_addregload(fs, base+1); /* limit */
+  luaK_addregload(fs, base+2); /* step */
+  luaK_addregstore(fs, base); /* internal index */
+  luaK_addregstore(fs, base+3); /* external index */
   prep = luaK_codeAsBx(fs, sOP(FORPREP), base, NO_JUMP);
   enterblock(fs, &bl, 0);  /* scope for declared variables */
   adjustlocalvars(ls, 1);
@@ -1362,11 +1363,11 @@ static void fornum (LexState *ls, TString *varname, int line) {
   block(ls);
   leaveblock(fs);  /* end of scope for declared variables */
   luaK_patchtohere(fs, prep);
-  addregload(fs, base+2); /* step */
-  addregload(fs, base+1); /* limit */
-  addregstore(fs, base); /* internal index */
-  lastreginfo(fs, base+3)->endpc = fs->pc; /* external index */
-  lastreginfo(fs, base+3)->lastuse |= REGINFO_USE_STORE;
+  luaK_addregload(fs, base+2); /* step */
+  luaK_addregload(fs, base+1); /* limit */
+  luaK_addregstore(fs, base); /* internal index */
+  luaK_lastreginfo(fs, base+3)->endpc = fs->pc; /* external index */
+  luaK_lastreginfo(fs, base+3)->lastuse |= RI_STORE;
   endfor = luaK_codeAsBx(fs, sOP(FORLOOP), base, NO_JUMP);
   luaK_patchlist(fs, endfor, prep + 1);
   luaK_fixline(fs, line);
@@ -1401,7 +1402,7 @@ static void forlist (LexState *ls, TString *indexname) {
   adjustlocalvars(ls, 3);  /* control variables */
   checknext(ls, TK_DO);
   for (res = base+3; res < base+nvars; res++) 
-    addregstore(fs, res);  /* var_1, ..., var_n */
+    luaK_addregstore(fs, res);  /* var_1, ..., var_n */
   prep = luaK_jump(fs);
   enterblock(fs, &bl, 0);  /* scope for declared variables */
   adjustlocalvars(ls, nvars - 3);
@@ -1409,19 +1410,19 @@ static void forlist (LexState *ls, TString *indexname) {
   block(ls);
   leaveblock(fs);  /* end of scope for declared variables */
   luaK_patchtohere(fs, prep);
-  addregload(fs, base + 2);  /* control var */
-  addregload(fs, base + 1);  /* state */
-  addregload(fs, base);  /* func */
+  luaK_addregload(fs, base + 2);  /* control var */
+  luaK_addregload(fs, base + 1);  /* state */
+  luaK_addregload(fs, base);  /* func */
   luaK_codeABC(fs, sOP(TFORCALL), base, 0, nvars - 3);
   luaK_fixline(fs, line);
   for (res = base+3; res < base+nvars; res++) {
-    lastreginfo(fs, res)->endpc = fs->pc;  /* var_1, ..., var_n */
-    lastreginfo(fs, res)->lastuse = REGINFO_USE_STORE;
+    luaK_lastreginfo(fs, res)->endpc = fs->pc;  /* var_1, ..., var_n */
+    luaK_lastreginfo(fs, res)->lastuse = RI_STORE;
     luaK_codeABC(fs, OP(CHKTYPE,___,___), res, 0, 0);
     luaK_fixline(fs, line);
   }  
-  lastreginfo(fs, base + 3)->endpc = fs->pc;
-  addregstore(fs, base + 2);  /* control var */
+  luaK_lastreginfo(fs, base + 3)->endpc = fs->pc;
+  luaK_addregstore(fs, base + 2);  /* control var */
   endfor = luaK_codeAsBx(fs, sOP(TFORLOOP), base + 2, NO_JUMP);
   luaK_patchlist(fs, endfor, prep + 1);
   luaK_fixline(fs, line);

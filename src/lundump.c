@@ -177,7 +177,6 @@ static void LoadReginfos(LoadState* S, Proto* f)
     reginfo->startpc = LoadNumber(S);
     reginfo->endpc = LoadNumber(S);
     reginfo->state = LoadChar(S);
-    // reginfo->nspec = LoadChar(S);
     reginfo->firstuse = LoadChar(S);
     reginfo->lastuse = LoadChar(S);
     reginfo->next = NULL;
@@ -189,7 +188,6 @@ static void LoadReginfos(LoadState* S, Proto* f)
       reginfo->startpc = startpc;
       reginfo->endpc = LoadNumber(S);
       reginfo->state = LoadChar(S);
-      // reginfo->nspec = LoadChar(S);
       reginfo->firstuse = LoadChar(S);
       reginfo->lastuse = LoadChar(S);      
       reginfo->next = NULL;

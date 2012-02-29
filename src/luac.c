@@ -379,10 +379,6 @@ static void PrintCode(const Proto* f)
 #define SS(x) ((x==1)?"":"s")
 #define S(x)  (int)(x),SS(x)
 
-static const char * const reginfostates[5] = {
-  "temp", "local open", "local closed", "unused", "local unused"
-};
-
 static void PrintHeader(const Proto* f)
 {
  const char* s=f->source ? getstr(f->source) : "=?";
@@ -403,15 +399,19 @@ static void PrintHeader(const Proto* f)
   S(f->sizelocvars),S(f->sizek),S(f->sizep));
 }
 
+static const char * const reginfostates[5] = {
+  "unused", "temp", "local unused", "local open", "local closed"
+};
+
 static void PrintRegInfo(RegInfo *r) {
   printf("(%d,%d)\t%s\t(%s%s,%s%s)",
           r->startpc,
           r->endpc,
           reginfostates[r->state],
-          r->firstuse & REGINFO_USE_STORE ? "S" : "",
-          r->firstuse & REGINFO_USE_LOAD ? "L" : "",
-          r->lastuse & REGINFO_USE_STORE ? "S" : "",
-          r->lastuse & REGINFO_USE_LOAD ? "L" : "");
+          r->firstuse & RI_STORE ? "S" : "",
+          r->firstuse & RI_LOAD ? "L" : "",
+          r->lastuse & RI_STORE ? "S" : "",
+          r->lastuse & RI_LOAD ? "L" : "");
 }
 
 static void PrintDebug(const Proto* f)
@@ -445,7 +445,7 @@ static void PrintDebug(const Proto* f)
  for (i=0; i<n; i++)
  {
   RegInfo *reginfo = &(f->reginfos[i]);
-  if (reginfo->state == REGINFO_STATE_UNUSED) {
+  if (reginfo->state == RI_UNUSED) {
     printf("\t%d\tunused\n", i);
     continue;
   }

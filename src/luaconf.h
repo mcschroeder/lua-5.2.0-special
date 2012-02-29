@@ -10,7 +10,7 @@
 
 #include <limits.h>
 #include <stddef.h>
-#include <assert.h> // TODO: remove
+#include <assert.h>  /* TODO: remove if not needed */
 
 
 /*

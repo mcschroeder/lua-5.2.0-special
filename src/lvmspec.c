@@ -18,8 +18,8 @@ static RegInfo *findreginfo (Proto *p, int pc, int reg, int use) {
   lua_assert(reg < p->sizereginfos);
   RegInfo *reginfo = &(p->reginfos[reg]);
   while (reginfo) {
-    if (reginfo->state == REGINFO_STATE_UNUSED) return NULL;
-    if (reginfo->state == REGINFO_STATE_LOCAL_UNUSED) return NULL;
+    if (reginfo->state == RI_UNUSED) return NULL;
+    if (reginfo->state == RI_LOCAL_UNUSED) return NULL;
     if (pc > reginfo->startpc && pc < reginfo->endpc) break;
     if (pc == reginfo->startpc && (reginfo->firstuse & use) != 0) break;
     if (pc == reginfo->endpc && (reginfo->lastuse & use) != 0) break;
@@ -84,9 +84,9 @@ static void remove_guard (Proto *p, int pc, int reg) {
 
 static void remove_guards (Proto *p, int reg, RegInfo *reginfo) {
   int pc = reginfo->startpc;
-  if (reginfo->firstuse & REGINFO_USE_STORE) remove_guard(p, pc, reg);
-  while (++pc < reginfo->endpc)              remove_guard(p, pc, reg);
-  if (reginfo->lastuse & REGINFO_USE_STORE)  remove_guard(p, pc, reg);
+  if (reginfo->firstuse & RI_STORE) remove_guard(p, pc, reg);
+  while (++pc < reginfo->endpc)     remove_guard(p, pc, reg);
+  if (reginfo->lastuse & RI_STORE)  remove_guard(p, pc, reg);
 
   /* remove guards from upvalue uses of reg in enclosed functions */
   int n = p->sizep;
@@ -206,13 +206,13 @@ static int add_guards (Proto *p, int reg, RegInfo *reginfo, OpType guard) {
   lua_assert(guard != OpType_raw && guard != OpType_chk);
 
   int pc = reginfo->startpc;
-  if (reginfo->firstuse & REGINFO_USE_STORE)
+  if (reginfo->firstuse & RI_STORE)
     if (!add_guard(p, pc, reg, guard)) goto fail;
 
   while (++pc < reginfo->endpc)
     if (!add_guard(p, pc, reg, guard)) goto fail;
   
-  if (reginfo->lastuse & REGINFO_USE_STORE)
+  if (reginfo->lastuse & RI_STORE)
     if (!add_guard(p, pc, reg, guard)) goto fail;
 
   /* try to add guards to all upvalue uses of reg in enclosed functions */
@@ -237,8 +237,7 @@ static int add_guards_upvalue_origin (Proto *p, Upvaldesc desc, OpType guard) {
   }
   if (p == NULL) return 1;
   /* find the right reginfo for the local */
-  RegInfo *reginfo = findreginfo(p, desc.regpc, desc.idx, 
-                                 REGINFO_USE_STORE | REGINFO_USE_LOAD);
+  RegInfo *reginfo = findreginfo(p, desc.regpc, desc.idx, RI_STORE);
   if (reginfo == NULL) return 1;
   return add_guards(p, desc.idx, reginfo, guard);
 }
@@ -262,7 +261,7 @@ static void despecialize (lua_State *L, Proto *p, int pc, int reg,
     case OP_MOVE: case OP_SELF: case OP_UNM: case OP_LEN:
       if (b == reg) {
         MODIFY_OPCODE_SPEC(*i, OpType_raw);
-        RegInfo *outreg = findreginfo(p, pc, a, REGINFO_USE_STORE);
+        RegInfo *outreg = findreginfo(p, pc, a, RI_STORE);
         despecialize_all(L, p, a, outreg, visited);
       }
       break;
@@ -300,7 +299,7 @@ static void despecialize (lua_State *L, Proto *p, int pc, int reg,
     case OP_DIV: case OP_MOD: case OP_POW:
       if ((!ISK(b) && b == reg) || (!ISK(c) && c == reg)) {
         MODIFY_OPCODE_SPEC(*i, OpType_raw);
-        RegInfo *outreg = findreginfo(p, pc, a, REGINFO_USE_STORE);
+        RegInfo *outreg = findreginfo(p, pc, a, RI_STORE);
         despecialize_all(L, p, a, outreg, visited);
       }
       break;
@@ -327,7 +326,7 @@ static void despecialize_upvalue (lua_State *L, Proto *p, int pc, int idx,
     case OP_GETUPVAL:
       if (b == idx) {
         MODIFY_OPCODE_SPEC(*i, OpType_raw);
-        RegInfo *outreg = findreginfo(p, pc, a, REGINFO_USE_STORE);
+        RegInfo *outreg = findreginfo(p, pc, a, RI_STORE);
         despecialize_all(L, p, a, outreg, visited);
       }
       break;
@@ -357,12 +356,9 @@ static void despecialize_all (lua_State *L, Proto *p, int reg,
   visited[reg] = 1;
 
   int pc = reginfo->startpc;
-  if (reginfo->firstuse & REGINFO_USE_LOAD) 
-    despecialize(L, p, pc, reg, visited);
-  while (++pc < reginfo->endpc)             
-    despecialize(L, p, pc, reg, visited);
-  if (reginfo->lastuse & REGINFO_USE_LOAD)  
-    despecialize(L, p, pc, reg, visited);
+  if (reginfo->firstuse & RI_LOAD)  despecialize(L, p, pc, reg, visited);
+  while (++pc < reginfo->endpc)     despecialize(L, p, pc, reg, visited);
+  if (reginfo->lastuse & RI_LOAD)   despecialize(L, p, pc, reg, visited);
 
   remove_guards(p, reg, reginfo);
 }
@@ -398,7 +394,7 @@ static void despecialize_all_upvalues (lua_State *L, Proto *p, int outer_idx) {
 
 
 void luaVS_despecialize (lua_State *L, Proto *p, int pc, int reg) {
-  RegInfo *reginfo = findreginfo(p, pc, reg, REGINFO_USE_STORE);
+  RegInfo *reginfo = findreginfo(p, pc, reg, RI_STORE);
   lua_assert(reginfo != NULL);
   
   int n = p->sizereginfos;
@@ -436,10 +432,10 @@ void luaVS_despecialize_upvalue_origin (lua_State *L, Proto *p, int idx) {
   (add_guards_upvalue_origin(p, p->upvalues[idx], t))
 
 #define _add_guards(r,t) \
-  (add_guards(p, r, findreginfo(p, pc, r, REGINFO_USE_LOAD), t))
+  (add_guards(p, r, findreginfo(p, pc, r, RI_LOAD), t))
 
 #define _remove_guards(r) \
-  (remove_guards(p, r, findreginfo(p, pc, r, REGINFO_USE_LOAD)))
+  (remove_guards(p, r, findreginfo(p, pc, r, RI_LOAD)))
 
 void luaVS_specialize (lua_State *L, Proto *p, int pc) {
   CallInfo *ci = L->ci;
