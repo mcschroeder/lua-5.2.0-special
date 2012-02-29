@@ -491,12 +491,25 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
 }
 
 
+/* type guarding macros */
+
+#define ____check(ra) /* no-op */
+
+#define num_check(ra) if (!ttisnumber(ra)) { \
+  luaVS_despecialize(L, GETARG_A(i)); }
+
+#define str_check(ra) if (!ttisstring(ra)) { \
+  luaVS_despecialize(L, GETARG_A(i)); }
+
+#define tab_check(ra) if (!ttistable(ra)) { \
+  luaVS_despecialize(L, GETARG_A(i)); }
+
+
 /*
 ** finish execution of an opcode interrupted by an yield
 */
 void luaV_finishOp (lua_State *L) {
   CallInfo *ci = L->ci;
-  LClosure *cl = clLvalue(ci->func);
   StkId base = ci->u.l.base;
   Instruction i = *(ci->u.l.savedpc - 1);  /* interrupted instruction */
   OpCode op = GET_OPCODE(i);
@@ -512,12 +525,11 @@ void luaV_finishOp (lua_State *L) {
     case OP_GETTABUP: case OP_GETTABLE: case OP_SELF: {
       StkId ra = base + GETARG_A(i);
       setobjs2s(L, ra, --L->top);
-      OpType guard = opguard(op);
-      if ((guard == OpType_num && !ttisnumber(ra)) ||
-          (guard == OpType_str && !ttisstring(ra)) ||
-          (guard == OpType_tab && !ttistable(ra))) {
-        int pc = pcRel(ci->u.l.savedpc-1, ci_func(ci)->p);
-        luaVS_despecialize(L, cl->p, pc, GETARG_A(i));
+      switch (opguard(op)) {
+        case OpType_num: num_check(ra) break;
+        case OpType_str: str_check(ra) break;
+        case OpType_tab: tab_check(ra) break;
+        default: lua_assert(0); break;
       }
       break;
     }
@@ -546,14 +558,14 @@ void luaV_finishOp (lua_State *L) {
       /* move final result to final position */
       StkId ra = ci->u.l.base + GETARG_A(i);
       setobj2s(L, ra, L->top - 1);
-      OpType guard = opguard(op);
-      if ((guard == OpType_num && !ttisnumber(ra)) ||
-          (guard == OpType_str && !ttisstring(ra)) ||
-          (guard == OpType_tab && !ttistable(ra))) {
-        int pc = pcRel(ci->u.l.savedpc-1, ci_func(ci)->p);
-        luaVS_despecialize(L, cl->p, pc, GETARG_A(i));
-      }
       L->top = ci->top;  /* restore top */
+      switch (opguard(op)) {
+        case OpType_num: num_check(ra) break;
+        case OpType_str: str_check(ra) break;
+        case OpType_tab: tab_check(ra) break;
+        default: lua_assert(0); break;
+      }
+      break;
       break;
     }
     case OP_TFORCALL: {
@@ -607,20 +619,6 @@ void luaV_finishOp (lua_State *L) {
 #define Protect(x)	{ {x;}; base = ci->u.l.base; }
 
 #define checkGC(L,c)	Protect(luaC_condGC(L, c); luai_threadyield(L);)
-
-
-/* type guarding macros */
-
-#define ____check(ra) ((void)0)
-
-#define num_check(ra) if (!ttisnumber(ra)) { \
-  luaVS_despecialize(L, cl->p, pcRel(ci->u.l.savedpc, cl->p), GETARG_A(i)); }
-
-#define str_check(ra) if (!ttisstring(ra)) { \
-  luaVS_despecialize(L, cl->p, pcRel(ci->u.l.savedpc, cl->p), GETARG_A(i)); }
-
-#define tab_check(ra) if (!ttistable(ra)) { \
-  luaVS_despecialize(L, cl->p, pcRel(ci->u.l.savedpc, cl->p), GETARG_A(i)); }
 
 
 
@@ -757,7 +755,7 @@ l_dispatch_again:
       vmcasenb(EQ,       ___, chk,)
       vmcasenb(LT,       ___, chk,)
       vmcasenb(LE,       ___, chk,
-        luaVS_specialize(L, cl->p, pcRel(ci->u.l.savedpc, cl->p));
+        luaVS_specialize(L);
         i = *(ci->u.l.savedpc-1); /* stay on the same instruction */
         goto l_dispatch_again;
       )

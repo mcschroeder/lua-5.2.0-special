@@ -11,6 +11,7 @@
 #include "lopcodes.h"
 #include "lstate.h"
 #include "lvmspec.h"
+#include "ldebug.h"
 
 
 
@@ -393,21 +394,23 @@ static void despecialize_all_upvalues (lua_State *L, Proto *p, int outer_idx) {
 }
 
 
-void luaVS_despecialize (lua_State *L, Proto *p, int pc, int reg) {
+void luaVS_despecialize (lua_State *L, int reg) {
+  CallInfo *ci = L->ci;
+  LClosure *cl = clLvalue(ci->func);
+  Proto *p = cl->p;
+  int pc = pcRel(ci->u.l.savedpc, cl->p);
   RegInfo *reginfo = findreginfo(p, pc, reg, RI_STORE);
   lua_assert(reginfo != NULL);
   
   int n = p->sizereginfos;
   int *visited = luaM_newvector(L, n, int);
   while (n > 0) visited[--n] = 0;
-
   despecialize_all(L, p, reg, reginfo, visited);
-  
   luaM_freearray(L, visited, p->sizereginfos);
 
   n = p->sizep;
   while (n > 0)
-    despecialize_all_upvalues(L, p->p[--n], reg);
+    despecialize_all_upvalues(L, p->p[--n], reg); 
 }
 
 
@@ -421,7 +424,18 @@ void luaVS_despecialize_upvalue_origin (lua_State *L, Proto *p, int idx) {
   }
   if (p == NULL) return;
 
-  luaVS_despecialize(L, p, desc.regpc, desc.idx);
+  int reg = desc.idx;
+  RegInfo *reginfo = findreginfo(p, desc.regpc, reg, RI_STORE);
+
+  int n = p->sizereginfos;
+  int *visited = luaM_newvector(L, n, int);
+  while (n > 0) visited[--n] = 0;
+  despecialize_all(L, p, reg, reginfo, visited);
+  luaM_freearray(L, visited, p->sizereginfos);
+
+  n = p->sizep;
+  while (n > 0)
+    despecialize_all_upvalues(L, p->p[--n], reg); 
 }
 
 
@@ -437,9 +451,11 @@ void luaVS_despecialize_upvalue_origin (lua_State *L, Proto *p, int idx) {
 #define _remove_guards(r) \
   (remove_guards(p, r, findreginfo(p, pc, r, RI_LOAD)))
 
-void luaVS_specialize (lua_State *L, Proto *p, int pc) {
+void luaVS_specialize (lua_State *L) {
   CallInfo *ci = L->ci;
   LClosure *cl = clLvalue(ci->func);
+  Proto *p = cl->p;
+  int pc = pcRel(ci->u.l.savedpc, cl->p);
   StkId base = ci->u.l.base;
   Instruction *i = &(p->code[pc]);
   OpCode op = GET_OPCODE(*i);
@@ -460,7 +476,7 @@ void luaVS_specialize (lua_State *L, Proto *p, int pc) {
       else if (ttistable(rb))   spec = OpType_tab;
       if (spec != OpType_chk && _add_guards(b, spec)) {
         if (guard != OpType_raw && guard != spec)
-          luaVS_despecialize(L, p, pc, a);
+          luaVS_despecialize(L, a);
         guard = OpType_raw;
       }
       MODIFY_OPCODE(*i, guard, OpType_raw);
@@ -475,7 +491,7 @@ void luaVS_specialize (lua_State *L, Proto *p, int pc) {
       else if (ttistable(rb))   spec = OpType_tab;
       if (spec != OpType_chk && _add_guards_upvalue_origin(b, spec)) {
         if (guard != OpType_raw && guard != spec)
-          luaVS_despecialize(L, p, pc, a);
+          luaVS_despecialize(L, a);
         guard = OpType_raw;
       }
       MODIFY_OPCODE(*i, guard, OpType_raw);
@@ -594,7 +610,7 @@ void luaVS_specialize (lua_State *L, Proto *p, int pc) {
         }
         if (safe) {          
           if (opguard(op) != OpType_raw && opguard(op) != OpType_num)
-            luaVS_despecialize(L, p, pc, a);
+            luaVS_despecialize(L, a);
           MODIFY_OPCODE(*i, OpType_raw, OpType_num);
           break;
         }
@@ -606,7 +622,7 @@ void luaVS_specialize (lua_State *L, Proto *p, int pc) {
     case OP_UNM: {
       if (ttisnumber(rb) && _add_guards(b, OpType_num)) {
         if (opguard(op) != OpType_raw && opguard(op) != OpType_num)
-          luaVS_despecialize(L, p, pc, a);
+          luaVS_despecialize(L, a);
         MODIFY_OPCODE(*i, OpType_raw, OpType_num);
         break;
       }
@@ -619,7 +635,7 @@ void luaVS_specialize (lua_State *L, Proto *p, int pc) {
       if (ttistable(rb))  spec = OpType_tab;
       if (spec != OpType_chk && _add_guards(b, spec)) {
         if (opguard(op) != OpType_raw && opguard(op) != OpType_num)
-          luaVS_despecialize(L, p, pc, a);
+          luaVS_despecialize(L, a);
         MODIFY_OPCODE(*i, OpType_raw, spec);
         break;
       }
