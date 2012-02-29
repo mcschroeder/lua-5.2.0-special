@@ -61,230 +61,81 @@ LUAI_DDEF OpCode luaP_opgroup2code[NUM_OPGROUPS] = {
 };
 
 
-LUAI_DDEF OpType luaP_opout[NUM_OPCODES] = {
-#define OPENUM(op,out,in) OpType_##out,
+LUAI_DDEF OpType luaP_opguards[NUM_OPCODES] = {
+#define OPENUM(op,guard,spec) OpType_##guard,
   OPDEF(OPENUM)
 #undef OPENUM  
 };
-LUAI_DDEF OpType luaP_opin[NUM_OPCODES] = {
-#define OPENUM(op,out,in) OpType_##in,
+LUAI_DDEF OpType luaP_opspecs[NUM_OPCODES] = {
+#define OPENUM(op,guard,spec) OpType_##spec,
   OPDEF(OPENUM)
 #undef OPENUM  
 };
 
 
-OpCode create_op_move (OpType in, OpType out) {  
-  OpCode op = grp2op(OP_MOVE);
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_str: op += 5; break;
-    case OpType_tab: op += 6; break;
-    case OpType_chk: op += 7; break;
-    default: lua_assert(0); break;
-  }
-  if (in == OpType_raw || in == OpType_chk) {
-    switch (out) {
-      case OpType_raw: op += 0; break;
-      case OpType_num: op += 1; break;
-      case OpType_str: op += 2; break;
-      case OpType_tab: op += 3; break;
-      default: lua_assert(0); break;
-    }
-  } else {
-    lua_assert(out == OpType_raw);
-  }
+/* raw, num, str, tab, chk */
+LUAI_DDEF const int OpSpecOffsets[NUM_OPGROUPS][5] = {
+  {0,  4,  5,  6,  7}, /* MOVE */
+  {0,  0,  1, -1, -1}, /* LOADK */
+  {0,  0,  1, -1, -1}, /* LOADKX */
+  {0, -1, -1, -1, -1}, /* LOADBOOL */
+  {0, -1, -1, -1, -1}, /* LOADNIL */
+  {0,  4,  5,  6,  7}, /* GETUPVAL */
+  {0,  4,  8, -1, 12}, /* GETTABUP */
+  {0,  4,  8, -1, 12}, /* GETTABLE */
+  {0,  1,  2, -1,  3}, /* SETTABUP */
+  {0,  4,  5,  6,  7}, /* SETUPVAL */
+  {0,  1,  2, -1,  3}, /* SETTABLE */
+  {0, -1, -1, -1, -1}, /* NEWTABLE */
+  {0, -1, -1,  1,  2}, /* SELF */
+  {0,  4, -1, -1,  5}, /* ADD */
+  {0,  4, -1, -1,  5}, /* SUB */
+  {0,  4, -1, -1,  5}, /* MUL */
+  {0,  4, -1, -1,  5}, /* DIV */
+  {0,  4, -1, -1,  5}, /* MOD */
+  {0,  4, -1, -1,  5}, /* POW */
+  {0,  4, -1, -1,  5}, /* UNM */
+  {0, -1, -1, -1, -1}, /* NOT */
+  {0, -1,  4,  5,  6}, /* LEN */
+  {0, -1, -1, -1, -1}, /* CONCAT */
+  {0, -1, -1, -1, -1}, /* JMP */
+  {0,  1,  2,  3,  4}, /* EQ */
+  {0,  1,  2,  3,  4}, /* LT */
+  {0,  1,  2,  3,  4}, /* LE */
+  {0, -1, -1, -1, -1}, /* TEST */
+  {0, -1, -1, -1, -1}, /* TESTSET */
+  {0, -1, -1, -1, -1}, /* CALL */
+  {0, -1, -1, -1, -1}, /* TAILCALL */
+  {0, -1, -1, -1, -1}, /* RETURN */
+  {0, -1, -1, -1, -1}, /* FORLOOP */
+  {0, -1, -1, -1, -1}, /* FORPREP */
+  {0, -1, -1, -1, -1}, /* TFORCALL */
+  {0, -1, -1, -1, -1}, /* TFORLOOP */
+  {0, -1, -1, -1, -1}, /* SETLIST */
+  {0, -1, -1, -1, -1}, /* CLOSURE */
+  {0, -1, -1, -1, -1}, /* VARARG */
+  {0, -1, -1, -1, -1}, /* CHKTYPE */
+  {0, -1, -1, -1, -1}, /* EXTRAARG */
+};
+
+
+OpCode createop (OpGroup grp, OpType guard, OpType spec) {
+  lua_assert(OpSpecOffsets[grp][spec] != -1);
+  OpCode op = grp2op(grp)+OpSpecOffsets[grp][spec]+guard;
+  lua_assert(op2grp(op) == grp);
   return op;
 }
 
-OpCode create_op_setupval (OpType in, OpType out) {  
-  OpCode op = grp2op(OP_SETUPVAL);
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_str: op += 5; break;
-    case OpType_tab: op += 6; break;
-    case OpType_chk: op += 7; break;
-    default: lua_assert(0); break;
-  }
-  if (in == OpType_raw || in == OpType_chk) {
-    switch (out) {
-      case OpType_raw: op += 0; break;
-      case OpType_num: op += 1; break;
-      case OpType_str: op += 2; break;
-      case OpType_tab: op += 3; break;
-      default: lua_assert(0); break;
-    }
-  } else {
-    lua_assert(out == OpType_raw);
-  }
-  return op;
-}
-
-OpCode create_op_getupval (OpType in, OpType out) {  
-  OpCode op = grp2op(OP_GETUPVAL);
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_str: op += 5; break;
-    case OpType_tab: op += 6; break;
-    case OpType_chk: op += 7; break;
-    default: lua_assert(0); break;
-  }
-  if (in == OpType_raw || in == OpType_chk) {
-    switch (out) {
-      case OpType_raw: op += 0; break;
-      case OpType_num: op += 1; break;
-      case OpType_str: op += 2; break;
-      case OpType_tab: op += 3; break;
-      default: lua_assert(0); break;
-    }
-  } else {
-    lua_assert(out == OpType_raw);
-  }
-  return op;
-}
-
-
-OpCode create_op_settab (OpGroup grp, OpType in) {
-  lua_assert(grp == OP_SETTABLE || grp == OP_SETTABUP);
-  OpCode op = grp2op(grp);
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 1; break;
-    case OpType_str: op += 2; break;
-    case OpType_chk: op += 3; break;
-    default: lua_assert(0); break;
-  }
-  return op;
-}
-
-OpCode create_op_gettab (OpGroup grp, OpType out, OpType in) {
-  lua_assert(grp == OP_GETTABLE || grp == OP_GETTABUP);
-  OpCode op = grp2op(grp);
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_str: op += 8; break;
-    case OpType_chk: op += 12; break;
-    default: lua_assert(0); break;
-  }
-  switch (out) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 1; break;
-    case OpType_str: op += 2; break;
-    case OpType_tab: op += 3; break;
-    default: lua_assert(0); break;
-  }
-  return op;
-}
-
-OpCode create_op_arith (OpGroup grp, OpType out, OpType in) {
-  lua_assert(grp >= OP_ADD && grp <= OP_POW);
-  OpCode op = grp2op(grp);  
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_chk: op += 5; break;
-    default: lua_assert(0); break;
-  }
-  if (in == OpType_num) {
-    if (out != OpType_raw) lua_assert(0);
-  } else {
-    switch (out) {
-      case OpType_raw: op += 0; break;
-      case OpType_num: op += 1; break;
-      case OpType_str: op += 2; break;
-      case OpType_tab: op += 3; break;
-      default: lua_assert(0); break;
-    }      
-  }  
-  return op;
-}
-
-OpCode create_op_unm (OpType out, OpType in) {
-  OpCode op = grp2op(OP_UNM);
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 4; break;
-    case OpType_chk: op += 5; break;
-    default: lua_assert(0); break;
-  }
-  if (in == OpType_num) {
-    if (out != OpType_raw) lua_assert(0);
-  } else {
-    switch (out) {
-      case OpType_raw: op += 0; break;
-      case OpType_num: op += 1; break;
-      case OpType_str: op += 2; break;
-      case OpType_tab: op += 3; break;
-      default: lua_assert(0); break;
-    }      
-  }  
-  return op;
-}
-
-OpCode create_op_len (OpType out, OpType in) {
-  OpCode op = grp2op(OP_LEN);
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_str: op += 4; break;
-    case OpType_tab: op += 5; break;
-    case OpType_chk: op += 6; break;
-    default: lua_assert(0); break;
-  }
-  if (in == OpType_str || in == OpType_tab) {
-    if (out != OpType_raw) lua_assert(0);
-  } else {
-    switch (out) {
-      case OpType_raw: op += 0; break;
-      case OpType_num: op += 1; break;
-      case OpType_str: op += 2; break;
-      case OpType_tab: op += 3; break;
-      default: lua_assert(0); break;
-    }      
-  }  
-  return op;
-}
-
-OpCode create_op_cmp (OpGroup grp, OpType in) {
-  lua_assert(grp == OP_EQ || grp == OP_LT || grp == OP_LE);
-  OpCode op = grp2op(grp);
-  switch (in) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 1; break;
-    case OpType_str: op += 2; break;
-    case OpType_tab: op += 3; break;
-    case OpType_chk: op += 4; break;
-    default: lua_assert(0); break;
-  }
-  return op;
-}
-
-OpCode create_op_out (OpGroup grp, OpType out) { 
-  OpCode op = grp2op(grp);
-  switch (out) {
-    case OpType_raw: op += 0; break;
-    case OpType_num: op += 1; break;
-    case OpType_str: op += 2; break;
-    case OpType_tab: op += 3; break;
-    default: lua_assert(0); break;
-  }
-  return op;
-}
 
 
 
 const char * const optypenames[7] = {
   "___","num","str","tab","chk"
 };
-void printop(OpCode op) {  
-  OpGroup grp = op2grp(op);
-  OpType out = opout(op);
-  OpType in = opin(op);
-  printf("%-9s", luaP_opnames[grp]);
-  printf(" %s",optypenames[out]);
-  printf(" %s",optypenames[in]);
+void printop(OpCode op) {
+  printf("%-9s", luaP_opnames[op2grp(op)]);
+  printf(" %s",optypenames[opguard(op)]);
+  printf(" %s",optypenames[opspec(op)]);
 }
 
 

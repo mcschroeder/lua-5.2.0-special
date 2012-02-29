@@ -491,21 +491,12 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
 }
 
 
-#define num_check if (!ttisnumber(ra)) { \
-  luaVS_despecialize(L, GETARG_A(i)); }
-
-#define str_check if (!ttisstring(ra)) { \
-  luaVS_despecialize(L, GETARG_A(i)); }
-
-#define tab_check if (!ttistable(ra)) { \
-  luaVS_despecialize(L, GETARG_A(i)); }
-
-
 /*
 ** finish execution of an opcode interrupted by an yield
 */
 void luaV_finishOp (lua_State *L) {
   CallInfo *ci = L->ci;
+  LClosure *cl = clLvalue(ci->func);
   StkId base = ci->u.l.base;
   Instruction i = *(ci->u.l.savedpc - 1);  /* interrupted instruction */
   OpCode op = GET_OPCODE(i);
@@ -521,11 +512,12 @@ void luaV_finishOp (lua_State *L) {
     case OP_GETTABUP: case OP_GETTABLE: case OP_SELF: {
       StkId ra = base + GETARG_A(i);
       setobjs2s(L, ra, --L->top);
-      switch (opout(op)) {
-        case OpType_num: num_check break;
-        case OpType_str: str_check break;
-        case OpType_tab: tab_check break;
-        default: break;
+      OpType guard = opguard(op);
+      if ((guard == OpType_num && !ttisnumber(ra)) ||
+          (guard == OpType_str && !ttisstring(ra)) ||
+          (guard == OpType_tab && !ttistable(ra))) {
+        int pc = pcRel(ci->u.l.savedpc-1, ci_func(ci)->p);
+        luaVS_despecialize(L, cl->p, pc, GETARG_A(i));
       }
       break;
     }
@@ -554,11 +546,12 @@ void luaV_finishOp (lua_State *L) {
       /* move final result to final position */
       StkId ra = ci->u.l.base + GETARG_A(i);
       setobj2s(L, ra, L->top - 1);
-      switch (opout(op)) {
-        case OpType_num: num_check break;
-        case OpType_str: str_check break;
-        case OpType_tab: tab_check break;
-        default: break;
+      OpType guard = opguard(op);
+      if ((guard == OpType_num && !ttisnumber(ra)) ||
+          (guard == OpType_str && !ttisstring(ra)) ||
+          (guard == OpType_tab && !ttistable(ra))) {
+        int pc = pcRel(ci->u.l.savedpc-1, ci_func(ci)->p);
+        luaVS_despecialize(L, cl->p, pc, GETARG_A(i));
       }
       L->top = ci->top;  /* restore top */
       break;
@@ -616,9 +609,25 @@ void luaV_finishOp (lua_State *L) {
 #define checkGC(L,c)	Protect(luaC_condGC(L, c); luai_threadyield(L);)
 
 
+/* type guarding macros */
+
+#define ____check(ra) ((void)0)
+
+#define num_check(ra) if (!ttisnumber(ra)) { \
+  luaVS_despecialize(L, cl->p, pcRel(ci->u.l.savedpc, cl->p), GETARG_A(i)); }
+
+#define str_check(ra) if (!ttisstring(ra)) { \
+  luaVS_despecialize(L, cl->p, pcRel(ci->u.l.savedpc, cl->p), GETARG_A(i)); }
+
+#define tab_check(ra) if (!ttistable(ra)) { \
+  luaVS_despecialize(L, cl->p, pcRel(ci->u.l.savedpc, cl->p), GETARG_A(i)); }
+
+
+
+
 #define vmdispatch(o) switch(o)
-#define vmcase(op,out,in,b)   case OP(op,out,in): {b}  break;  
-#define vmcasenb(op,out,in,b) case OP(op,out,in): {b}  /* nb = no break */
+#define vmcase(op,guard,spec,b)   case OP(op,guard,spec): {b}  break;  
+#define vmcasenb(op,guard,spec,b) case OP(op,guard,spec): {b}
 
 
 void luaV_execute (lua_State *L) {
@@ -626,7 +635,7 @@ void luaV_execute (lua_State *L) {
 #ifdef LUA_THREADED_DISPATCH
 
   static void *disptab[] = {
-  #define OPENUM(op,out,in) &&L_OP_##op##_##out##_##in,
+  #define OPENUM(op,guard,spec) &&L_OP_##op##_##guard##_##spec,
     OPDEF(OPENUM)
   #undef OPENUM
   };
@@ -647,16 +656,16 @@ void luaV_execute (lua_State *L) {
 #endif
 
   #undef vmcasenb
-  #define vmcasenb(op,out,in,b) L_OP_##op##_##out##_##in: {b};
+  #define vmcasenb(op,guard,spec,b) L_OP_##op##_##guard##_##spec: {b};
 
   #undef vmcase
-  #define vmcase(op,out,in,b)   L_OP_##op##_##out##_##in: {b};  \
-    i = *(ci->u.l.savedpc++);                                   \
-    if ((L->hookmask & (LUA_MASKLINE | LUA_MASKCOUNT)) &&       \
-        (--L->hookcount == 0 || L->hookmask & LUA_MASKLINE)) {  \
-      Protect(traceexec(L));                                    \
-    }                                                           \
-    ra = RA(i);                                                 \
+  #define vmcase(op,guard,spec,b)   L_OP_##op##_##guard##_##spec: {b};  \
+    i = *(ci->u.l.savedpc++);                                           \
+    if ((L->hookmask & (LUA_MASKLINE | LUA_MASKCOUNT)) &&               \
+        (--L->hookcount == 0 || L->hookmask & LUA_MASKLINE)) {          \
+      Protect(traceexec(L));                                            \
+    }                                                                   \
+    ra = RA(i);                                                         \
     vmdispatch(GET_OPCODE(i));
 
 #endif
@@ -748,21 +757,21 @@ l_dispatch_again:
       vmcasenb(EQ,       ___, chk,)
       vmcasenb(LT,       ___, chk,)
       vmcasenb(LE,       ___, chk,
-        luaVS_specialize(L);
+        luaVS_specialize(L, cl->p, pcRel(ci->u.l.savedpc, cl->p));
         i = *(ci->u.l.savedpc-1); /* stay on the same instruction */
         goto l_dispatch_again;
       )
 /* ------------------------------------------------------------------------ */      
-#define vmcase_move_raw(out, guard) \
-      vmcase(MOVE,out,___,          \
-        setobjs2s(L, ra, RB(i));    \
-        {guard;}                    \
+#define vmcase_move_raw(guard)    \
+      vmcase(MOVE,guard,___,      \
+        setobjs2s(L, ra, RB(i));  \
+        guard##_check(ra);        \
       )
 
-      vmcase_move_raw(___, )
-      vmcase_move_raw(num, num_check)
-      vmcase_move_raw(str, str_check)
-      vmcase_move_raw(tab, tab_check)
+      vmcase_move_raw(___)
+      vmcase_move_raw(num)
+      vmcase_move_raw(str)
+      vmcase_move_raw(tab)
 
       vmcase(MOVE,___,num,
         setnvalue(ra, nvalue(RB(i)));
@@ -808,16 +817,16 @@ l_dispatch_again:
         } while (b--);
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_getupval_raw(out, guard)               \
-      vmcase(GETUPVAL,out,___,                        \
+#define vmcase_getupval_raw(guard)                    \
+      vmcase(GETUPVAL,guard,___,                      \
         setobjs2s(L, ra, cl->upvals[GETARG_B(i)]->v); \
-        {guard;}                                      \
+        guard##_check(ra);                            \
       )
 
-      vmcase_getupval_raw(___, )
-      vmcase_getupval_raw(num, num_check)
-      vmcase_getupval_raw(str, str_check)
-      vmcase_getupval_raw(tab, tab_check)
+      vmcase_getupval_raw(___)
+      vmcase_getupval_raw(num)
+      vmcase_getupval_raw(str)
+      vmcase_getupval_raw(tab)
 
       vmcase(GETUPVAL,___,num,
         setnvalue(ra, nvalue(cl->upvals[GETARG_B(i)]->v));
@@ -829,13 +838,13 @@ l_dispatch_again:
         setobjs2s(L, ra, cl->upvals[GETARG_B(i)]->v);
       ) 
 /* ------------------------------------------------------------------------ */
-#define _vmcase_gettab_raw(op,b,out,guard)        \
-      vmcase(op,out,___,                          \
+#define _vmcase_gettab_raw(op,b,guard)            \
+      vmcase(op,guard,___,                        \
         Protect(luaV_gettable(L, b, RKC(i), ra)); \
-        {guard;}                                  \
+        guard##_check(ra);                        \
       )
-#define _vmcase_gettab_spec(op,b,out,in,getfunc,guard)          \
-      vmcase(op, out, in,                                       \
+#define _vmcase_gettab_spec(op,b,guard,spec,getfunc)            \
+      vmcase(op,guard,spec,                                     \
         TValue *rb = b;                                         \
         TValue *key = RKC(i);                                   \
         Table *h = hvalue(rb);                                  \
@@ -847,24 +856,24 @@ l_dispatch_again:
         } else {                                                \
           Protect(gettable_tm(L, rb, tm, key, ra));             \
         }                                                       \
-        {guard;}                                                \
+        guard##_check(ra);                                      \
       )
   
 #define luaH_getstr_(h,key) luaH_getstr(h, rawtsvalue(key))
 
-#define vmcase_gettab(op,b)                                         \
-      _vmcase_gettab_raw(op, b, ___, )                              \
-      _vmcase_gettab_raw(op, b, num, num_check)                     \
-      _vmcase_gettab_raw(op, b, str, str_check)                     \
-      _vmcase_gettab_raw(op, b, tab, tab_check)                     \
-      _vmcase_gettab_spec(op, b, ___, num, luaH_getnum, )           \
-      _vmcase_gettab_spec(op, b, num, num, luaH_getnum, num_check)  \
-      _vmcase_gettab_spec(op, b, str, num, luaH_getnum, str_check)  \
-      _vmcase_gettab_spec(op, b, tab, num, luaH_getnum, tab_check)  \
-      _vmcase_gettab_spec(op, b, ___, str, luaH_getstr_, )          \
-      _vmcase_gettab_spec(op, b, num, str, luaH_getstr_, num_check) \
-      _vmcase_gettab_spec(op, b, str, str, luaH_getstr_, str_check) \
-      _vmcase_gettab_spec(op, b, tab, str, luaH_getstr_, tab_check)
+#define vmcase_gettab(op,b)                               \
+      _vmcase_gettab_raw(op, b, ___)                      \
+      _vmcase_gettab_raw(op, b, num)                      \
+      _vmcase_gettab_raw(op, b, str)                      \
+      _vmcase_gettab_raw(op, b, tab)                      \
+      _vmcase_gettab_spec(op, b, ___, num, luaH_getnum)   \
+      _vmcase_gettab_spec(op, b, num, num, luaH_getnum)   \
+      _vmcase_gettab_spec(op, b, str, num, luaH_getnum)   \
+      _vmcase_gettab_spec(op, b, tab, num, luaH_getnum)   \
+      _vmcase_gettab_spec(op, b, ___, str, luaH_getstr_)  \
+      _vmcase_gettab_spec(op, b, num, str, luaH_getstr_)  \
+      _vmcase_gettab_spec(op, b, str, str, luaH_getstr_)  \
+      _vmcase_gettab_spec(op, b, tab, str, luaH_getstr_)
 
       vmcase_gettab(GETTABUP, cl->upvals[GETARG_B(i)]->v)
       vmcase_gettab(GETTABLE, RB(i))
@@ -873,8 +882,8 @@ l_dispatch_again:
       vmcase(op,___,___,                              \
         Protect(luaV_settable(L, a, RKB(i), RKC(i))); \
       )
-#define _vmcase_settab_spec(op,a,in,getfunc)                          \
-      vmcase(op, ___, in,                                             \
+#define _vmcase_settab_spec(op,a,spec,getfunc)                        \
+      vmcase(op,___,spec,                                             \
         Table *h = hvalue(a);                                         \
         TValue *key = RKB(i);                                         \
         StkId val = RKC(i);                                           \
@@ -900,27 +909,27 @@ l_dispatch_again:
       vmcase_settab(SETTABUP, cl->upvals[GETARG_A(i)]->v)
       vmcase_settab(SETTABLE, ra)
 /* ------------------------------------------------------------------------ */
-#define vmcase_setupval_raw(out, guard) \
-      vmcase(SETUPVAL,out,___,          \
-        int idx = GETARG_B(i);          \
-        UpVal *uv = cl->upvals[idx];    \
-        setobj(L, uv->v, ra);           \
-        luaC_barrier(L, uv, ra);        \
-        {guard;}                        \
+#define vmcase_setupval_raw(guard, guard_check) \
+      vmcase(SETUPVAL,guard,___,                \
+        int idx = GETARG_B(i);                  \
+        UpVal *uv = cl->upvals[idx];            \
+        setobj(L, uv->v, ra);                   \
+        luaC_barrier(L, uv, ra);                \
+        guard_check                             \
       )
 
       vmcase_setupval_raw(___, )
       vmcase_setupval_raw(num, 
         if (!ttisnumber(uv->v)) 
-          luaVS_despecialize_upval_origin(L, cl->p, idx)
+          luaVS_despecialize_upvalue_origin(L, cl->p, idx);
       );
       vmcase_setupval_raw(str, 
         if (!ttisstring(uv->v)) 
-          luaVS_despecialize_upval_origin(L, cl->p, idx)
+          luaVS_despecialize_upvalue_origin(L, cl->p, idx);
       );
       vmcase_setupval_raw(tab, 
         if (!ttistable(uv->v)) 
-          luaVS_despecialize_upval_origin(L, cl->p, idx)
+          luaVS_despecialize_upvalue_origin(L, cl->p, idx);
       );
 
       vmcase(SETUPVAL,___,num,
@@ -976,8 +985,8 @@ l_dispatch_again:
         }
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_arith_raw(op,func,tm,out,guard)            \
-      vmcase(op,out,___,                              \
+#define vmcase_arith_raw(op,func,tm,guard)                \
+      vmcase(op,guard,___,                                \
         TValue *rb = RKB(i);                              \
         TValue *rc = RKC(i);                              \
         if (ttisnumber(rb) && ttisnumber(rc)) {           \
@@ -986,19 +995,19 @@ l_dispatch_again:
           setnvalue(ra, func(L, nb, nc));                 \
         }                                                 \
         else { Protect(luaV_arith(L, ra, rb, rc, tm)); }  \
-        {guard;}                                          \
+        guard##_check(ra);                                \
       )
 #define vmcase_arith_num(op,func)                       \
-      vmcase(op,___,num,                            \
+      vmcase(op,___,num,                                \
         TValue *rb = RKB(i);                            \
         TValue *rc = RKC(i);                            \
         setnvalue(ra, func(L, nvalue(rb), nvalue(rc))); \
       )
-#define vmcase_arith(op,func,tm)                      \
-      vmcase_arith_raw(op, func, tm, ___, )           \
-      vmcase_arith_raw(op, func, tm, num, num_check)  \
-      vmcase_arith_raw(op, func, tm, str, str_check)  \
-      vmcase_arith_raw(op, func, tm, tab, tab_check)  \
+#define vmcase_arith(op,func,tm)          \
+      vmcase_arith_raw(op, func, tm, ___) \
+      vmcase_arith_raw(op, func, tm, num) \
+      vmcase_arith_raw(op, func, tm, str) \
+      vmcase_arith_raw(op, func, tm, tab) \
       vmcase_arith_num(op, func)
 
       vmcase_arith(ADD, luai_numadd, TM_ADD)
@@ -1008,17 +1017,17 @@ l_dispatch_again:
       vmcase_arith(MOD, luai_nummod, TM_MOD)
       vmcase_arith(POW, luai_numpow, TM_POW)
 /* ------------------------------------------------------------------------ */
-#define vmcase_unm_raw(out,guard)                   \
-      vmcase(UNM,out,___,                       \
+#define vmcase_unm_raw(guard)                       \
+      vmcase(UNM,guard,___,                         \
         TValue *rb = RB(i);                         \
         Protect(luaV_arith(L, ra, rb, rb, TM_UNM)); \
-        {guard;}                                    \
+        guard##_check(ra);                          \
       )
 
-      vmcase_unm_raw(___, )
-      vmcase_unm_raw(num, num_check)
-      vmcase_unm_raw(str, str_check)
-      vmcase_unm_raw(tab, tab_check)
+      vmcase_unm_raw(___)
+      vmcase_unm_raw(num)
+      vmcase_unm_raw(str)
+      vmcase_unm_raw(tab)
       vmcase(UNM,___,num,
         setnvalue(ra, luai_numunm(L, nvalue(RB(i))));
       )
@@ -1027,16 +1036,16 @@ l_dispatch_again:
         setbvalue(ra, l_isfalse(RB(i)));
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_len_raw(out,guard)           \
-      vmcase(LEN,out,___,                   \
+#define vmcase_len_raw(guard)               \
+      vmcase(LEN,guard,___,                 \
         Protect(luaV_objlen(L, ra, RB(i))); \
-        {guard;}                            \
+        guard##_check(ra);                  \
       )
 
-      vmcase_len_raw(___, )
-      vmcase_len_raw(num, num_check)
-      vmcase_len_raw(str, str_check)
-      vmcase_len_raw(tab, tab_check)
+      vmcase_len_raw(___)
+      vmcase_len_raw(num)
+      vmcase_len_raw(str)
+      vmcase_len_raw(tab)
 
       vmcase(LEN,___,str,
         setnvalue(ra, cast_num(tsvalue(RB(i))->len));
@@ -1049,8 +1058,8 @@ l_dispatch_again:
         else setnvalue(ra, cast_num(luaH_getn(h)));
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_concat(out,guard)                                            \
-      vmcase(CONCAT,out,___,                                                \
+#define vmcase_concat(guard)                                                \
+      vmcase(CONCAT,guard,___,                                              \
         int b = GETARG_B(i);                                                \
         int c = GETARG_C(i);                                                \
         StkId rb;                                                           \
@@ -1064,20 +1073,20 @@ l_dispatch_again:
           luaC_step(L);                                                     \
         )                                                                   \
         L->top = ci->top;  /* restore top */                                \
-        {guard;}                                                            \
+        guard##_check(ra);                                                  \
       )
 
-      vmcase_concat(___, )
-      vmcase_concat(num, num_check)
-      vmcase_concat(str, str_check)
-      vmcase_concat(tab, tab_check)
+      vmcase_concat(___)
+      vmcase_concat(num)
+      vmcase_concat(str)
+      vmcase_concat(tab)
 /* ------------------------------------------------------------------------ */
       vmcase(JMP,___,___,
         dojump(ci, i, 0);
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_cmp(op,in,f,g)           \
-      vmcase(op,___,in,                 \
+#define vmcase_cmp(op,spec,f,g)         \
+      vmcase(op,___,spec,               \
         int a = GETARG_A(i);            \
         TValue *rb = RKB(i);            \
         TValue *rc = RKC(i);            \
@@ -1116,22 +1125,22 @@ l_dispatch_again:
           donextjump(ci);
       )
 /* ------------------------------------------------------------------------ */
-#define vmcase_testset(out,guard)                         \
-      vmcase(TESTSET,out,___,                         \
+#define vmcase_testset(guard)                             \
+      vmcase(TESTSET,guard,___,                           \
         TValue *rb = RB(i);                               \
         if (GETARG_C(i) ? l_isfalse(rb) : !l_isfalse(rb)) \
           ci->u.l.savedpc++;                              \
         else {                                            \
           setobjs2s(L, ra, rb);                           \
-          {guard;}                                        \
+          guard##_check(ra);                              \
           donextjump(ci);                                 \
         }                                                 \
       )
 
-      vmcase_testset(___, )
-      vmcase_testset(num, num_check)
-      vmcase_testset(str, str_check)
-      vmcase_testset(tab, tab_check)
+      vmcase_testset(___)
+      vmcase_testset(num)
+      vmcase_testset(str)
+      vmcase_testset(tab)
 /* ------------------------------------------------------------------------ */
       vmcase(CALL,___,___,
         int b = GETARG_B(i);
@@ -1232,11 +1241,6 @@ l_dispatch_again:
         int nresults = GETARG_C(i);
         Protect(luaD_call(L, cb, nresults, 1));
         L->top = ci->top;
-        // TODO: cannot use this optimization due to CHKTYPE
-        // i = *(ci->u.l.savedpc++);  /* go to next instruction */
-        // ra = RA(i);
-        // lua_assert(GET_OPCODE(i) == sOP(TFORLOOP));
-        // goto l_tforloop;
       )
 /* ------------------------------------------------------------------------ */
       vmcase(TFORLOOP,___,___,
@@ -1305,9 +1309,9 @@ l_dispatch_again:
       )
 /* ------------------------------------------------------------------------ */
       vmcase(CHKTYPE,___,___, /* nop */)
-      vmcase(CHKTYPE,num,___, num_check)
-      vmcase(CHKTYPE,str,___, str_check)
-      vmcase(CHKTYPE,tab,___, tab_check)
+      vmcase(CHKTYPE,num,___, num_check(ra))
+      vmcase(CHKTYPE,str,___, str_check(ra))
+      vmcase(CHKTYPE,tab,___, tab_check(ra))
 /* ------------------------------------------------------------------------ */
       vmcase(EXTRAARG,___,___,
         lua_assert(0);

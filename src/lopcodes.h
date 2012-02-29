@@ -14,10 +14,10 @@
   We assume that instructions are unsigned numbers.
   All instructions have an opcode in the first 9 bits.
   Instructions can have the following fields:
-  `A' : 7 bits
+  `A' : 8 bits
   `B' : 8 bits
   `C' : 8 bits
-  'Ax' : 23 bits ('A', 'B', and 'C' together)
+  'Ax' : 24 bits ('A', 'B', and 'C' together)
   `Bx' : 16 bits (`B' and `C' together)
   `sBx' : signed Bx
 
@@ -490,12 +490,11 @@ _(CHKTYPE, tab, ___) /* type check (table) */ \
 _(EXTRAARG, ___, ___)
 
 
-#define OP(op,out,in) OP_##op##_##out##_##in
-
+#define OP(op,guard,spec) OP_##op##_##guard##_##spec
 #define sOP(op) OP(op,___,___)
 
 typedef enum {
-#define OPENUM(op,out,in) OP(op,out,in),
+#define OPENUM(op,guard,spec) OP(op,guard,spec),
   OPDEF(OPENUM)
 #undef OPENUM
   NUM_OPCODES
@@ -519,52 +518,22 @@ typedef enum {
 
 #define OpType____ OpType_raw
 
-LUAI_DDEC OpType luaP_opout[NUM_OPCODES];
-LUAI_DDEC OpType luaP_opin[NUM_OPCODES];
+LUAI_DDEC OpType luaP_opguards[NUM_OPCODES];
+LUAI_DDEC OpType luaP_opspecs[NUM_OPCODES];
 
-#define opout(op) luaP_opout[op]
-#define opin(op) luaP_opin[op]
+#define opguard(op) luaP_opguards[op]
+#define opspec(op) luaP_opspecs[op]
 
+LUAI_FUNC OpCode createop (OpGroup grp, OpType guard, OpType spec);
 
-// TODO: these are all (in,out) whereas the opcodes are (out,in)
-// THIS IS CONFUSING AS FUCK
+#define MODIFY_OPCODE(i,guard,spec) \
+  SET_OPCODE(i, createop(GET_OPGROUP(i),guard,spec))
 
-LUAI_FUNC OpCode create_op_move (OpType in, OpType out);
-LUAI_FUNC OpCode create_op_settab (OpGroup grp, OpType in);
-LUAI_FUNC OpCode create_op_gettab (OpGroup grp, OpType out, OpType in);
-LUAI_FUNC OpCode create_op_setupval (OpType in, OpType out);
-LUAI_FUNC OpCode create_op_getupval (OpType in, OpType out);
-LUAI_FUNC OpCode create_op_self (OpType out);
-LUAI_FUNC OpCode create_op_arith (OpGroup grp, OpType in, OpType out);
-LUAI_FUNC OpCode create_op_unm (OpType out, OpType in);
-LUAI_FUNC OpCode create_op_len (OpType out, OpType in);
-LUAI_FUNC OpCode create_op_cmp (OpGroup grp, OpType in);
-LUAI_FUNC OpCode create_op_out (OpGroup grp, OpType out);
+#define MODIFY_OPCODE_GUARD(i,guard) \
+  MODIFY_OPCODE(i,guard,opspec(GET_OPCODE(i)))
 
-
-#define set_out_move(op,out) create_op_move(opin(op),out)
-#define set_out_gettab(op,out) \
-  create_op_gettab(op2grp(op),out,opin(op))
-#define set_out_setupval(op,out) create_op_setupval(opin(op),out)
-#define set_out_getupval(op,out) create_op_getupval(opin(op),out)
-#define set_out_arith(op,out) \
-  create_op_arith(op2grp(op),out,opin(op))
-#define set_out_unm(op,out) create_op_unm(out,opin(op))
-#define set_out_len(op,out) create_op_len(out,opin(op))
-#define set_out(op,out) create_op_out(op2grp(op),out)
-
-#define set_in_move(op,in) create_op_move(in,opout(op))
-#define set_in_settab(op,in) create_op_settab(op2grp(op),in)
-#define set_in_gettab(op,in) \
-  create_op_gettab(op2grp(op),opout(op),in)
-#define set_in_setupval(op,in) create_op_setupval(in,opout(op))
-#define set_in_getupval(op,in) create_op_getupval(in,opout(op))
-#define set_in_arith(op,in) \
-  create_op_arith(op2grp(op),opout(op),in)
-#define set_in_unm(op,in) create_op_unm(opout(op),in)
-#define set_in_len(op,in) create_op_len(opout(op),in)
-#define set_in_cmp(op,in) create_op_cmp(op2grp(op),in)
-
+#define MODIFY_OPCODE_SPEC(i,spec) \
+  MODIFY_OPCODE(i,opguard(GET_OPCODE(i)),spec)
 
 
 extern void printop(OpCode op);

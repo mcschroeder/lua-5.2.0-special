@@ -526,8 +526,7 @@ static void codeclosure (LexState *ls, Proto *clp, expdesc *v) {
   f->p[fs->np++] = clp;
   clp->encp = f;
   luaC_objbarrier(ls->L, f, clp);
-  OpCode op = create_op_out(OP_CLOSURE, OpType_raw);
-  init_exp(v, VRELOCABLE, luaK_codeABx(fs, op, 0, fs->np-1));
+  init_exp(v, VRELOCABLE, luaK_codeABx(fs, sOP(CLOSURE), 0, fs->np-1));
   luaK_exp2nextreg(fs, v);  /* fix it at stack top (for GC) */
 }
 
@@ -699,8 +698,7 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
     addregload(fs, rkkey);
   } 
   addregload(fs, cc->t->u.info);
-  OpCode op = create_op_settab(OP_SETTABLE, OpType_chk);
-  luaK_codeABC(fs, op, cc->t->u.info, rkkey, rkval);
+  luaK_codeABC(fs, OP(SETTABLE,___,chk), cc->t->u.info, rkkey, rkval);
   fs->freereg = reg;  /* free registers */
 }
 
@@ -767,7 +765,7 @@ static void constructor (LexState *ls, expdesc *t) {
      sep -> ',' | ';' */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  int pc = luaK_codeABC(fs, create_op_out(OP_NEWTABLE, OpType_raw), 0, 0, 0);
+  int pc = luaK_codeABC(fs, sOP(NEWTABLE), 0, 0, 0);
   struct ConsControl cc;
   cc.na = cc.nh = cc.tostore = 0;
   cc.t = t;
@@ -1009,8 +1007,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
       FuncState *fs = ls->fs;
       check_condition(ls, fs->f->is_vararg,
                       "cannot use " LUA_QL("...") " outside a vararg function");
-      OpCode op = create_op_out(OP_VARARG, OpType_raw);
-      init_exp(v, VVARARG, luaK_codeABC(fs, op, 0, 1, 0));      
+      init_exp(v, VVARARG, luaK_codeABC(fs, sOP(VARARG), 0, 1, 0));
       break;
     }
     case '{': {  /* constructor */

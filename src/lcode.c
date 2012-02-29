@@ -58,8 +58,7 @@ void luaK_nil (FuncState *fs, int from, int n) {
   int ra;
   for (ra = from; ra <= from+n; ra++)
     addregstore(fs, ra);
-  OpCode op = create_op_out(OP_LOADNIL, OpType_raw);
-  luaK_codeABC(fs, op, from, n - 1, 0);  /* else no optimization */
+  luaK_codeABC(fs, sOP(LOADNIL), from, n - 1, 0);  /* else no optimization */
 }
 
 
@@ -443,7 +442,7 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
       if (!ISK(e->u.ind.idx)) {
         addregload(fs, e->u.ind.idx);
       }
-      OpCode op = create_op_gettab(grp, OpType_raw, OpType_chk);
+      OpCode op = createop(grp, OpType_raw, OpType_chk);
       e->u.info = luaK_codeABC(fs, op, 0, e->u.ind.t, e->u.ind.idx);
       e->k = VRELOCABLE;
       break;
@@ -643,7 +642,7 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
         addupvalload(fs, var->u.ind.t);
         grp = OP_SETTABUP;
       }
-      OpCode op = create_op_settab(grp, OpType_chk);
+      OpCode op = createop(grp, OpType_raw, OpType_chk);
       luaK_codeABC(fs, op, var->u.ind.t, var->u.ind.idx, e);
       break;
     }
@@ -695,8 +694,7 @@ static int jumponcond (FuncState *fs, expdesc *e, int cond) {
   discharge2anyreg(fs, e);
   freeexp(fs, e);
   addregload(fs, e->u.info);
-  OpCode op = create_op_out(OP_TESTSET, OpType_raw);
-  return condjump(fs, op, NO_REG, e->u.info, cond);
+  return condjump(fs, sOP(TESTSET), NO_REG, e->u.info, cond);
 }
 
 
@@ -767,8 +765,7 @@ static void codenot (FuncState *fs, expdesc *e) {
       discharge2anyreg(fs, e);
       freeexp(fs, e);
       addregload(fs, e->u.info);
-      OpCode op = create_op_out(OP_NOT, OpType_raw);
-      e->u.info = luaK_codeABC(fs, op, 0, e->u.info, 0);
+      e->u.info = luaK_codeABC(fs, sOP(NOT), 0, e->u.info, 0);
       e->k = VRELOCABLE;
       break;
     }
@@ -820,15 +817,15 @@ static void codearith (FuncState *fs, BinOpr opr,
       freeexp(fs, e1);
     }
     OpGroup grp = OP_ADD + opr; /* ORDER OP */
-    OpType in;
+    OpType spec;
     if (ISK(o1) && ISK(o2)) {
-      in = OpType_raw;
+      spec = OpType_raw; /* since they're not folded, one must be a string */
     } else {
-      in = OpType_chk;
+      spec = OpType_chk;
       if (!ISK(o1)) addregload(fs, o1);
       if (!ISK(o2)) addregload(fs, o2);
     }
-    OpCode op = create_op_arith(grp, OpType_raw, in);
+    OpCode op = createop(grp, OpType_raw, spec);
     e1->u.info = luaK_codeABC(fs, op, 0, o1, o2);
     e1->k = VRELOCABLE;
     luaK_fixline(fs, line);
@@ -844,7 +841,7 @@ static void codeunm (FuncState *fs, expdesc *e, int line) {
     int o = luaK_exp2RK(fs, e);
     freeexp(fs, e);    
     addregload(fs, o);
-    OpCode op = create_op_unm(OpType_raw, OpType_chk);
+    OpCode op = createop(OP_UNM, OpType_raw, OpType_chk);
     e->u.info = luaK_codeABC(fs, op, 0, o, 0);
     e->k = VRELOCABLE;
     luaK_fixline(fs, line);
@@ -857,7 +854,7 @@ static void codelen (FuncState *fs, expdesc *e, int line) {
   int o = luaK_exp2RK(fs, e);
   freeexp(fs, e);
   addregload(fs, o);
-  OpCode op = create_op_len(OpType_raw, OpType_chk);
+  OpCode op = createop(OP_LEN, OpType_raw, OpType_chk);
   e->u.info = luaK_codeABC(fs, op, 0, o, 0);
   e->k = VRELOCABLE;
   luaK_fixline(fs, line);
@@ -886,8 +883,7 @@ static void codeconcat (FuncState *fs, expdesc *e1, expdesc *e2, int line) {
     }
     int r;
     for (r = o1; r <= o2; r++) addregload(fs, r);
-    OpCode op = create_op_out(OP_CONCAT, OpType_raw);
-    e1->u.info = luaK_codeABC(fs, op, 0, o1, o2);
+    e1->u.info = luaK_codeABC(fs, sOP(CONCAT), 0, o1, o2);
     e1->k = VRELOCABLE;
     luaK_fixline(fs, line);
   }
@@ -916,20 +912,20 @@ static void codecomp (FuncState *fs, BinOpr opr, expdesc *e1, expdesc *e2) {
     int tmp = o1; o1 = o2; o2 = tmp;
   }
   OpGroup grp = (opr == OPR_GT || opr == OPR_LT) ? OP_LT : OP_LE;
-  OpType in;
+  OpType spec;
   if (ISK(o1) && ISK(o2)) {
     TValue *k1 = fs->f->k + INDEXK(o1);
     TValue *k2 = fs->f->k + INDEXK(o2);
     if (ttisequal(k1, k2)) {
-      if (ttisnumber(k1)) in = OpType_num;
-      else                in = OpType_str;
-    } else                in = OpType_raw;
+      if (ttisnumber(k1)) spec = OpType_num;
+      else                spec = OpType_str;
+    } else                spec = OpType_raw;
   } else {
-    in = OpType_chk;
+    spec = OpType_chk;
     if (!ISK(o1)) addregload(fs, o1);
     if (!ISK(o2)) addregload(fs, o2);
   }
-  e1->u.info = condjump(fs, create_op_cmp(grp, in), 1, o1, o2);
+  e1->u.info = condjump(fs, createop(grp, OpType_raw, spec), 1, o1, o2);
   e1->k = VJMP;
 }
 
