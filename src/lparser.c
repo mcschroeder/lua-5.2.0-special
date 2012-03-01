@@ -1356,7 +1356,7 @@ static void fornum (LexState *ls, TString *varname, int line) {
   luaK_addregload(fs, base+2); /* step */
   luaK_addregstore(fs, base); /* internal index */
   luaK_addregstore(fs, base+3); /* external index */
-  prep = luaK_codeAsBx(fs, sOP(FORPREP), base, NO_JUMP);
+  prep = luaK_codeAsBx(fs, OP(FORPREP,___,chk), base, NO_JUMP);
   enterblock(fs, &bl, 0);  /* scope for declared variables */
   adjustlocalvars(ls, 1);
   luaK_reserveregs(fs, 1);

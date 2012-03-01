@@ -310,6 +310,11 @@ static void despecialize (lua_State *L, Proto *p, int pc, int reg,
         MODIFY_OPCODE_SPEC(*i, OpType_raw);
       break;
 /* ------------------------------------------------------------------------ */
+    case OP_FORPREP:
+      if (a == reg || a+1 == reg || a+2 == reg)
+        MODIFY_OPCODE_SPEC(*i, OpType_raw);
+      break;
+/* ------------------------------------------------------------------------ */
     default: 
       return;
   }
@@ -661,6 +666,23 @@ void luaVS_specialize (lua_State *L) {
         if (!safe) spec = OpType_raw;
       }
       MODIFY_OPCODE_SPEC(*i, spec);
+      break;
+    }
+/* ------------------------------------------------------------------------ */
+    case OP_FORPREP: {      
+      int safe = ttisnumber(ra) && _add_guards(a, OpType_num);
+      if (safe && !(ttisnumber(ra+1) && _add_guards(a+1, OpType_num))) {
+        _remove_guards(a);
+        safe = 0;
+      }
+      if (safe && !(ttisnumber(ra+2) && !_add_guards(a+2, OpType_num))) {
+        _remove_guards(a+1);
+        safe = 0;
+      }
+      if (safe)
+        MODIFY_OPCODE_SPEC(*i, OpType_num);
+      else
+        MODIFY_OPCODE_SPEC(*i, OpType_raw);
       break;
     }
 /* ------------------------------------------------------------------------ */

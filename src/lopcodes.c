@@ -108,7 +108,7 @@ LUAI_DDEF const int OpSpecOffsets[NUM_OPGROUPS][5] = {
   {0, -1, -1, -1, -1}, /* TAILCALL */
   {0, -1, -1, -1, -1}, /* RETURN */
   {0, -1, -1, -1, -1}, /* FORLOOP */
-  {0, -1, -1, -1, -1}, /* FORPREP */
+  {0,  1, -1, -1,  2}, /* FORPREP */
   {0, -1, -1, -1, -1}, /* TFORCALL */
   {0, -1, -1, -1, -1}, /* TFORLOOP */
   {0, -1, -1, -1, -1}, /* SETLIST */

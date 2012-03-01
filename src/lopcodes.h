@@ -467,12 +467,15 @@ _(TESTSET,  num, ___) /* type check (number) */ \
 _(TESTSET,  str, ___) /* type check (string) */ \
 _(TESTSET,  tab, ___) /* type check (table) */ \
 \
-_(CALL, ___, ___) /* vanilla */ \
+_(CALL, ___, ___) \
 \
 _(TAILCALL, ___, ___) \
 _(RETURN, ___, ___) \
 _(FORLOOP, ___, ___) \
-_(FORPREP, ___, ___) \
+\
+_(FORPREP, ___, ___) /* vanilla */\
+_(FORPREP, ___, num) /* init, limit, step are numbers */ \
+_(FORPREP, ___, chk) /* specialize */\
 \
 _(TFORCALL, ___, ___) \
 \

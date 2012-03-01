@@ -754,7 +754,8 @@ l_dispatch_again:
       vmcasenb(LEN,      tab, chk,)
       vmcasenb(EQ,       ___, chk,)
       vmcasenb(LT,       ___, chk,)
-      vmcasenb(LE,       ___, chk,
+      vmcasenb(LE,       ___, chk,)
+      vmcasenb(FORPREP,  ___, chk,
         luaVS_specialize(L);
         i = *(ci->u.l.savedpc-1); /* stay on the same instruction */
         goto l_dispatch_again;
@@ -1227,6 +1228,10 @@ l_dispatch_again:
         else if (!tonumber(pstep, ra+2))
           luaG_runerror(L, LUA_QL("for") " step must be a number");
         setnvalue(ra, luai_numsub(L, nvalue(ra), nvalue(pstep)));
+        ci->u.l.savedpc += GETARG_sBx(i);
+      )
+      vmcase(FORPREP,___,num,
+        setnvalue(ra, luai_numsub(L, nvalue(ra), nvalue(ra+2)));
         ci->u.l.savedpc += GETARG_sBx(i);
       )
 /* ------------------------------------------------------------------------ */
