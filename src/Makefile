@@ -6,8 +6,9 @@
 # Your platform. See PLATS for possible values.
 PLAT= none
 
-CC= gcc
-#CC = clang
+#CC= gcc 
+CC= gcc-4.2
+#CC= clang
 #CFLAGS= -O2 -Wall -DLUA_COMPAT_ALL $(SYSCFLAGS) $(MYCFLAGS)
 #CFLAGS= -gfull -O2 -Wall -DLUA_COMPAT_ALL $(SYSCFLAGS) $(MYCFLAGS)
 #CFLAGS= -gfull -Wall -DLUA_COMPAT_ALL $(SYSCFLAGS) $(MYCFLAGS)
