@@ -1,0 +1,5 @@
+This is a modified version of the Lua 5.2 VM, created as part of my [bachelor's thesis](https://github.com/mcschroeder/lua-5.2.0-special/raw/master/optimizing_lua.pdf) at the Vienna University of Technology.
+
+Here's the abstract:
+
+> Like other dynamically typed languages, Lua spends a significant amount of execution time on type checks. Yet most programs, even if they are written in a dynamic language, are actually overwhelmingly monomorphically typed. To remove this unnecessary typechecking overhead, we implement a portable optimization scheme that rewrites virtual machine instructions at run-time based on the types of their operands. While not consistent across all platforms, we achieve average speed-ups of 1.2x on Intel, with a threaded variant of our VM showing improvements in the 1.5x to 2.4x range.
